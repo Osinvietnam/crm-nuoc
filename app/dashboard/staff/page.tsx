@@ -176,46 +176,46 @@ export default function StaffPage() {
           <h2 className="font-semibold text-gray-800">Tạo tài khoản mới</h2>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Họ và tên *</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Họ và tên *</label>
               <input
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Nguyễn Văn A"
                 value={form.full_name}
                 onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Email *</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Email *</label>
               <input
                 type="email"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="nhanvien@gmail.com"
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Số điện thoại</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Số điện thoại</label>
               <input
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0901234567"
                 value={form.phone}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Phòng ban</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Phòng ban</label>
               <input
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Kinh doanh / Kỹ thuật /..."
                 value={form.department}
                 onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Vai trò *</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Vai trò *</label>
               <select
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 value={form.role}
                 onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
               >
@@ -226,10 +226,10 @@ export default function StaffPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Mật khẩu *</label>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">Mật khẩu *</label>
               <div className="flex gap-2">
                 <input
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   placeholder="Nhập hoặc tạo tự động"
                   value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
@@ -267,9 +267,12 @@ export default function StaffPage() {
       )}
 
       {loading ? (
-        <div className="text-center text-gray-400 text-sm py-8">Đang tải...</div>
+        <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm"><span className="crm-spinner" /><span>Đang tải...</span></div>
       ) : staffList.length === 0 ? (
-        <div className="text-center text-gray-400 text-sm py-8">Chưa có nhân viên nào</div>
+        <div className="flex flex-col items-center py-16 gap-2">
+          <span className="text-4xl">👤</span>
+          <p className="text-sm font-medium text-gray-500">Chưa có nhân viên nào</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {staffList.map(staff => (
@@ -285,7 +288,7 @@ export default function StaffPage() {
                     <p className="font-semibold text-gray-800 text-sm truncate">{staff.full_name}</p>
                     <p className="text-xs text-gray-500 truncate">{staff.email}</p>
                     {staff.phone && (
-                      <p className="text-xs text-gray-400">{staff.phone}</p>
+                      <p className="text-xs text-gray-500">{staff.phone}</p>
                     )}
                   </div>
                 </div>
@@ -305,7 +308,7 @@ export default function StaffPage() {
                   {roleLabel[staff.role] ?? staff.role}
                 </span>
                 {staff.department && (
-                  <span className="text-xs text-gray-400">{staff.department}</span>
+                  <span className="text-xs text-gray-500">{staff.department}</span>
                 )}
                 <span className="text-xs text-gray-300 ml-auto">
                   {new Date(staff.created_at).toLocaleDateString('vi-VN')}

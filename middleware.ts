@@ -24,16 +24,46 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
 
+  // Chưa đăng nhập → về login
   if (!user && !path.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
+  // Đã đăng nhập ở root → vào dashboard
   if (user && path === '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // Kiểm tra quyền cho các route admin
+  const isStaffRoute = path.startsWith('/dashboard/staff')
+  const isAdminRoute = path.startsWith('/dashboard/admin')
+
+  if (user && (isStaffRoute || isAdminRoute)) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const role = profile?.role ?? ''
+
+    // /dashboard/admin → chỉ admin
+    if (isAdminRoute && role !== 'admin') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    // /dashboard/staff → admin + manager
+    if (isStaffRoute && !['admin', 'manager'].includes(role)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
