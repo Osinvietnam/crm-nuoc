@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import { PIPELINE_STAGES, PIPELINE_COLORS, PRIORITY_COLORS, NGUON_KH_OPTIONS, LOAI_HINH_NHA_OPTIONS } from '@/lib/lark/tables'
 import type { Customer } from '@/app/api/lark/customers/route'
@@ -55,12 +56,10 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
   const [error, setError] = useState('')
 
   function downloadTemplate() {
-    import('xlsx').then(XLSX => {
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
-      XLSX.utils.book_append_sheet(wb, ws, 'Khách hàng')
-      XLSX.writeFile(wb, 'template_khach_hang.xlsx')
-    })
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
+    XLSX.utils.book_append_sheet(wb, ws, 'Khách hàng')
+    XLSX.writeFile(wb, 'template_khach_hang.xlsx')
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -72,19 +71,17 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
 
     const reader = new FileReader()
     reader.onload = ev => {
-      import('xlsx').then(XLSX => {
-        const wb = XLSX.read(ev.target?.result, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
-        const rows = raw.map(row => {
-          const mapped: Record<string, string> = {}
-          for (const [header, key] of Object.entries(EXCEL_COLS)) {
-            mapped[key] = String(row[header] ?? '')
-          }
-          return mapped
-        })
-        setPreview(rows.slice(0, 5))
+      const wb = XLSX.read(ev.target?.result, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+      const rows = raw.map(row => {
+        const mapped: Record<string, string> = {}
+        for (const [header, key] of Object.entries(EXCEL_COLS)) {
+          mapped[key] = String(row[header] ?? '')
+        }
+        return mapped
       })
+      setPreview(rows.slice(0, 5))
     }
     reader.readAsArrayBuffer(file)
   }
@@ -98,7 +95,6 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
     const reader = new FileReader()
     reader.onload = async ev => {
       try {
-        const XLSX = await import('xlsx')
         const wb = XLSX.read(ev.target?.result, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
