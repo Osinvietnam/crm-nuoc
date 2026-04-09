@@ -8,6 +8,7 @@ export type AuditAction =
   | 'logo_updated'
   | 'logo_deleted'
   | 'quote_status_changed'
+  | 'password_reset'
 
 export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config'
 

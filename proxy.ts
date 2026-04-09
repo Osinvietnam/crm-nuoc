@@ -25,7 +25,8 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Chưa đăng nhập → về login
-  if (!user && !path.startsWith('/login')) {
+  const publicPaths = ['/login', '/forgot-password', '/reset-password']
+  if (!user && !publicPaths.some(p => path.startsWith(p))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

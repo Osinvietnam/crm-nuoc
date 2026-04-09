@@ -76,10 +76,15 @@ export default function StaffPage() {
   const [sending, setSending] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [editId,     setEditId]     = useState<string | null>(null)
-  const [editForm,   setEditForm]   = useState<Partial<Staff>>({})
-  const [saving,     setSaving]     = useState(false)
+  const [expandedId,    setExpandedId]    = useState<string | null>(null)
+  const [editId,        setEditId]        = useState<string | null>(null)
+  const [editForm,      setEditForm]      = useState<Partial<Staff>>({})
+  const [saving,        setSaving]        = useState(false)
+  const [resetId,       setResetId]       = useState<string | null>(null)
+  const [resetPass,     setResetPass]     = useState('')
+  const [resetSaving,   setResetSaving]   = useState(false)
+  const [resetMsg,      setResetMsg]      = useState('')
+  const [myRole,        setMyRole]        = useState('')
   const [form, setForm] = useState({
     full_name:    '',
     email:        '',
@@ -105,7 +110,14 @@ export default function StaffPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadStaff() }, [])
+  useEffect(() => {
+    loadStaff()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('role').eq('id', user.id).single()
+        .then(({ data }) => setMyRole(data?.role ?? ''))
+    })
+  }, [])
 
   const generatePassword = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -205,6 +217,31 @@ export default function StaffPage() {
       ngay_vao_lam: staff.ngay_vao_lam,
       role:         staff.role,
     })
+  }
+
+  const handleResetPass = async (id: string) => {
+    if (!resetPass || resetPass.length < 8) {
+      setResetMsg('error:Mật khẩu phải có ít nhất 8 ký tự')
+      return
+    }
+    setResetSaving(true)
+    setResetMsg('')
+    try {
+      const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: resetPass }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setResetMsg('error:' + (data.error || 'Lỗi')); return }
+      setResetMsg('ok:Đã đặt lại mật khẩu thành công')
+      setResetPass('')
+      setTimeout(() => { setResetId(null); setResetMsg('') }, 2000)
+    } catch {
+      setResetMsg('error:Lỗi kết nối')
+    } finally {
+      setResetSaving(false)
+    }
   }
 
   const saveEdit = async (id: string) => {
@@ -604,6 +641,49 @@ export default function StaffPage() {
                         >
                           Chỉnh sửa thông tin
                         </button>
+
+                        {/* Admin reset password */}
+                        {['admin', 'ceo'].includes(myRole) && (
+                          resetId === staff.id ? (
+                            <div className="space-y-2 pt-1">
+                              <p className="text-xs text-gray-400">Đặt mật khẩu mới</p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Tối thiểu 8 ký tự"
+                                  value={resetPass}
+                                  onChange={e => { setResetPass(e.target.value); setResetMsg('') }}
+                                />
+                                <button
+                                  onClick={() => { setResetId(null); setResetPass(''); setResetMsg('') }}
+                                  className="text-xs px-3 py-2 border border-gray-200 rounded-xl text-gray-400"
+                                >
+                                  Huỷ
+                                </button>
+                              </div>
+                              {resetMsg && (
+                                <p className={`text-xs px-3 py-1.5 rounded-lg ${resetMsg.startsWith('ok:') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                  {resetMsg.slice(3)}
+                                </p>
+                              )}
+                              <button
+                                onClick={() => handleResetPass(staff.id)}
+                                disabled={resetSaving}
+                                className="w-full bg-red-500 disabled:bg-red-300 text-white text-sm font-medium py-2 rounded-xl"
+                              >
+                                {resetSaving ? 'Đang lưu...' : 'Xác nhận đặt lại mật khẩu'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setResetId(staff.id); setResetPass(''); setResetMsg('') }}
+                              className="w-full border border-red-200 text-red-500 text-sm py-2 rounded-xl hover:bg-red-50 transition-colors"
+                            >
+                              Đặt lại mật khẩu
+                            </button>
+                          )
+                        )}
                       </>
                     )}
                   </div>

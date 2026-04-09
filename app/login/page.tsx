@@ -90,9 +90,14 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Liên hệ admin nếu quên mật khẩu
-        </p>
+        <div className="text-center mt-5">
+          <a
+            href="/forgot-password"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Quên mật khẩu?
+          </a>
+        </div>
       </div>
     </div>
   )
