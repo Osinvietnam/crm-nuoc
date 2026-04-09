@@ -819,7 +819,6 @@ function AddQuoteForm({ onClose, onCreated, prefilledCustomer }: {
           ngay_gui_kh:        form.ngay_gui_kh ? new Date(form.ngay_gui_kh).getTime() : undefined,
           san_pham,
           tong_gia_tri:       total,
-          chiet_khau:           ck,
           customer_record_id: customerRecordId || undefined,
         }),
       })
