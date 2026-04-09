@@ -18,12 +18,36 @@ function ResetPasswordContent() {
   const supabase     = createClient()
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    if (!code) { setStep('error'); return }
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) setStep('error')
-      else       setStep('form')
-    })
+    const handleToken = async () => {
+      // Case 1: PKCE flow — ?code=CODE (newer Supabase)
+      const code = searchParams.get('code')
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        setStep(error ? 'error' : 'form')
+        return
+      }
+
+      // Case 2: Implicit flow — #access_token=TOKEN&type=recovery (legacy Supabase)
+      const hash   = window.location.hash
+      const params = new URLSearchParams(hash.substring(1))
+      const accessToken  = params.get('access_token')
+      const refreshToken = params.get('refresh_token') ?? ''
+      const type         = params.get('type')
+
+      if (type === 'recovery' && accessToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token:  accessToken,
+          refresh_token: refreshToken,
+        })
+        setStep(error ? 'error' : 'form')
+        return
+      }
+
+      // Không có token nào hợp lệ
+      setStep('error')
+    }
+
+    handleToken()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
