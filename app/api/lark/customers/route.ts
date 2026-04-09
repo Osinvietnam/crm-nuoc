@@ -27,6 +27,7 @@ export interface Customer {
   ly_do_tu_choi: string
   nhom_dv: string
   tien_do_ct: string
+  khu_vuc: string
 }
 
 function mapRecord(r: LarkRecord): Customer {
@@ -57,6 +58,7 @@ function mapRecord(r: LarkRecord): Customer {
     ly_do_tu_choi:    String(f['Lý do từ chối'] ?? ''),
     nhom_dv:          String(f['Nhóm dịch vụ'] ?? ''),
     tien_do_ct:       String(f['Tiến độ công trình'] ?? ''),
+    khu_vuc:          String(f['Khu vực'] ?? ''),
   }
 }
 
@@ -68,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, role')
+      .select('full_name, role, khu_vuc')
       .eq('id', user.id)
       .single()
 
@@ -81,7 +83,12 @@ export async function GET(req: NextRequest) {
     }
 
     const records = await listAllRecords(TABLES.CUSTOMERS, filter)
-    const customers = records.map(mapRecord)
+    let customers = records.map(mapRecord)
+
+    // Accountant: filter by their assigned region (if set)
+    if (profile.role === 'accountant' && profile.khu_vuc) {
+      customers = customers.filter(c => c.khu_vuc === profile.khu_vuc)
+    }
 
     return NextResponse.json({ customers, role: profile.role })
   } catch (err) {
@@ -116,7 +123,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Họ tên và SĐT là bắt buộc' }, { status: 400 })
     }
 
-    // Sales/partner: force nguoi_phu_trach = themselves
+    // Sales/partner: force nguoi_phu_trach = themselves; others can assign freely
     const assignee = (profile.role === 'sales' || profile.role === 'partner')
       ? profile.full_name
       : (nguoi_phu_trach || profile.full_name)

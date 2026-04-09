@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
       { href: '/dashboard/admin', label: 'Quản trị', icon: '⚙️' },
     ],
-    manager: [
+    ceo: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
@@ -58,6 +58,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
       { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
+    ],
+    tech_lead: [
+      { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
+      { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+      { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
+      { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
+    ],
+    accountant: [
+      { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
+      { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+      { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
     ],
     sales: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
@@ -71,6 +85,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
     ],
+    logistics: [
+      { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
+      { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+    ],
     partner: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
@@ -79,11 +98,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const roleLabel: Record<string, string> = {
-    admin: 'Quản trị viên',
-    manager: 'Quản lý',
-    sales: 'Kinh doanh',
-    tech: 'Kỹ thuật',
-    partner: 'Đối tác',
+    admin:      'Quản trị viên',
+    ceo:        'Giám đốc',
+    tech_lead:  'Trưởng phòng KT',
+    accountant: 'Kế toán',
+    sales:      'Kinh doanh',
+    tech:       'Kỹ thuật',
+    logistics:  'Hậu cần',
+    partner:    'Đối tác',
   }
 
   if (loading) return (

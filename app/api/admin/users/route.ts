@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 
-const ROLES = ['admin', 'manager', 'sales', 'tech'] as const
+const ROLES = ['admin', 'ceo', 'tech_lead', 'accountant', 'sales', 'tech', 'logistics', 'partner'] as const
 
 // ─── GET /api/admin/users — Danh sách tất cả user ────────────────────────────
 
@@ -18,13 +18,13 @@ export async function GET() {
       .eq('id', user.id)
       .single()
 
-    if (!me || !['admin', 'manager'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'tech_lead', 'accountant'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, phone, department, is_active, created_at')
+      .select('id, full_name, email, role, phone, department, chuc_vu, khu_vuc, target_thang, ngay_vao_lam, trang_thai_nv, is_active, created_at')
       .order('created_at', { ascending: false })
 
     if (error) throw error

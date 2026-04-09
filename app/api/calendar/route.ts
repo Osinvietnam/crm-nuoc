@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
 
     const events: CalendarEvent[] = []
 
-    const isAdmin    = ['admin', 'manager'].includes(role)
+    const isAdmin    = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
     const isTech     = role === 'tech'
-    const isSales    = role === 'sales'
+    const isSales    = role === 'sales' || role === 'logistics'
     const isPartner  = role === 'partner'
     const myFilter   = (field: string) =>
       !isAdmin ? `CurrentValue.[${field}] = "${full_name}"` : undefined

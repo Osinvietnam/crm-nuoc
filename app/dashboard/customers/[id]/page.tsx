@@ -201,6 +201,7 @@ export default function CustomerDetailPage() {
           ly_do_tu_choi:   String(f['Lý do từ chối'] ?? ''),
           nhom_dv:         String(f['Nhóm dịch vụ'] ?? ''),
           tien_do_ct:      String(f['Tiến độ công trình'] ?? ''),
+          khu_vuc:         String(f['Khu vực'] ?? ''),
         })
       } catch {
         // silently fail — user can go back
