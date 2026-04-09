@@ -43,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     admin: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
@@ -52,6 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     manager: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
@@ -60,16 +62,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     sales: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
     ],
     tech: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
-      { href: '/dashboard/maintenance', label: 'Lịch bảo trì', icon: '🔧' },
+      { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
     ],
     partner: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
     ],
   }
 

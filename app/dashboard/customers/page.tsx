@@ -711,6 +711,44 @@ function CustomerCard({ customer, onClick, onCreateQuote }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Time filter helpers ──────────────────────────────────────────────────────
+
+type TimePreset = 'month' | 'last_month' | 'quarter' | 'custom' | 'all'
+
+function currentYM() {
+  const d = new Date()
+  return { y: d.getFullYear(), m: d.getMonth() + 1 }
+}
+
+function presetLabel(p: TimePreset, customY: number, customM: number) {
+  if (p === 'all')        return 'Tất cả'
+  if (p === 'month')      return 'Tháng này'
+  if (p === 'last_month') return 'Tháng trước'
+  if (p === 'quarter')    return 'Quý này'
+  return `${String(customM).padStart(2,'0')}/${customY}`
+}
+
+function presetRange(p: TimePreset, customY: number, customM: number): [number,number] | null {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth() + 1
+  if (p === 'all') return null
+  if (p === 'month') {
+    return [new Date(y, m - 1, 1).getTime(), new Date(y, m, 1).getTime() - 1]
+  }
+  if (p === 'last_month') {
+    const lm = m === 1 ? 12 : m - 1, ly = m === 1 ? y - 1 : y
+    return [new Date(ly, lm - 1, 1).getTime(), new Date(ly, lm, 1).getTime() - 1]
+  }
+  if (p === 'quarter') {
+    const q = Math.floor((m - 1) / 3)
+    return [new Date(y, q * 3, 1).getTime(), new Date(y, q * 3 + 3, 1).getTime() - 1]
+  }
+  // custom
+  return [new Date(customY, customM - 1, 1).getTime(), new Date(customY, customM, 1).getTime() - 1]
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function CustomersPage() {
   const router = useRouter()
   const [customers, setCustomers]       = useState<Customer[]>([])
@@ -723,6 +761,14 @@ export default function CustomersPage() {
   const [error, setError]               = useState('')
   const [quoteFor, setQuoteFor]         = useState<Customer | null>(null)
 
+  // Time filter
+  const { y: cY, m: cM } = currentYM()
+  const [timePreset, setTimePreset]   = useState<TimePreset>('all') // set after role loads
+  const [customY, setCustomY]         = useState(cY)
+  const [customM, setCustomM]         = useState(cM)
+  const [showPicker, setShowPicker]   = useState(false)
+  const roleLoaded = useRef(false)
+
   const loadCustomers = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -731,7 +777,13 @@ export default function CustomersPage() {
       if (!res.ok) throw new Error()
       const data = await res.json()
       setCustomers(data.customers ?? [])
-      setRole(data.role ?? '')
+      const r = data.role ?? ''
+      setRole(r)
+      // Set default time preset once based on role
+      if (!roleLoaded.current) {
+        roleLoaded.current = true
+        setTimePreset(['sales', 'partner'].includes(r) ? 'month' : 'all')
+      }
     } catch {
       setError('Không tải được dữ liệu. Kiểm tra kết nối.')
     } finally {
@@ -743,12 +795,19 @@ export default function CustomersPage() {
 
   const ptr = usePullToRefresh(loadCustomers)
 
+  const timeRange = presetRange(timePreset, customY, customM)
+
   const filtered = customers.filter(c => {
     const matchStage  = stage === 'Tất cả' || c.pipeline === stage
     const q = search.toLowerCase()
     const matchSearch = !q || [c.ho_ten, c.sdt, c.email, c.dia_chi_ct, c.nguoi_phu_trach]
       .some(v => v?.toLowerCase().includes(q))
-    return matchStage && matchSearch
+    const matchTime = !timeRange || (
+      c.ngay_lien_he_dau !== null &&
+      c.ngay_lien_he_dau >= timeRange[0] &&
+      c.ngay_lien_he_dau <= timeRange[1]
+    )
+    return matchStage && matchSearch && matchTime
   })
 
   const handleCreated = (c: Customer) => {
@@ -764,7 +823,7 @@ export default function CustomersPage() {
           <div>
             <h1 className="text-lg font-bold text-gray-800">Khách hàng</h1>
             <p className="text-xs text-gray-400">
-              {loading ? 'Đang tải...' : `${customers.length} khách hàng`}
+              {loading ? 'Đang tải...' : `${filtered.length}/${customers.length} khách hàng`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -801,6 +860,64 @@ export default function CustomersPage() {
             >✕</button>
           )}
         </div>
+
+        {/* Time filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 shrink-0">Thời gian:</span>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1">
+            {(['month', 'last_month', 'quarter', 'all'] as TimePreset[]).map(p => (
+              <button
+                key={p}
+                onClick={() => { setTimePreset(p); setShowPicker(false) }}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  timePreset === p && p !== 'custom'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                {presetLabel(p, customY, customM)}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowPicker(v => !v)}
+              className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                timePreset === 'custom'
+                  ? 'bg-blue-600 text-white border-transparent'
+                  : 'bg-white text-gray-500 border-gray-200'
+              }`}
+            >
+              {timePreset === 'custom' ? presetLabel('custom', customY, customM) : 'Tùy chọn'}
+            </button>
+          </div>
+        </div>
+
+        {/* Month/year picker */}
+        {showPicker && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2.5">
+            <select
+              value={customM}
+              onChange={e => { setCustomM(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={m}>Tháng {m}</option>
+              ))}
+            </select>
+            <select
+              value={customY}
+              onChange={e => { setCustomY(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none"
+            >
+              {Array.from({ length: 5 }, (_, i) => cY - 2 + i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setShowPicker(false)}
+              className="text-blue-600 text-sm font-semibold ml-auto"
+            >Xong</button>
+          </div>
+        )}
 
         {/* Pipeline stage filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
