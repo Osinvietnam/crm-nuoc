@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       ho_ten, sdt, sdt_khac, email, dia_chi_hd, dia_chi_ct,
       pipeline, nguoi_phu_trach, nguon_kh, doi_tac_gt,
       loai_hinh_nha, nguon_nuoc, san_pham_quan_tam,
-      bao_gia, muc_uu_tien, noi_dung, nhom_dv,
+      bao_gia, muc_uu_tien, noi_dung, nhom_dv, khu_vuc,
     } = body
 
     if (!ho_ten || !sdt) {
@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
     if (muc_uu_tien)        fields['Mức ưu tiên'] = muc_uu_tien
     if (noi_dung)           fields['Nội dung trao đổi'] = noi_dung
     if (nhom_dv)            fields['Nhóm dịch vụ'] = nhom_dv
+    if (khu_vuc)            fields['Khu vực'] = khu_vuc
 
     const record = await createRecord(TABLES.CUSTOMERS, fields)
     return NextResponse.json({ customer: mapRecord(record) }, { status: 201 })

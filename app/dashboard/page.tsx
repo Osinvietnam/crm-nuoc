@@ -7,8 +7,20 @@ import { PIPELINE_STAGES, PIPELINE_COLORS } from '@/lib/lark/tables'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 
 interface Profile {
-  full_name: string
-  role: string
+  full_name:    string
+  role:         string
+  target_thang: number | null
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  admin:      'Quản trị viên',
+  ceo:        'Giám đốc',
+  tech_lead:  'Trưởng phòng KT',
+  accountant: 'Kế toán',
+  sales:      'Kinh doanh',
+  tech:       'Kỹ thuật',
+  logistics:  'Hậu cần',
+  partner:    'Đối tác',
 }
 
 export default function DashboardPage() {
@@ -24,7 +36,7 @@ export default function DashboardPage() {
       if (!user) return
 
       const { data } = await supabase
-        .from('profiles').select('full_name, role')
+        .from('profiles').select('full_name, role, target_thang')
         .eq('id', user.id).single()
       setProfile(data)
 
@@ -87,7 +99,14 @@ export default function DashboardPage() {
 
       {/* Chào mừng */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 text-white">
-        <p className="text-blue-200 text-sm">Xin chào,</p>
+        <div className="flex items-start justify-between">
+          <p className="text-blue-200 text-sm">Xin chào,</p>
+          {profile?.role && (
+            <span className="text-xs bg-white/20 text-white px-2.5 py-1 rounded-full font-medium">
+              {ROLE_LABEL[profile.role] ?? profile.role}
+            </span>
+          )}
+        </div>
         <p className="text-xl font-bold mt-0.5">{profile?.full_name ?? '...'}</p>
         <p className="text-blue-200 text-xs mt-2">
           {new Date().toLocaleDateString('vi-VN', {
@@ -95,6 +114,15 @@ export default function DashboardPage() {
             month: 'long', day: 'numeric',
           })}
         </p>
+        {/* Target tháng cho sales */}
+        {profile?.target_thang && profile.role === 'sales' && (
+          <div className="mt-3 pt-3 border-t border-white/20">
+            <p className="text-blue-200 text-xs">Target tháng này</p>
+            <p className="text-white font-bold text-sm mt-0.5">
+              {profile.target_thang.toLocaleString('vi-VN')} đ
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}

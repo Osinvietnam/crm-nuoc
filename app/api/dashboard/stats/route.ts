@@ -42,7 +42,7 @@ export async function GET() {
 
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
-    const isSales   = profile.role === 'sales'
+    const isSales   = ['sales', 'partner'].includes(profile.role)
     const isTech    = profile.role === 'tech'
     const ownerFilter = (field: string) =>
       `CurrentValue.[${field}] = "${profile.full_name}"`
@@ -90,7 +90,7 @@ export async function GET() {
     const pending_quotes = pendingQuoteResult.total
 
     // ── 4. Hợp đồng + đơn thương mại trong tháng ─────────────────────────────
-    const orderOwner = isSales ? ownerFilter('Người phụ trách') : undefined
+    const orderOwner = (isSales && profile.role !== 'partner') ? ownerFilter('Người phụ trách') : undefined
     const contractMonthFilter = [
       orderOwner,
       `CurrentValue.[Ngày ký HĐ] >= ${from}`,

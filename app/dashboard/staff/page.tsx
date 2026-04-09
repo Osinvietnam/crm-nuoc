@@ -77,6 +77,9 @@ export default function StaffPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editId,     setEditId]     = useState<string | null>(null)
+  const [editForm,   setEditForm]   = useState<Partial<Staff>>({})
+  const [saving,     setSaving]     = useState(false)
   const [form, setForm] = useState({
     full_name:    '',
     email:        '',
@@ -187,6 +190,37 @@ export default function StaffPage() {
       role: 'sales', trang_thai_nv: 'Đang làm', password: '',
     })
     setShowForm(false)
+    loadStaff()
+  }
+
+  const startEdit = (staff: Staff) => {
+    setEditId(staff.id)
+    setEditForm({
+      full_name:    staff.full_name,
+      phone:        staff.phone,
+      chuc_vu:      staff.chuc_vu,
+      department:   staff.department,
+      khu_vuc:      staff.khu_vuc,
+      target_thang: staff.target_thang,
+      ngay_vao_lam: staff.ngay_vao_lam,
+      role:         staff.role,
+    })
+  }
+
+  const saveEdit = async (id: string) => {
+    setSaving(true)
+    await supabase.from('profiles').update({
+      full_name:    editForm.full_name,
+      phone:        editForm.phone,
+      chuc_vu:      editForm.chuc_vu || null,
+      department:   editForm.department || null,
+      khu_vuc:      editForm.khu_vuc || null,
+      target_thang: editForm.target_thang || null,
+      ngay_vao_lam: editForm.ngay_vao_lam || null,
+      role:         editForm.role,
+    }).eq('id', id)
+    setSaving(false)
+    setEditId(null)
     loadStaff()
   }
 
@@ -448,52 +482,130 @@ export default function StaffPage() {
                 {/* Expanded detail */}
                 {isExpanded && (
                   <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                      {staff.phone && (
-                        <>
-                          <span className="text-gray-400">SĐT</span>
-                          <span className="text-gray-700 font-medium">{staff.phone}</span>
-                        </>
-                      )}
-                      {staff.department && (
-                        <>
-                          <span className="text-gray-400">Phòng ban</span>
-                          <span className="text-gray-700 font-medium">{staff.department}</span>
-                        </>
-                      )}
-                      {staff.ngay_vao_lam && (
-                        <>
-                          <span className="text-gray-400">Ngày vào làm</span>
-                          <span className="text-gray-700 font-medium">{fmtDate(staff.ngay_vao_lam)}</span>
-                        </>
-                      )}
-                      {staff.target_thang != null && (
-                        <>
-                          <span className="text-gray-400">Target/tháng</span>
-                          <span className="text-gray-700 font-medium">{fmtMoney(staff.target_thang)}</span>
-                        </>
-                      )}
-                    </div>
+                    {editId === staff.id ? (
+                      /* ── Edit mode ── */
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            { key: 'full_name',  label: 'Họ và tên',    type: 'text'  },
+                            { key: 'phone',      label: 'SĐT',           type: 'tel'   },
+                            { key: 'chuc_vu',    label: 'Chức vụ',       type: 'text'  },
+                            { key: 'department', label: 'Phòng ban',      type: 'text'  },
+                            { key: 'ngay_vao_lam', label: 'Ngày vào làm', type: 'date' },
+                            { key: 'target_thang', label: 'Target (VNĐ)', type: 'number' },
+                          ] as const).map(({ key, label, type }) => (
+                            <div key={key} className={key === 'full_name' ? 'col-span-2' : ''}>
+                              <label className="text-xs text-gray-400 mb-1 block">{label}</label>
+                              <input
+                                type={type}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={String(editForm[key] ?? '')}
+                                onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                              />
+                            </div>
+                          ))}
 
-                    {/* Status changer */}
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1.5">Thay đổi trạng thái</p>
-                      <div className="flex flex-wrap gap-2">
-                        {STATUS_OPTIONS.map(s => (
+                          <div>
+                            <label className="text-xs text-gray-400 mb-1 block">Khu vực</label>
+                            <select
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={editForm.khu_vuc ?? ''}
+                              onChange={e => setEditForm(f => ({ ...f, khu_vuc: e.target.value }))}
+                            >
+                              <option value="">— Chọn —</option>
+                              {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-xs text-gray-400 mb-1 block">Vai trò</label>
+                            <select
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={editForm.role ?? ''}
+                              onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                            >
+                              {ROLE_OPTIONS.map(r => (
+                                <option key={r.value} value={r.value}>{r.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
                           <button
-                            key={s}
-                            onClick={() => updateStatus(staff.id, s)}
-                            className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all ${
-                              status === s
-                                ? STATUS_COLOR[s] + ' border-current'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                            }`}
+                            onClick={() => setEditId(null)}
+                            className="flex-1 border border-gray-200 text-gray-500 text-sm py-2 rounded-xl"
                           >
-                            {s}
+                            Huỷ
                           </button>
-                        ))}
+                          <button
+                            onClick={() => saveEdit(staff.id)}
+                            disabled={saving}
+                            className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-xl"
+                          >
+                            {saving ? 'Đang lưu...' : 'Lưu'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* ── View mode ── */
+                      <>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                          {staff.phone && (
+                            <>
+                              <span className="text-gray-400">SĐT</span>
+                              <span className="text-gray-700 font-medium">{staff.phone}</span>
+                            </>
+                          )}
+                          {staff.department && (
+                            <>
+                              <span className="text-gray-400">Phòng ban</span>
+                              <span className="text-gray-700 font-medium">{staff.department}</span>
+                            </>
+                          )}
+                          {staff.ngay_vao_lam && (
+                            <>
+                              <span className="text-gray-400">Ngày vào làm</span>
+                              <span className="text-gray-700 font-medium">{fmtDate(staff.ngay_vao_lam)}</span>
+                            </>
+                          )}
+                          {staff.target_thang != null && (
+                            <>
+                              <span className="text-gray-400">Target/tháng</span>
+                              <span className="text-gray-700 font-medium">{fmtMoney(staff.target_thang)}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Trạng thái */}
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1.5">Trạng thái</p>
+                          <div className="flex flex-wrap gap-2">
+                            {STATUS_OPTIONS.map(s => (
+                              <button
+                                key={s}
+                                onClick={() => updateStatus(staff.id, s)}
+                                className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all ${
+                                  status === s
+                                    ? STATUS_COLOR[s] + ' border-current'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Edit button */}
+                        <button
+                          onClick={() => startEdit(staff)}
+                          className="w-full border border-gray-200 text-gray-500 text-sm py-2 rounded-xl hover:border-gray-300 transition-colors"
+                        >
+                          Chỉnh sửa thông tin
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

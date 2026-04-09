@@ -432,6 +432,7 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
     ho_ten: '', sdt: '', email: '', dia_chi_hd: '',
     pipeline: 'Lead mới', nguon_kh: '', loai_hinh_nha: '',
     muc_uu_tien: 'Trung bình', bao_gia: '', noi_dung: '', nhom_dv: '',
+    khu_vuc: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -533,6 +534,25 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
               <option value="">— Chọn nguồn —</option>
               {NGUON_KH_OPTIONS.map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-600 mb-1 block">KHU VỰC</label>
+            <div className="flex gap-2">
+              {(['Miền Nam', 'Miền Bắc', 'Miền Trung'] as const).map(k => (
+                <button
+                  key={k}
+                  onClick={() => set('khu_vuc', form.khu_vuc === k ? '' : k)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                    form.khu_vuc === k
+                      ? 'bg-blue-600 text-white border-transparent'
+                      : 'border-gray-200 text-gray-500'
+                  }`}
+                >
+                  {k.replace('Miền ', '')}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
