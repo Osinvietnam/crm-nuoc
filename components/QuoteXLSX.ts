@@ -3,7 +3,7 @@ import type { Quote } from '@/app/api/lark/quotes/_mappers'
 import type { CompanyInfo } from '@/components/QuotePDF'
 
 const COMPANY_FALLBACK: CompanyInfo = {
-  name: '', address: '', phone: '', email: '', tax: '', website: '',
+  name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '',
 }
 
 const fmtDate = (ms: number | null) => ms
