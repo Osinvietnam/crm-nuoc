@@ -1,7 +1,7 @@
 export const TABLES = {
   CUSTOMERS:        'tbl56uB4wSaACzgm',
   CONTRACTS:        'tbl2l6Z9vPaHfNHs',
-  PAYMENTS:         'tbltKdcqLIWKX0JA',
+  PAYMENTS:         'tbl6lKVsQhrSdp4L',
   PARTNERS:         'tbl1GDMJrfbT7peB',
   STAFF:            'tbl5Zqfu8qQqWBk7',
   PRODUCTS:         'tbl5ekXxzmCADqQw',
