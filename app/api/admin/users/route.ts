@@ -27,7 +27,8 @@ export async function GET() {
     const service   = createServiceClient()
 
     // Try extended fields first; fall back to basic if columns don't exist yet (pending migrations)
-    let profiles: Record<string, unknown>[] | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let profiles: any[] | null = null
     if (isManager) {
       const { data, error } = await service
         .from('profiles')
