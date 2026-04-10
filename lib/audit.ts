@@ -12,8 +12,12 @@ export type AuditAction =
   | 'logo_deleted'
   | 'quote_status_changed'
   | 'password_reset'
+  | 'payment_created'
+  | 'payment_updated'
+  | 'payment_deleted'
+  | 'kpi_target_set'
 
-export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config'
+export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi'
 
 export async function logAudit(
   supabase: SupabaseClient,

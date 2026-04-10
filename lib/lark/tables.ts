@@ -61,8 +61,10 @@ export const NGUON_KH_OPTIONS = [
   'Giới thiệu bạn bè',
   'Khách cũ giới thiệu',
   'Đối tác giới thiệu',
+  'Đối tác giới thiệu đối tác',
   'Nhà phân phối',
   'Đại lý',
+  'KH cũ mua lại',
   'Khác',
 ] as const
 

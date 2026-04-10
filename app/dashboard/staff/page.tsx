@@ -111,6 +111,17 @@ export default function StaffPage() {
   const [offboarding,  setOffboarding]  = useState(false)
   const [offboardMsg,  setOffboardMsg]  = useState('')
 
+  // KPI
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [kpiData,      setKpiData]      = useState<Record<string, any>>({})
+  const [kpiLoading,   setKpiLoading]   = useState<Set<string>>(new Set())
+  const [kpiMonth,     setKpiMonth]     = useState(new Date().getMonth() + 1)
+  const [kpiYear,      setKpiYear]      = useState(new Date().getFullYear())
+  const [kpiModal,     setKpiModal]     = useState<string | null>(null)
+  const [kpiForm,      setKpiForm]      = useState({ target_revenue: '', target_contracts: '', target_customers: '' })
+  const [kpiSaving,    setKpiSaving]    = useState(false)
+  const [kpiSaveMsg,   setKpiSaveMsg]   = useState('')
+
   // Create new user
   const [showCreate,   setShowCreate]   = useState(false)
   const [createForm,   setCreateForm]   = useState<NewUserForm>(EMPTY_FORM)
@@ -238,6 +249,45 @@ export default function StaffPage() {
     setCreating(false)
   }
 
+  // ─── KPI ───────────────────────────────────────────────────────────────────
+
+  const loadKpi = (userId: string) => {
+    setKpiLoading(prev => new Set(prev).add(userId))
+    fetch(`/api/kpi/me?userId=${userId}&month=${kpiMonth}&year=${kpiYear}`)
+      .then(r => r.json())
+      .then(d => setKpiData(prev => ({ ...prev, [userId]: d })))
+      .catch(() => setKpiData(prev => ({ ...prev, [userId]: null })))
+      .finally(() => setKpiLoading(prev => { const s = new Set(prev); s.delete(userId); return s }))
+  }
+
+  const saveKpiTarget = async () => {
+    if (!kpiModal) return
+    setKpiSaving(true); setKpiSaveMsg('')
+    try {
+      const res = await fetch('/api/admin/kpi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:          kpiModal,
+          month:            kpiMonth,
+          year:             kpiYear,
+          target_revenue:   kpiForm.target_revenue   ? Number(kpiForm.target_revenue.replace(/[^\d]/g, ''))   : 0,
+          target_contracts: kpiForm.target_contracts ? Number(kpiForm.target_contracts) : 0,
+          target_customers: kpiForm.target_customers ? Number(kpiForm.target_customers) : 0,
+        }),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setKpiSaveMsg('Đã lưu mục tiêu')
+        loadKpi(kpiModal)
+        setTimeout(() => { setKpiModal(null); setKpiSaveMsg('') }, 1500)
+      } else {
+        setKpiSaveMsg(json.error ?? 'Lỗi lưu')
+      }
+    } catch { setKpiSaveMsg('Lỗi kết nối') }
+    finally { setKpiSaving(false) }
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   if (loading) return (
@@ -337,8 +387,10 @@ export default function StaffPage() {
               <button
                 className="w-full flex items-center gap-3 px-4 py-3 text-left"
                 onClick={() => {
-                  setExpandedId(isExpanded ? null : s.id)
+                  const willExpand = !isExpanded
+                  setExpandedId(willExpand ? s.id : null)
                   setEditId(null); setResetId(null); setOffboardId(null)
+                  if (willExpand && isManager && !kpiData[s.id]) loadKpi(s.id)
                 }}
               >
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
@@ -449,6 +501,26 @@ export default function StaffPage() {
                     </div>
                   )}
 
+                  {/* KPI Card */}
+                  {isManager && !isEditing && !isResetting && !isOffboarding && (
+                    <KpiCard
+                      data={kpiData[s.id]}
+                      loading={kpiLoading.has(s.id)}
+                      isAdmin={isAdmin}
+                      month={kpiMonth}
+                      year={kpiYear}
+                      onSetTarget={() => {
+                        const d = kpiData[s.id]
+                        setKpiForm({
+                          target_revenue:   d?.target?.target_revenue   ? String(d.target.target_revenue)   : '',
+                          target_contracts: d?.target?.target_contracts ? String(d.target.target_contracts) : '',
+                          target_customers: d?.target?.target_customers ? String(d.target.target_customers) : '',
+                        })
+                        setKpiModal(s.id)
+                      }}
+                    />
+                  )}
+
                   {/* Action buttons (manager only, not while in sub-forms) */}
                   {isManager && !isEditing && !isResetting && !isOffboarding && (
                     <div className="flex flex-wrap gap-2 pt-1">
@@ -480,6 +552,68 @@ export default function StaffPage() {
           )
         })}
       </div>
+
+      {/* KPI target modal */}
+      {kpiModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex flex-col justify-end"
+          onClick={e => e.target === e.currentTarget && setKpiModal(null)}>
+          <div className="bg-white rounded-t-3xl">
+            <div className="flex justify-center pt-3 pb-1"><div className="w-12 h-1.5 bg-gray-300 rounded-full" /></div>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-bold text-gray-800">Đặt mục tiêu KPI</h2>
+                <p className="text-xs text-gray-500">Tháng {kpiMonth}/{kpiYear}</p>
+              </div>
+              {/* Month/year selector */}
+              <div className="flex gap-1.5 items-center">
+                <select value={kpiMonth} onChange={e => setKpiMonth(Number(e.target.value))}
+                  className="text-xs px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i+1} value={i+1}>T{i+1}</option>
+                  ))}
+                </select>
+                <select value={kpiYear} onChange={e => setKpiYear(Number(e.target.value))}
+                  className="text-xs px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none">
+                  {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button onClick={() => setKpiModal(null)} className="text-gray-400 p-1 text-lg ml-1">✕</button>
+              </div>
+            </div>
+            <div className="p-5 space-y-4 pb-8">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Doanh thu mục tiêu (VNĐ)</label>
+                <input type="text" inputMode="numeric" value={kpiForm.target_revenue}
+                  onChange={e => setKpiForm(f => ({ ...f, target_revenue: e.target.value }))}
+                  placeholder="Ví dụ: 100000000"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Số hợp đồng mục tiêu</label>
+                <input type="number" inputMode="numeric" min="0" value={kpiForm.target_contracts}
+                  onChange={e => setKpiForm(f => ({ ...f, target_contracts: e.target.value }))}
+                  placeholder="Ví dụ: 5"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Số khách hàng mới mục tiêu</label>
+                <input type="number" inputMode="numeric" min="0" value={kpiForm.target_customers}
+                  onChange={e => setKpiForm(f => ({ ...f, target_customers: e.target.value }))}
+                  placeholder="Ví dụ: 10"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              {kpiSaveMsg && (
+                <p className={`text-sm text-center py-2 rounded-xl ${kpiSaveMsg.includes('Đã lưu') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {kpiSaveMsg}
+                </p>
+              )}
+              <button onClick={saveKpiTarget} disabled={kpiSaving}
+                className="w-full py-3.5 bg-blue-600 text-white font-semibold rounded-2xl active:bg-blue-700 disabled:opacity-50">
+                {kpiSaving ? 'Đang lưu...' : 'Lưu mục tiêu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create user modal */}
       {showCreate && (
@@ -557,6 +691,106 @@ export default function StaffPage() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function KpiCard({ data, loading, isAdmin, month, year, onSetTarget }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any
+  loading: boolean
+  isAdmin: boolean
+  month: number
+  year: number
+  onSetTarget: () => void
+}) {
+  if (loading) {
+    return (
+      <div className="bg-gray-50 rounded-xl px-3 py-3 flex justify-center">
+        <span className="crm-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+      </div>
+    )
+  }
+
+  const target = data?.target
+  const actual = data?.actual
+  const perf   = data?.performance
+
+  const fmtM    = (n: number | null | undefined) =>
+    n != null ? (n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n.toLocaleString('vi-VN')) : '—'
+  const pctBar  = (pct: number | null) => Math.min(100, Math.max(0, pct ?? 0))
+  const barColor = (pct: number | null) => (pct ?? 0) >= 100 ? 'bg-green-500' : 'bg-blue-500'
+
+  return (
+    <div className="bg-gray-50 rounded-xl px-3 py-3 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-500">KPI {month}/{year}</p>
+        {isAdmin && (
+          <button
+            onClick={onSetTarget}
+            className="text-[10px] text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg font-semibold active:bg-blue-100"
+          >
+            ⚙ Đặt mục tiêu
+          </button>
+        )}
+      </div>
+
+      {!target ? (
+        <p className="text-xs text-gray-400 text-center py-1">Chưa đặt mục tiêu tháng này</p>
+      ) : (
+        <>
+          {/* Doanh thu */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[11px] text-gray-500">Doanh thu</span>
+              <span className="text-[11px] font-semibold text-gray-700">
+                {fmtM(actual?.revenue)} / {fmtM(target.target_revenue)}
+                {perf?.revenue != null && (
+                  <span className={`ml-1.5 ${(perf.revenue ?? 0) >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                    {perf.revenue}%
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${barColor(perf?.revenue)}`}
+                style={{ width: `${pctBar(perf?.revenue)}%` }} />
+            </div>
+          </div>
+
+          {/* Hợp đồng */}
+          {target.target_contracts > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[11px] text-gray-500">Hợp đồng</span>
+                <span className="text-[11px] font-semibold text-gray-700">
+                  {actual?.contracts ?? '—'} / {target.target_contracts} HĐ
+                </span>
+              </div>
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-400 rounded-full transition-all"
+                  style={{ width: `${pctBar(perf?.contracts)}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* KH mới */}
+          {target.target_customers > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[11px] text-gray-500">KH mới</span>
+                <span className="text-[11px] font-semibold text-gray-700">
+                  {actual?.customers ?? '—'} / {target.target_customers} KH
+                </span>
+              </div>
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-400 rounded-full transition-all"
+                  style={{ width: `${pctBar(perf?.customers)}%` }} />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
 function InfoGrid({ items }: { items: { label: string; value?: string | number | null }[] }) {
   const visible = items.filter(i => i.value)

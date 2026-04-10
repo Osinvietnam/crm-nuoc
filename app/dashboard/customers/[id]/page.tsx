@@ -7,6 +7,8 @@ import type { Customer } from '@/app/api/lark/customers/route'
 import type { Quote } from '@/app/api/lark/quotes/_mappers'
 import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 import type { Product } from '@/app/api/lark/products/_mapper'
+import { TaskChecklist } from '@/components/TaskChecklist'
+import { PaymentSection } from '@/components/PaymentSection'
 
 const formatPhone = (p: string) => p?.replace(/^84/, '0') ?? ''
 const formatMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
@@ -98,6 +100,8 @@ export default function CustomerDetailPage() {
   const [updating, setUpdating]           = useState(false)
   const [showPipeline, setShowPipeline]   = useState(false)
   const [showQuoteForm, setShowQuoteForm] = useState(false)
+  const [userRole, setUserRole]           = useState('')
+  const [userFullName, setUserFullName]   = useState('')
   const [successMsg, setSuccessMsg]       = useState('')
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
@@ -155,6 +159,14 @@ export default function CustomerDetailPage() {
     } catch { setQError('Lỗi kết nối') }
     finally { setQSaving(false) }
   }
+
+  // Load user profile (role) — dùng cho TaskChecklist + PaymentSection
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => { setUserRole(d.role ?? ''); setUserFullName(d.full_name ?? '') })
+      .catch(() => {})
+  }, [])
 
   // Load lịch sử báo giá của KH
   useEffect(() => {
@@ -305,6 +317,15 @@ export default function CustomerDetailPage() {
           </div>
         </div>
 
+        {/* Task Checklist */}
+        {userRole && (
+          <TaskChecklist
+            customerId={id}
+            stage={pipeline}
+            userRole={userRole}
+          />
+        )}
+
         {/* Quick actions */}
         <div className="grid grid-cols-4 gap-2">
           <a
@@ -436,6 +457,16 @@ export default function CustomerDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Thanh toán 3 đợt — chỉ hiện từ giai đoạn Chốt HĐ trở đi */}
+        {currentStageIdx >= PIPELINE_STAGES.indexOf('Chốt HĐ') && pipeline !== 'Lost' && userRole && (
+          <PaymentSection
+            customerId={id}
+            customerName={customer.ho_ten}
+            nguoiPhuTrach={customer.nguoi_phu_trach}
+            userRole={userRole}
+          />
+        )}
 
         {customer.ly_do_tu_choi && (
           <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
