@@ -1,8 +1,7 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { updateRecord, listAllRecords } from '@/lib/lark/client'
-import { revalidateTag } from 'next/cache'
+import { invalidateCache } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { logAudit } from '@/lib/audit'
 
@@ -63,7 +62,7 @@ export async function POST(
         )
       )
       transferred = records.length
-      revalidateTag('lark-customers', 'max')
+      invalidateCache(TABLES.CUSTOMERS)
     } catch {
       // LarkBase lỗi không block offboarding
     }

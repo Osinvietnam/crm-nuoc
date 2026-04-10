@@ -1,9 +1,7 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createRecord } from '@/lib/lark/client'
-import { cachedListAllRecords } from '@/lib/lark/cached'
+import { cachedListAllRecords, invalidateCache } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mapProduct, productToFields } from './_mapper'
 
@@ -39,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const record = await createRecord(TABLES.PRODUCTS, productToFields(body))
-    revalidateTag('lark-products', 'max')
+    invalidateCache(TABLES.PRODUCTS)
     return NextResponse.json({ data: mapProduct(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/products:', err)

@@ -1,9 +1,7 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createRecord, updateRecord } from '@/lib/lark/client'
-import { cachedListAllRecords } from '@/lib/lark/cached'
+import { cachedListAllRecords, invalidateCache } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mapQuote } from './_mappers'
 
@@ -144,8 +142,8 @@ export async function POST(req: NextRequest) {
       }).catch(() => {}) // non-blocking
     }
 
-    revalidateTag('lark-quotes', 'max')
-    revalidateTag('lark-customers', 'max') // pipeline may have changed
+    invalidateCache(TABLES.QUOTES)
+    invalidateCache(TABLES.CUSTOMERS) // pipeline may have changed
     return NextResponse.json({ data: mapQuote(record) }, { status: 201 })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

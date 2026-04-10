@@ -1,9 +1,7 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createRecord, LarkRecord } from '@/lib/lark/client'
-import { cachedListAllRecords } from '@/lib/lark/cached'
+import { cachedListAllRecords, invalidateCache } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 
 export interface Customer {
@@ -156,7 +154,7 @@ export async function POST(req: NextRequest) {
     if (khu_vuc)            fields['Khu vực'] = khu_vuc
 
     const record = await createRecord(TABLES.CUSTOMERS, fields)
-    revalidateTag('lark-customers', 'max')
+    invalidateCache(TABLES.CUSTOMERS)
     return NextResponse.json({ customer: mapRecord(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/customers:', err)

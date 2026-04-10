@@ -1,9 +1,7 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createRecord } from '@/lib/lark/client'
-import { cachedListAllRecords } from '@/lib/lark/cached'
+import { cachedListAllRecords, invalidateCache } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mappers } from './_mappers'
 
@@ -167,7 +165,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      revalidateTag('lark-contracts', 'max')
+      invalidateCache(TABLES.CONTRACTS)
       return NextResponse.json({ data: mappers.contract(record) }, { status: 201 })
     }
 
@@ -193,7 +191,7 @@ export async function POST(req: NextRequest) {
       if (tinh_thanh) fields['Tỉnh|Thành'] = tinh_thanh
       if (ghi_chu) fields['Ghi chú'] = ghi_chu
       const record = await createRecord(TABLES.COMMERCIAL, fields)
-      revalidateTag('lark-commercial', 'max')
+      invalidateCache(TABLES.COMMERCIAL)
       return NextResponse.json({ data: mappers.commercial(record) }, { status: 201 })
     }
 
@@ -216,7 +214,7 @@ export async function POST(req: NextRequest) {
       if (ty_le_thang) fields['Tỷ lệ thắng thầu (%)'] = Number(ty_le_thang)
       if (ghi_chu) fields['Ghi chú'] = ghi_chu
       const record = await createRecord(TABLES.PROJECTS, fields)
-      revalidateTag('lark-projects', 'max')
+      invalidateCache(TABLES.PROJECTS)
       return NextResponse.json({ data: mappers.project(record) }, { status: 201 })
     }
 
