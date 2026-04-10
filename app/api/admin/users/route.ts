@@ -5,7 +5,7 @@ import { logAudit } from '@/lib/audit'
 const ROLES = ['admin', 'ceo', 'tech_lead', 'accountant', 'sales', 'tech', 'logistics', 'partner'] as const
 
 const BASIC_FIELDS   = 'id, full_name, email, role, phone, chuc_vu, khu_vuc, trang_thai_nv'
-const MANAGER_FIELDS = 'id, full_name, email, role, phone, department, chuc_vu, khu_vuc, ' +
+const MANAGER_FIELDS = 'id, full_name, email, role, phone, chuc_vu, khu_vuc, ' +
   'target_thang, ngay_vao_lam, trang_thai_nv, is_active, created_at, ' +
   'ngay_sinh, dia_chi, cccd, so_tk_nh, ngan_hang, tinh_trang_hn, ghi_chu_nb'
 

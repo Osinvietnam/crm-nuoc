@@ -83,6 +83,7 @@ const EMPTY_FORM: NewUserForm = {
 export default function StaffPage() {
   const [staffList,    setStaffList]    = useState<Staff[]>([])
   const [loading,      setLoading]      = useState(true)
+  const [loadError,    setLoadError]    = useState('')
   const [isManager,    setIsManager]    = useState(false)
   const [isAdmin,      setIsAdmin]      = useState(false)
 
@@ -120,12 +121,15 @@ export default function StaffPage() {
 
   const loadStaff = async () => {
     setLoading(true)
+    setLoadError('')
     const res = await fetch('/api/admin/users')
+    const json = await res.json()
     if (res.ok) {
-      const json = await res.json()
       setStaffList(json.data ?? [])
       setIsManager(json.isManager ?? false)
       setIsAdmin(json.isAdmin ?? false)
+    } else {
+      setLoadError(json.error ?? `Lỗi ${res.status}`)
     }
     setLoading(false)
   }
@@ -310,7 +314,12 @@ export default function StaffPage() {
 
       {/* Staff list */}
       <div className="px-4 space-y-3">
-        {filtered.length === 0 && (
+        {loadError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+            Lỗi tải dữ liệu: {loadError}
+          </div>
+        )}
+        {!loadError && filtered.length === 0 && (
           <p className="text-center text-gray-400 text-sm py-10">Không tìm thấy nhân viên nào</p>
         )}
 
