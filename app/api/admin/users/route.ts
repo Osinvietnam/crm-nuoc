@@ -53,15 +53,20 @@ export async function GET() {
           .from('profiles')
           .select(MINIMAL_FIELDS)
           .order('created_at', { ascending: true })
-        if (error2) throw error2
+        if (error2) {
+          const msg = `MINIMAL_FIELDS failed: ${error2.message}`
+          console.error('GET /api/admin/users:', msg)
+          return NextResponse.json({ error: msg }, { status: 500 })
+        }
         profiles = data2
       }
     }
 
     return NextResponse.json({ data: profiles ?? [], isManager, isAdmin })
   } catch (err) {
-    console.error('GET /api/admin/users:', err)
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('GET /api/admin/users:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
 
