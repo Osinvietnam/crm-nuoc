@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const record = await createRecord(TABLES.PRODUCTS, productToFields(body))
-    revalidateTag('lark-products')
+    revalidateTag('lark-products', 'max')
     return NextResponse.json({ data: mapProduct(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/products:', err)

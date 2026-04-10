@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      revalidateTag('lark-contracts')
+      revalidateTag('lark-contracts', 'max')
       return NextResponse.json({ data: mappers.contract(record) }, { status: 201 })
     }
 
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
       if (tinh_thanh) fields['Tỉnh|Thành'] = tinh_thanh
       if (ghi_chu) fields['Ghi chú'] = ghi_chu
       const record = await createRecord(TABLES.COMMERCIAL, fields)
-      revalidateTag('lark-commercial')
+      revalidateTag('lark-commercial', 'max')
       return NextResponse.json({ data: mappers.commercial(record) }, { status: 201 })
     }
 
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
       if (ty_le_thang) fields['Tỷ lệ thắng thầu (%)'] = Number(ty_le_thang)
       if (ghi_chu) fields['Ghi chú'] = ghi_chu
       const record = await createRecord(TABLES.PROJECTS, fields)
-      revalidateTag('lark-projects')
+      revalidateTag('lark-projects', 'max')
       return NextResponse.json({ data: mappers.project(record) }, { status: 201 })
     }
 

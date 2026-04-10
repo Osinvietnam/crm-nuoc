@@ -143,8 +143,8 @@ export async function POST(req: NextRequest) {
       }).catch(() => {}) // non-blocking
     }
 
-    revalidateTag('lark-quotes')
-    revalidateTag('lark-customers') // pipeline may have changed
+    revalidateTag('lark-quotes', 'max')
+    revalidateTag('lark-customers', 'max') // pipeline may have changed
     return NextResponse.json({ data: mapQuote(record) }, { status: 201 })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

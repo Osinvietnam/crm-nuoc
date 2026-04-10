@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     if (khu_vuc)            fields['Khu vực'] = khu_vuc
 
     const record = await createRecord(TABLES.CUSTOMERS, fields)
-    revalidateTag('lark-customers')
+    revalidateTag('lark-customers', 'max')
     return NextResponse.json({ customer: mapRecord(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/customers:', err)

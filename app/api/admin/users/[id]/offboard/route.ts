@@ -62,7 +62,7 @@ export async function POST(
         )
       )
       transferred = records.length
-      revalidateTag('lark-customers')
+      revalidateTag('lark-customers', 'max')
     } catch {
       // LarkBase lỗi không block offboarding
     }
