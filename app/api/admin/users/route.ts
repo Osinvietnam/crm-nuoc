@@ -5,6 +5,7 @@ import { logAudit } from '@/lib/audit'
 const ROLES = ['admin', 'ceo', 'tech_lead', 'accountant', 'sales', 'tech', 'logistics', 'partner'] as const
 
 const BASIC_FIELDS   = 'id, full_name, email, role, phone, chuc_vu, khu_vuc, trang_thai_nv'
+const MINIMAL_FIELDS = 'id, full_name, email, role, phone, is_active, created_at'
 const MANAGER_FIELDS = 'id, full_name, email, role, phone, chuc_vu, khu_vuc, ' +
   'target_thang, ngay_vao_lam, trang_thai_nv, is_active, created_at, ' +
   'ngay_sinh, dia_chi, cccd, so_tk_nh, ngan_hang, tinh_trang_hn, ghi_chu_nb'
@@ -25,12 +26,37 @@ export async function GET() {
     const isAdmin   = me.role === 'admin'
     const service   = createServiceClient()
 
-    const { data: profiles, error } = await service
-      .from('profiles')
-      .select(isManager ? MANAGER_FIELDS : BASIC_FIELDS)
-      .order('created_at', { ascending: true })
+    // Try extended fields first; fall back to basic if columns don't exist yet (pending migrations)
+    let profiles: Record<string, unknown>[] | null = null
+    if (isManager) {
+      const { data, error } = await service
+        .from('profiles')
+        .select(MANAGER_FIELDS)
+        .order('created_at', { ascending: true })
+      if (!error) {
+        profiles = data
+      } else {
+        console.warn('MANAGER_FIELDS query failed, falling back to BASIC_FIELDS:', error.message)
+      }
+    }
+    if (profiles === null) {
+      const { data, error } = await service
+        .from('profiles')
+        .select(BASIC_FIELDS)
+        .order('created_at', { ascending: true })
+      if (!error) {
+        profiles = data
+      } else {
+        console.warn('BASIC_FIELDS query failed, falling back to MINIMAL_FIELDS:', error.message)
+        const { data: data2, error: error2 } = await service
+          .from('profiles')
+          .select(MINIMAL_FIELDS)
+          .order('created_at', { ascending: true })
+        if (error2) throw error2
+        profiles = data2
+      }
+    }
 
-    if (error) throw error
     return NextResponse.json({ data: profiles ?? [], isManager, isAdmin })
   } catch (err) {
     console.error('GET /api/admin/users:', err)
