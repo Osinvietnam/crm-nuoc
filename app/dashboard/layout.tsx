@@ -43,11 +43,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     admin: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
-      { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
       { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
+      { href: '/dashboard/admin', label: 'Quản trị', icon: '⚙️' },
     ],
     ceo: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
