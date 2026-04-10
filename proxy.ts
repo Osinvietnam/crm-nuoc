@@ -59,12 +59,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // /dashboard/staff → admin, ceo, tech_lead, accountant
-    if (isStaffRoute && !['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
+    // /dashboard/staff → tất cả user đã đăng nhập đều xem được
   }
 
   return supabaseResponse

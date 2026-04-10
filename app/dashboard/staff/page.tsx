@@ -1,31 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState, useMemo } from 'react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROLE_OPTIONS = [
-  { value: 'sales',      label: 'Kinh doanh'       },
-  { value: 'tech',       label: 'Kỹ thuật'          },
-  { value: 'logistics',  label: 'Hậu cần'           },
-  { value: 'tech_lead',  label: 'Trưởng phòng KT'   },
-  { value: 'accountant', label: 'Kế toán'            },
-  { value: 'ceo',        label: 'Giám đốc'           },
-  { value: 'admin',      label: 'Quản trị viên'      },
-  { value: 'partner',    label: 'Đối tác'            },
+  { value: 'sales',      label: 'Kinh doanh'      },
+  { value: 'tech',       label: 'Kỹ thuật'         },
+  { value: 'logistics',  label: 'Hậu cần'          },
+  { value: 'tech_lead',  label: 'Trưởng phòng KT'  },
+  { value: 'accountant', label: 'Kế toán'           },
+  { value: 'ceo',        label: 'Giám đốc'          },
+  { value: 'admin',      label: 'Quản trị viên'     },
+  { value: 'partner',    label: 'Đối tác'           },
 ]
 
-const ROLE_LABEL: Record<string, string> = {
-  admin:      'Quản trị viên',
-  ceo:        'Giám đốc',
-  tech_lead:  'Trưởng phòng KT',
-  accountant: 'Kế toán',
-  sales:      'Kinh doanh',
-  tech:       'Kỹ thuật',
-  logistics:  'Hậu cần',
-  partner:    'Đối tác',
-}
+const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLE_OPTIONS.map(r => [r.value, r.label]))
 
 const ROLE_COLOR: Record<string, string> = {
   admin:      'bg-purple-100 text-purple-700',
@@ -39,7 +29,6 @@ const ROLE_COLOR: Record<string, string> = {
 }
 
 const STATUS_OPTIONS = ['Đang làm', 'Thử việc', 'Tạm nghỉ', 'Nghỉ việc']
-
 const STATUS_COLOR: Record<string, string> = {
   'Đang làm': 'bg-green-100 text-green-700',
   'Thử việc': 'bg-blue-100 text-blue-700',
@@ -47,7 +36,9 @@ const STATUS_COLOR: Record<string, string> = {
   'Nghỉ việc': 'bg-red-100 text-red-600',
 }
 
-const KHU_VUC_OPTIONS = ['Miền Nam', 'Miền Bắc', 'Miền Trung']
+const KHU_VUC_OPTIONS  = ['Miền Nam', 'Miền Bắc', 'Miền Trung']
+const HN_OPTIONS       = ['Độc thân', 'Đã kết hôn', 'Ly hôn']
+const NH_OPTIONS       = ['Vietcombank','MB Bank','Techcombank','VietinBank','BIDV','VPBank','ACB','TPBank','Sacombank','HDBank','Khác']
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,643 +47,626 @@ interface Staff {
   full_name: string
   email: string
   role: string
-  phone: string
-  department: string
-  chuc_vu: string
-  khu_vuc: string
-  target_thang: number | null
-  ngay_vao_lam: string | null
+  phone?: string
+  chuc_vu?: string
+  khu_vuc?: string
   trang_thai_nv: string
-  is_active: boolean
-  created_at: string
+  // manager-only fields
+  department?: string
+  target_thang?: number | null
+  ngay_vao_lam?: string | null
+  is_active?: boolean
+  created_at?: string
+  ngay_sinh?: string | null
+  dia_chi?: string | null
+  cccd?: string | null
+  so_tk_nh?: string | null
+  ngan_hang?: string | null
+  tinh_trang_hn?: string | null
+  ghi_chu_nb?: string | null
+}
+
+interface NewUserForm {
+  full_name: string; email: string; role: string; phone: string
+  chuc_vu: string; khu_vuc: string; target_thang: string; ngay_vao_lam: string
+  trang_thai_nv: string
+}
+
+const EMPTY_FORM: NewUserForm = {
+  full_name: '', email: '', role: 'sales', phone: '',
+  chuc_vu: '', khu_vuc: '', target_thang: '', ngay_vao_lam: '',
+  trang_thai_nv: 'Đang làm',
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StaffPage() {
-  const [staffList, setStaffList] = useState<Staff[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [expandedId,    setExpandedId]    = useState<string | null>(null)
-  const [editId,        setEditId]        = useState<string | null>(null)
-  const [editForm,      setEditForm]      = useState<Partial<Staff>>({})
-  const [saving,        setSaving]        = useState(false)
-  const [resetId,       setResetId]       = useState<string | null>(null)
-  const [resetPass,     setResetPass]     = useState('')
-  const [resetSaving,   setResetSaving]   = useState(false)
-  const [resetMsg,      setResetMsg]      = useState('')
-  const [myRole,        setMyRole]        = useState('')
-  const [form, setForm] = useState({
-    full_name:    '',
-    email:        '',
-    phone:        '',
-    department:   '',
-    chuc_vu:      '',
-    khu_vuc:      '',
-    target_thang: '',
-    ngay_vao_lam: '',
-    role:         'sales',
-    trang_thai_nv: 'Đang làm',
-    password:     '',
-  })
-  const supabase = createClient()
+  const [staffList,    setStaffList]    = useState<Staff[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [isManager,    setIsManager]    = useState(false)
+  const [isAdmin,      setIsAdmin]      = useState(false)
+
+  // Filters
+  const [search,       setSearch]       = useState('')
+  const [filterRole,   setFilterRole]   = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterKV,     setFilterKV]     = useState('')
+
+  // Card state
+  const [expandedId,   setExpandedId]   = useState<string | null>(null)
+  const [editId,       setEditId]       = useState<string | null>(null)
+  const [editForm,     setEditForm]     = useState<Partial<Staff>>({})
+  const [saving,       setSaving]       = useState(false)
+  const [saveMsg,      setSaveMsg]      = useState('')
+
+  // Reset password
+  const [resetId,      setResetId]      = useState<string | null>(null)
+  const [resetPass,    setResetPass]    = useState('')
+  const [resetSaving,  setResetSaving]  = useState(false)
+  const [resetMsg,     setResetMsg]     = useState('')
+
+  // Offboarding
+  const [offboardId,   setOffboardId]   = useState<string | null>(null)
+  const [offboarding,  setOffboarding]  = useState(false)
+  const [offboardMsg,  setOffboardMsg]  = useState('')
+
+  // Create new user
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [createForm,   setCreateForm]   = useState<NewUserForm>(EMPTY_FORM)
+  const [creating,     setCreating]     = useState(false)
+  const [createMsg,    setCreateMsg]    = useState('')
+
+  // ─── Load ──────────────────────────────────────────────────────────────────
 
   const loadStaff = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setStaffList(data ?? [])
+    const res = await fetch('/api/admin/users')
+    if (res.ok) {
+      const json = await res.json()
+      setStaffList(json.data ?? [])
+      setIsManager(json.isManager ?? false)
+      setIsAdmin(json.isAdmin ?? false)
+    }
     setLoading(false)
   }
 
-  useEffect(() => {
-    loadStaff()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from('profiles').select('role').eq('id', user.id).single()
-        .then(({ data }) => setMyRole(data?.role ?? ''))
-    })
-  }, [])
+  useEffect(() => { loadStaff() }, [])
 
-  const generatePassword = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    let pass = ''
-    for (let i = 0; i < 10; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length))
+  // ─── Filtered list ─────────────────────────────────────────────────────────
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return staffList.filter(s => {
+      if (q && !s.full_name.toLowerCase().includes(q) && !s.email.toLowerCase().includes(q) && !(s.phone ?? '').includes(q)) return false
+      if (filterRole   && s.role !== filterRole)           return false
+      if (filterStatus && s.trang_thai_nv !== filterStatus) return false
+      if (filterKV     && s.khu_vuc !== filterKV)          return false
+      return true
+    })
+  }, [staffList, search, filterRole, filterStatus, filterKV])
+
+  // ─── Stats ─────────────────────────────────────────────────────────────────
+
+  const stats = useMemo(() => ({
+    total:    staffList.length,
+    active:   staffList.filter(s => s.trang_thai_nv === 'Đang làm').length,
+    probation:staffList.filter(s => s.trang_thai_nv === 'Thử việc').length,
+    leave:    staffList.filter(s => s.trang_thai_nv === 'Tạm nghỉ').length,
+  }), [staffList])
+
+  // ─── Save edit ─────────────────────────────────────────────────────────────
+
+  const handleSave = async (id: string) => {
+    setSaving(true); setSaveMsg('')
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...editForm }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setStaffList(list => list.map(s => s.id === id ? { ...s, ...editForm } : s))
+      setEditId(null)
+      setSaveMsg('Đã lưu.')
+      setTimeout(() => setSaveMsg(''), 3000)
+    } else {
+      setSaveMsg(json.error ?? 'Lỗi khi lưu')
     }
-    setForm(f => ({ ...f, password: pass }))
+    setSaving(false)
   }
 
-  const handleCreate = async () => {
-    if (!form.full_name || !form.email || !form.password) {
-      setErrorMsg('Vui lòng điền đầy đủ họ tên, email và mật khẩu')
-      return
-    }
-    setSending(true)
-    setErrorMsg('')
-    setSuccessMsg('')
-
-    const profileData = {
-      email:         form.email,
-      full_name:     form.full_name,
-      role:          form.role,
-      phone:         form.phone,
-      department:    form.department,
-      chuc_vu:       form.chuc_vu || null,
-      khu_vuc:       form.khu_vuc || null,
-      target_thang:  form.target_thang ? Number(form.target_thang.replace(/\D/g, '')) : null,
-      ngay_vao_lam:  form.ngay_vao_lam || null,
-      trang_thai_nv: form.trang_thai_nv,
-      is_active:     form.trang_thai_nv !== 'Nghỉ việc',
-    }
-
-    const { data: created, error } = await supabase.auth.admin.createUser({
-      email: form.email,
-      password: form.password,
-      email_confirm: true,
-      user_metadata: { full_name: form.full_name, role: form.role },
-    })
-
-    if (error) {
-      // Fallback: signUp
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: { data: { full_name: form.full_name, role: form.role } },
-      })
-      if (signUpError) {
-        setErrorMsg('Lỗi tạo tài khoản: ' + signUpError.message)
-        setSending(false)
-        return
-      }
-      if (signUpData.user) {
-        await supabase.from('profiles').upsert({ id: signUpData.user.id, ...profileData })
-      }
-    } else if (created.user) {
-      await supabase.from('profiles').upsert({ id: created.user.id, ...profileData })
-    }
-
-    // Gửi email qua N8n
-    try {
-      await fetch('/api/send-staff-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name:  form.full_name,
-          email:      form.email,
-          password:   form.password,
-          role:       form.role,
-          department: form.department,
-        }),
-      })
-    } catch (e) {
-      console.error('N8n webhook error:', e)
-    }
-
-    setSending(false)
-    setSuccessMsg(`Đã tạo tài khoản cho ${form.full_name}. Email đã được gửi.`)
-    setForm({
-      full_name: '', email: '', phone: '', department: '', chuc_vu: '',
-      khu_vuc: '', target_thang: '', ngay_vao_lam: '',
-      role: 'sales', trang_thai_nv: 'Đang làm', password: '',
-    })
-    setShowForm(false)
-    loadStaff()
-  }
-
-  const startEdit = (staff: Staff) => {
-    setEditId(staff.id)
-    setEditForm({
-      full_name:    staff.full_name,
-      phone:        staff.phone,
-      chuc_vu:      staff.chuc_vu,
-      department:   staff.department,
-      khu_vuc:      staff.khu_vuc,
-      target_thang: staff.target_thang,
-      ngay_vao_lam: staff.ngay_vao_lam,
-      role:         staff.role,
-    })
-  }
+  // ─── Reset password ────────────────────────────────────────────────────────
 
   const handleResetPass = async (id: string) => {
-    if (!resetPass || resetPass.length < 8) {
-      setResetMsg('error:Mật khẩu phải có ít nhất 8 ký tự')
-      return
+    if (!resetPass || resetPass.length < 8) { setResetMsg('Mật khẩu tối thiểu 8 ký tự'); return }
+    setResetSaving(true); setResetMsg('')
+    const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: resetPass }),
+    })
+    const json = await res.json()
+    setResetMsg(res.ok ? 'Đã đặt lại mật khẩu thành công.' : (json.error ?? 'Lỗi'))
+    if (res.ok) { setResetPass(''); setTimeout(() => { setResetId(null); setResetMsg('') }, 2000) }
+    setResetSaving(false)
+  }
+
+  // ─── Offboard ──────────────────────────────────────────────────────────────
+
+  const handleOffboard = async (id: string) => {
+    setOffboarding(true); setOffboardMsg('')
+    const res = await fetch(`/api/admin/users/${id}/offboard`, { method: 'POST' })
+    const json = await res.json()
+    if (res.ok) {
+      setOffboardMsg(`Hoàn tất. Đã chuyển ${json.transferred} KH sang ${json.ceoName}.`)
+      setStaffList(list => list.map(s => s.id === id
+        ? { ...s, trang_thai_nv: 'Nghỉ việc', is_active: false }
+        : s
+      ))
+      setTimeout(() => { setOffboardId(null); setOffboardMsg('') }, 3000)
+    } else {
+      setOffboardMsg(json.error ?? 'Lỗi khi offboard')
     }
-    setResetSaving(true)
-    setResetMsg('')
-    try {
-      const res = await fetch(`/api/admin/users/${id}/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: resetPass }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setResetMsg('error:' + (data.error || 'Lỗi')); return }
-      setResetMsg('ok:Đã đặt lại mật khẩu thành công')
-      setResetPass('')
-      setTimeout(() => { setResetId(null); setResetMsg('') }, 2000)
-    } catch {
-      setResetMsg('error:Lỗi kết nối')
-    } finally {
-      setResetSaving(false)
+    setOffboarding(false)
+  }
+
+  // ─── Create user ───────────────────────────────────────────────────────────
+
+  const handleCreate = async () => {
+    setCreating(true); setCreateMsg('')
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...createForm,
+        target_thang: createForm.target_thang ? Number(createForm.target_thang) : null,
+      }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setCreateMsg('Tạo thành công! Email mời đã được gửi.')
+      setCreateForm(EMPTY_FORM)
+      await loadStaff()
+      setTimeout(() => { setShowCreate(false); setCreateMsg('') }, 2500)
+    } else {
+      setCreateMsg(json.error ?? 'Lỗi khi tạo tài khoản')
     }
+    setCreating(false)
   }
 
-  const saveEdit = async (id: string) => {
-    setSaving(true)
-    await supabase.from('profiles').update({
-      full_name:    editForm.full_name,
-      phone:        editForm.phone,
-      chuc_vu:      editForm.chuc_vu || null,
-      department:   editForm.department || null,
-      khu_vuc:      editForm.khu_vuc || null,
-      target_thang: editForm.target_thang || null,
-      ngay_vao_lam: editForm.ngay_vao_lam || null,
-      role:         editForm.role,
-    }).eq('id', id)
-    setSaving(false)
-    setEditId(null)
-    loadStaff()
-  }
+  // ─── Render ────────────────────────────────────────────────────────────────
 
-  const updateStatus = async (id: string, status: string) => {
-    await supabase.from('profiles').update({
-      trang_thai_nv: status,
-      is_active:     status !== 'Nghỉ việc',
-    }).eq('id', id)
-    loadStaff()
-  }
-
-  const fmtMoney = (n: number | null) =>
-    n ? n.toLocaleString('vi-VN') + ' đ' : '—'
-
-  const fmtDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('vi-VN') : '—'
-
-  // Active = not "Nghỉ việc"
-  const activeCount = staffList.filter(s => s.trang_thai_nv !== 'Nghỉ việc').length
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
 
   return (
-    <div className="p-4 space-y-4 pb-24">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-800">Nhân viên</h1>
-          <p className="text-xs text-gray-500">{activeCount}/{staffList.length} đang làm</p>
+    <div className="pb-32">
+
+      {/* Header + Stats */}
+      <div className="px-4 pt-5 pb-3">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-lg font-bold text-gray-800">Nhân viên</h1>
+            <p className="text-xs text-gray-500 mt-0.5">{filtered.length}/{staffList.length} nhân viên</p>
+          </div>
+          {isAdmin && (
+            <button onClick={() => setShowCreate(true)}
+              className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl">
+              + Thêm
+            </button>
+          )}
         </div>
-        <button
-          onClick={() => { setShowForm(true); setSuccessMsg(''); setErrorMsg('') }}
-          className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl flex items-center gap-2"
-        >
-          <span className="text-base leading-none">+</span> Thêm nhân viên
-        </button>
+
+        {/* Stats bar */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {[
+            { label: 'Tổng',     value: stats.total,     color: 'bg-gray-100 text-gray-700' },
+            { label: 'Đang làm', value: stats.active,    color: 'bg-green-100 text-green-700' },
+            { label: 'Thử việc', value: stats.probation, color: 'bg-blue-100 text-blue-700' },
+            { label: 'Tạm nghỉ', value: stats.leave,     color: 'bg-yellow-100 text-yellow-700' },
+          ].map(s => (
+            <div key={s.label} className={`${s.color} rounded-xl px-2 py-2 text-center`}>
+              <p className="text-lg font-bold leading-none">{s.value}</p>
+              <p className="text-[10px] mt-1 font-medium">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters */}
+        <div className="space-y-2">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm tên, email, SĐT..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+            {[
+              { value: filterRole, set: setFilterRole, options: ROLE_OPTIONS.map(r => ({ value: r.value, label: r.label })), placeholder: 'Vai trò' },
+              { value: filterStatus, set: setFilterStatus, options: STATUS_OPTIONS.map(s => ({ value: s, label: s })), placeholder: 'Trạng thái' },
+              { value: filterKV, set: setFilterKV, options: KHU_VUC_OPTIONS.map(k => ({ value: k, label: k })), placeholder: 'Khu vực' },
+            ].map((f, i) => (
+              <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
+                className="shrink-0 px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">{f.placeholder}</option>
+                {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ))}
+            {(search || filterRole || filterStatus || filterKV) && (
+              <button onClick={() => { setSearch(''); setFilterRole(''); setFilterStatus(''); setFilterKV('') }}
+                className="shrink-0 text-xs text-gray-500 px-3 py-2 border border-gray-200 rounded-xl">
+                Xóa lọc
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {successMsg && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">
-          {successMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
-          {errorMsg}
-        </div>
+      {saveMsg && (
+        <div className="mx-4 mb-2 text-sm text-center py-2 px-4 rounded-xl bg-green-50 text-green-700">{saveMsg}</div>
       )}
 
-      {/* ── Create form ── */}
-      {showForm && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
-          <h2 className="font-semibold text-gray-800">Tạo tài khoản mới</h2>
-          <div className="space-y-3">
+      {/* Staff list */}
+      <div className="px-4 space-y-3">
+        {filtered.length === 0 && (
+          <p className="text-center text-gray-400 text-sm py-10">Không tìm thấy nhân viên nào</p>
+        )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Họ và tên *</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nguyễn Văn A"
-                  value={form.full_name}
-                  onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-                />
-              </div>
+        {filtered.map(s => {
+          const isExpanded = expandedId === s.id
+          const isEditing  = editId === s.id
+          const isResetting = resetId === s.id
+          const isOffboarding = offboardId === s.id
+          const initials = s.full_name.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase()
 
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Email *</label>
-                <input
-                  type="email"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="nhanvien@gmail.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                />
-              </div>
+          return (
+            <div key={s.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+
+              {/* Collapsed row */}
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                onClick={() => {
+                  setExpandedId(isExpanded ? null : s.id)
+                  setEditId(null); setResetId(null); setOffboardId(null)
+                }}
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-blue-700">{initials}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{s.full_name}</p>
+                  <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLOR[s.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {ROLE_LABEL[s.role] ?? s.role}
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[s.trang_thai_nv] ?? 'bg-gray-100'}`}>
+                    {s.trang_thai_nv}
+                  </span>
+                </div>
+                <span className={`text-gray-400 text-xs ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+              </button>
+
+              {/* Expanded */}
+              {isExpanded && (
+                <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+
+                  {/* Basic info (all roles see) */}
+                  <InfoGrid items={[
+                    { label: 'SĐT',       value: s.phone },
+                    { label: 'Chức vụ',   value: s.chuc_vu },
+                    { label: 'Khu vực',   value: s.khu_vuc },
+                  ]} />
+
+                  {/* Manager-only info */}
+                  {isManager && !isEditing && (
+                    <>
+                      <InfoGrid items={[
+                        { label: 'Ngày vào làm', value: s.ngay_vao_lam },
+                        { label: 'Ngày sinh',    value: s.ngay_sinh },
+                        { label: 'Địa chỉ',      value: s.dia_chi },
+                        { label: 'Tình trạng HN',value: s.tinh_trang_hn },
+                      ]} />
+                      <InfoGrid items={[
+                        { label: 'CMND/CCCD',   value: s.cccd },
+                        { label: 'Ngân hàng',   value: s.ngan_hang },
+                        { label: 'Số tài khoản',value: s.so_tk_nh },
+                        { label: 'Target/tháng',value: s.target_thang ? s.target_thang.toLocaleString('vi-VN') + ' ₫' : null },
+                      ]} />
+                      {s.ghi_chu_nb && (
+                        <div className="bg-amber-50 rounded-xl px-3 py-2">
+                          <p className="text-xs text-amber-600 font-medium mb-1">Ghi chú nội bộ</p>
+                          <p className="text-sm text-gray-700">{s.ghi_chu_nb}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Edit form */}
+                  {isEditing && (
+                    <EditForm
+                      form={editForm}
+                      setForm={setEditForm}
+                      isAdmin={isAdmin}
+                      onSave={() => handleSave(s.id)}
+                      onCancel={() => setEditId(null)}
+                      saving={saving}
+                    />
+                  )}
+
+                  {/* Reset password UI */}
+                  {isResetting && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-medium text-gray-600">Đặt lại mật khẩu</p>
+                      <input
+                        type="password"
+                        value={resetPass}
+                        onChange={e => setResetPass(e.target.value)}
+                        placeholder="Mật khẩu mới (≥ 8 ký tự)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {resetMsg && <p className={`text-xs ${resetMsg.includes('thành công') ? 'text-green-600' : 'text-red-500'}`}>{resetMsg}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => { setResetId(null); setResetPass(''); setResetMsg('') }}
+                          className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+                        <button onClick={() => handleResetPass(s.id)} disabled={resetSaving}
+                          className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+                          {resetSaving ? 'Đang lưu...' : 'Xác nhận'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Offboard confirm */}
+                  {isOffboarding && (
+                    <div className="bg-red-50 rounded-xl px-3 py-3 space-y-2">
+                      <p className="text-sm font-semibold text-red-700">Xác nhận cho nghỉ việc?</p>
+                      <p className="text-xs text-red-600">
+                        Toàn bộ khách hàng của <strong>{s.full_name}</strong> sẽ được chuyển sang CEO để phân bổ lại.
+                        Tài khoản sẽ bị vô hiệu hóa ngay lập tức.
+                      </p>
+                      {offboardMsg && <p className={`text-xs font-medium ${offboardMsg.includes('Hoàn tất') ? 'text-green-700' : 'text-red-600'}`}>{offboardMsg}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => { setOffboardId(null); setOffboardMsg('') }}
+                          className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+                        <button onClick={() => handleOffboard(s.id)} disabled={offboarding}
+                          className="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-medium disabled:opacity-50">
+                          {offboarding ? 'Đang xử lý...' : 'Xác nhận'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons (manager only, not while in sub-forms) */}
+                  {isManager && !isEditing && !isResetting && !isOffboarding && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        onClick={() => { setEditId(s.id); setEditForm({ ...s }) }}
+                        className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 font-medium"
+                      >
+                        Sửa thông tin
+                      </button>
+                      <button
+                        onClick={() => setResetId(s.id)}
+                        className="flex-1 py-2 rounded-xl border border-blue-200 text-sm text-blue-600 font-medium"
+                      >
+                        Đặt lại mật khẩu
+                      </button>
+                      {s.trang_thai_nv !== 'Nghỉ việc' && (
+                        <button
+                          onClick={() => setOffboardId(s.id)}
+                          className="w-full py-2 rounded-xl border border-red-200 text-sm text-red-600 font-medium"
+                        >
+                          Cho nghỉ việc
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Create user modal */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center px-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 className="text-base font-bold text-gray-800">Thêm nhân viên mới</h2>
+              <button onClick={() => { setShowCreate(false); setCreateMsg('') }} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-gray-500 bg-blue-50 rounded-xl px-3 py-2">
+                Hệ thống sẽ gửi email mời để nhân viên tự đặt mật khẩu.
+              </p>
+
+              <FormField label="Họ tên *" value={createForm.full_name}
+                onChange={v => setCreateForm(f => ({ ...f, full_name: v }))} placeholder="Nguyễn Văn A" />
+              <FormField label="Email *" type="email" value={createForm.email}
+                onChange={v => setCreateForm(f => ({ ...f, email: v }))} placeholder="example@gmail.com" />
 
               <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Số điện thoại</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0901234567"
-                  value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                />
+                <label className="block text-xs text-gray-500 mb-1">Vai trò *</label>
+                <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Ngày vào làm</label>
-                <input
-                  type="date"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={form.ngay_vao_lam}
-                  onChange={e => setForm(f => ({ ...f, ngay_vao_lam: e.target.value }))}
-                />
-              </div>
+              <FormField label="Số điện thoại" value={createForm.phone}
+                onChange={v => setCreateForm(f => ({ ...f, phone: v }))} placeholder="0901 234 567" />
+              <FormField label="Chức vụ" value={createForm.chuc_vu}
+                onChange={v => setCreateForm(f => ({ ...f, chuc_vu: v }))} placeholder="Nhân viên kinh doanh" />
 
               <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Chức vụ</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nhân viên / Trưởng nhóm..."
-                  value={form.chuc_vu}
-                  onChange={e => setForm(f => ({ ...f, chuc_vu: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Phòng ban</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Kinh doanh / Kỹ thuật..."
-                  value={form.department}
-                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Khu vực</label>
-                <select
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  value={form.khu_vuc}
-                  onChange={e => setForm(f => ({ ...f, khu_vuc: e.target.value }))}
-                >
-                  <option value="">— Chọn khu vực —</option>
+                <label className="block text-xs text-gray-500 mb-1">Khu vực</label>
+                <select value={createForm.khu_vuc} onChange={e => setCreateForm(f => ({ ...f, khu_vuc: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">-- Chọn khu vực --</option>
                   {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Target tháng (VNĐ)</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="100,000,000"
-                  value={form.target_thang}
-                  onChange={e => setForm(f => ({ ...f, target_thang: e.target.value }))}
-                />
-              </div>
+              <FormField label="Target tháng (VNĐ)" value={createForm.target_thang} type="number"
+                onChange={v => setCreateForm(f => ({ ...f, target_thang: v }))} placeholder="50000000" />
+              <FormField label="Ngày vào làm" value={createForm.ngay_vao_lam} type="date"
+                onChange={v => setCreateForm(f => ({ ...f, ngay_vao_lam: v }))} />
 
               <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Vai trò *</label>
-                <select
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  value={form.role}
-                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                >
-                  {ROLE_OPTIONS.map(r => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-600 mb-1 block">Trạng thái</label>
-                <select
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  value={form.trang_thai_nv}
-                  onChange={e => setForm(f => ({ ...f, trang_thai_nv: e.target.value }))}
-                >
+                <label className="block text-xs text-gray-500 mb-1">Trạng thái</label>
+                <select value={createForm.trang_thai_nv} onChange={e => setCreateForm(f => ({ ...f, trang_thai_nv: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-            </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-600 mb-1 block">Mật khẩu *</label>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  placeholder="Nhập hoặc tạo tự động"
-                  value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                />
-                <button
-                  onClick={generatePassword}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-3 py-2 rounded-xl whitespace-nowrap"
-                >
-                  Tạo tự động
-                </button>
-              </div>
-              {form.password && (
-                <p className="text-xs text-blue-600 mt-1 font-mono bg-blue-50 px-2 py-1 rounded-lg">
-                  Pass: {form.password}
+              {createMsg && (
+                <p className={`text-sm text-center py-2 px-3 rounded-xl ${createMsg.includes('thành công') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {createMsg}
                 </p>
               )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setShowCreate(false); setCreateMsg('') }}
+                  className="flex-1 py-3 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+                <button onClick={handleCreate} disabled={creating || !createForm.full_name || !createForm.email}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+                  {creating ? 'Đang tạo...' : 'Tạo & Gửi email'}
+                </button>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
-          <div className="flex gap-3 pt-1">
-            <button
-              onClick={() => { setShowForm(false); setErrorMsg('') }}
-              className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl"
-            >
-              Huỷ
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={sending}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium py-2.5 rounded-xl"
-            >
-              {sending ? 'Đang tạo...' : 'Tạo & Gửi email'}
-            </button>
-          </div>
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function InfoGrid({ items }: { items: { label: string; value?: string | number | null }[] }) {
+  const visible = items.filter(i => i.value)
+  if (visible.length === 0) return null
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+      {visible.map(item => (
+        <div key={item.label}>
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">{item.label}</p>
+          <p className="text-sm text-gray-800 mt-0.5">{item.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EditForm({ form, setForm, isAdmin, onSave, onCancel, saving }: {
+  form: Partial<Staff>
+  setForm: (f: Partial<Staff>) => void
+  isAdmin: boolean
+  onSave: () => void
+  onCancel: () => void
+  saving: boolean
+}) {
+  const set = (k: keyof Staff) => (v: string) => setForm({ ...form, [k]: v || null })
+  return (
+    <div className="space-y-3 pt-1">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Chỉnh sửa thông tin</p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FormField label="Họ tên" value={form.full_name ?? ''} onChange={set('full_name')} />
+        <FormField label="SĐT" value={form.phone ?? ''} onChange={set('phone')} />
+        <FormField label="Chức vụ" value={form.chuc_vu ?? ''} onChange={set('chuc_vu')} />
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Khu vực</label>
+          <select value={form.khu_vuc ?? ''} onChange={e => set('khu_vuc')(e.target.value)}
+            className="w-full px-2 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
+            <option value="">--</option>
+            {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
+          <select value={form.role ?? ''} onChange={e => set('role')(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
+            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
         </div>
       )}
 
-      {/* ── Staff list ── */}
-      {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm">
-          <span className="crm-spinner" /><span>Đang tải...</span>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Trạng thái</label>
+          <select value={form.trang_thai_nv ?? ''} onChange={e => set('trang_thai_nv')(e.target.value)}
+            className="w-full px-2 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
-      ) : staffList.length === 0 ? (
-        <div className="flex flex-col items-center py-16 gap-2">
-          <span className="text-4xl">👤</span>
-          <p className="text-sm font-medium text-gray-500">Chưa có nhân viên nào</p>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Tình trạng HN</label>
+          <select value={form.tinh_trang_hn ?? ''} onChange={e => set('tinh_trang_hn')(e.target.value)}
+            className="w-full px-2 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
+            <option value="">--</option>
+            {HN_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {staffList.map(staff => {
-            const isExpanded = expandedId === staff.id
-            const status = staff.trang_thai_nv || (staff.is_active ? 'Đang làm' : 'Nghỉ việc')
-            return (
-              <div key={staff.id} className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                {/* Card header — tap to expand */}
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : staff.id)}
-                  className="w-full p-4 text-left"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        status === 'Nghỉ việc' ? 'bg-gray-300' : 'bg-blue-600'
-                      }`}>
-                        <span className="text-white text-sm font-bold">
-                          {staff.full_name?.charAt(0)?.toUpperCase() ?? '?'}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">{staff.full_name}</p>
-                        <p className="text-xs text-gray-500 truncate">{staff.email}</p>
-                      </div>
-                    </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_COLOR[status] ?? 'bg-gray-100 text-gray-500'}`}>
-                      {status}
-                    </span>
-                  </div>
+      </div>
 
-                  <div className="flex items-center gap-2 mt-3 flex-wrap">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLOR[staff.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {ROLE_LABEL[staff.role] ?? staff.role}
-                    </span>
-                    {staff.chuc_vu && (
-                      <span className="text-xs text-gray-500">{staff.chuc_vu}</span>
-                    )}
-                    {staff.khu_vuc && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{staff.khu_vuc}</span>
-                    )}
-                    <span className="text-xs text-gray-300 ml-auto">{isExpanded ? '▲' : '▼'}</span>
-                  </div>
-                </button>
+      <div className="grid grid-cols-2 gap-2">
+        <FormField label="Ngày sinh" value={form.ngay_sinh ?? ''} type="date" onChange={set('ngay_sinh')} />
+        <FormField label="Ngày vào làm" value={form.ngay_vao_lam ?? ''} type="date" onChange={set('ngay_vao_lam')} />
+        <FormField label="Target/tháng (VNĐ)" value={form.target_thang ? String(form.target_thang) : ''}
+          type="number" onChange={v => setForm({ ...form, target_thang: v ? Number(v) : null })} />
+        <FormField label="CMND/CCCD" value={form.cccd ?? ''} onChange={set('cccd')} />
+      </div>
 
-                {/* Expanded detail */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
-                    {editId === staff.id ? (
-                      /* ── Edit mode ── */
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          {([
-                            { key: 'full_name',  label: 'Họ và tên',    type: 'text'  },
-                            { key: 'phone',      label: 'SĐT',           type: 'tel'   },
-                            { key: 'chuc_vu',    label: 'Chức vụ',       type: 'text'  },
-                            { key: 'department', label: 'Phòng ban',      type: 'text'  },
-                            { key: 'ngay_vao_lam', label: 'Ngày vào làm', type: 'date' },
-                            { key: 'target_thang', label: 'Target (VNĐ)', type: 'number' },
-                          ] as const).map(({ key, label, type }) => (
-                            <div key={key} className={key === 'full_name' ? 'col-span-2' : ''}>
-                              <label className="text-xs text-gray-400 mb-1 block">{label}</label>
-                              <input
-                                type={type}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                value={String(editForm[key] ?? '')}
-                                onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                              />
-                            </div>
-                          ))}
-
-                          <div>
-                            <label className="text-xs text-gray-400 mb-1 block">Khu vực</label>
-                            <select
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={editForm.khu_vuc ?? ''}
-                              onChange={e => setEditForm(f => ({ ...f, khu_vuc: e.target.value }))}
-                            >
-                              <option value="">— Chọn —</option>
-                              {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs text-gray-400 mb-1 block">Vai trò</label>
-                            <select
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={editForm.role ?? ''}
-                              onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
-                            >
-                              {ROLE_OPTIONS.map(r => (
-                                <option key={r.value} value={r.value}>{r.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => setEditId(null)}
-                            className="flex-1 border border-gray-200 text-gray-500 text-sm py-2 rounded-xl"
-                          >
-                            Huỷ
-                          </button>
-                          <button
-                            onClick={() => saveEdit(staff.id)}
-                            disabled={saving}
-                            className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-xl"
-                          >
-                            {saving ? 'Đang lưu...' : 'Lưu'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── View mode ── */
-                      <>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                          {staff.phone && (
-                            <>
-                              <span className="text-gray-400">SĐT</span>
-                              <span className="text-gray-700 font-medium">{staff.phone}</span>
-                            </>
-                          )}
-                          {staff.department && (
-                            <>
-                              <span className="text-gray-400">Phòng ban</span>
-                              <span className="text-gray-700 font-medium">{staff.department}</span>
-                            </>
-                          )}
-                          {staff.ngay_vao_lam && (
-                            <>
-                              <span className="text-gray-400">Ngày vào làm</span>
-                              <span className="text-gray-700 font-medium">{fmtDate(staff.ngay_vao_lam)}</span>
-                            </>
-                          )}
-                          {staff.target_thang != null && (
-                            <>
-                              <span className="text-gray-400">Target/tháng</span>
-                              <span className="text-gray-700 font-medium">{fmtMoney(staff.target_thang)}</span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Trạng thái */}
-                        <div>
-                          <p className="text-xs text-gray-400 mb-1.5">Trạng thái</p>
-                          <div className="flex flex-wrap gap-2">
-                            {STATUS_OPTIONS.map(s => (
-                              <button
-                                key={s}
-                                onClick={() => updateStatus(staff.id, s)}
-                                className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all ${
-                                  status === s
-                                    ? STATUS_COLOR[s] + ' border-current'
-                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                                }`}
-                              >
-                                {s}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Edit button */}
-                        <button
-                          onClick={() => startEdit(staff)}
-                          className="w-full border border-gray-200 text-gray-500 text-sm py-2 rounded-xl hover:border-gray-300 transition-colors"
-                        >
-                          Chỉnh sửa thông tin
-                        </button>
-
-                        {/* Admin reset password */}
-                        {['admin', 'ceo'].includes(myRole) && (
-                          resetId === staff.id ? (
-                            <div className="space-y-2 pt-1">
-                              <p className="text-xs text-gray-400">Đặt mật khẩu mới</p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  placeholder="Tối thiểu 8 ký tự"
-                                  value={resetPass}
-                                  onChange={e => { setResetPass(e.target.value); setResetMsg('') }}
-                                />
-                                <button
-                                  onClick={() => { setResetId(null); setResetPass(''); setResetMsg('') }}
-                                  className="text-xs px-3 py-2 border border-gray-200 rounded-xl text-gray-400"
-                                >
-                                  Huỷ
-                                </button>
-                              </div>
-                              {resetMsg && (
-                                <p className={`text-xs px-3 py-1.5 rounded-lg ${resetMsg.startsWith('ok:') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                  {resetMsg.slice(3)}
-                                </p>
-                              )}
-                              <button
-                                onClick={() => handleResetPass(staff.id)}
-                                disabled={resetSaving}
-                                className="w-full bg-red-500 disabled:bg-red-300 text-white text-sm font-medium py-2 rounded-xl"
-                              >
-                                {resetSaving ? 'Đang lưu...' : 'Xác nhận đặt lại mật khẩu'}
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => { setResetId(staff.id); setResetPass(''); setResetMsg('') }}
-                              className="w-full border border-red-200 text-red-500 text-sm py-2 rounded-xl hover:bg-red-50 transition-colors"
-                            >
-                              Đặt lại mật khẩu
-                            </button>
-                          )
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Ngân hàng</label>
+          <select value={form.ngan_hang ?? ''} onChange={e => set('ngan_hang')(e.target.value)}
+            className="w-full px-2 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
+            <option value="">--</option>
+            {NH_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
         </div>
-      )}
+        <FormField label="Số tài khoản" value={form.so_tk_nh ?? ''} onChange={set('so_tk_nh')} />
+      </div>
+
+      <FormField label="Địa chỉ" value={form.dia_chi ?? ''} onChange={set('dia_chi')} placeholder="Số nhà, đường, quận, tỉnh" />
+
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Ghi chú nội bộ</label>
+        <textarea value={form.ghi_chu_nb ?? ''} onChange={e => setForm({ ...form, ghi_chu_nb: e.target.value || null })}
+          rows={2} placeholder="Chỉ admin và CEO thấy..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none resize-none" />
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+        <button onClick={onSave} disabled={saving}
+          className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+          {saving ? 'Đang lưu...' : 'Lưu'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FormField({ label, value, onChange, placeholder, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
   )
 }

@@ -48,7 +48,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
       { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
-      { href: '/dashboard/admin', label: 'Quản trị', icon: '⚙️' },
     ],
     ceo: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
@@ -72,6 +71,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
     sales: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
@@ -79,21 +79,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
     tech: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/maintenance', label: 'Bảo trì', icon: '🔧' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
     logistics: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
     partner: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
       { href: '/dashboard/calendar', label: 'Lịch', icon: '📅' },
+      { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
   }
 
@@ -121,15 +125,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white text-xs font-bold">CRM</span>
+        <button
+          onClick={() => router.push('/dashboard/profile')}
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left"
+        >
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+            <span className="text-white text-xs font-bold">
+              {profile?.full_name?.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase() ?? 'U'}
+            </span>
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-800 leading-none">{profile?.full_name}</p>
             <p className="text-xs text-blue-600 mt-0.5">{roleLabel[profile?.role ?? 'sales']}</p>
           </div>
-        </div>
+        </button>
         <button
           onClick={handleLogout}
           className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50"

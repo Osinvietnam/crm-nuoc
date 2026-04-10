@@ -19,7 +19,40 @@ function ResetPasswordContent() {
 
   useEffect(() => {
     const handleToken = async () => {
-      // Case 1: PKCE flow — ?code=CODE (newer Supabase)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+
+      // Case 0: Supabase redirected with error params — check BEFORE trying any token
+      const urlError     = searchParams.get('error')
+      const urlErrorCode = searchParams.get('error_code')
+      const hashError    = hashParams.get('error') || hashParams.get('error_code')
+      if (urlError || hashError) {
+        const code = urlErrorCode || urlError || hashError || ''
+        if (code.includes('expired') || code.includes('otp')) {
+          setError('Link đã hết hạn. Vui lòng yêu cầu link mới.\nThis link has expired. Please request a new one.')
+        } else if (code.includes('access_denied')) {
+          setError('Yêu cầu bị từ chối. Vui lòng thử lại.\nAccess denied. Please try again.')
+        } else {
+          setError(`Lỗi xác thực: ${code}`)
+        }
+        setStep('error')
+        return
+      }
+
+      // Case 1: token_hash flow (recommended — immune to email pre-fetch)
+      // Recovery email: ?token_hash=...&type=recovery
+      // Invite email:   ?token_hash=...&type=invite
+      const tokenHash = searchParams.get('token_hash')
+      const typeParam = searchParams.get('type') as 'recovery' | 'invite' | null
+      if (tokenHash && (typeParam === 'recovery' || typeParam === 'invite')) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: typeParam,
+        })
+        setStep(error ? 'error' : 'form')
+        return
+      }
+
+      // Case 2: PKCE flow — ?code=CODE
       const code = searchParams.get('code')
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -27,13 +60,10 @@ function ResetPasswordContent() {
         return
       }
 
-      // Case 2: Implicit flow — #access_token=TOKEN&type=recovery (legacy Supabase)
-      const hash   = window.location.hash
-      const params = new URLSearchParams(hash.substring(1))
-      const accessToken  = params.get('access_token')
-      const refreshToken = params.get('refresh_token') ?? ''
-      const type         = params.get('type')
-
+      // Case 3: Implicit flow — #access_token=TOKEN&type=recovery
+      const accessToken  = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token') ?? ''
+      const type         = hashParams.get('type')
       if (type === 'recovery' && accessToken) {
         const { error } = await supabase.auth.setSession({
           access_token:  accessToken,
@@ -43,7 +73,7 @@ function ResetPasswordContent() {
         return
       }
 
-      // Không có token nào hợp lệ
+      // No valid token found
       setStep('error')
     }
 
@@ -84,8 +114,14 @@ function ResetPasswordContent() {
     <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8 text-center space-y-4">
       <span className="text-4xl">⚠️</span>
       <h1 className="text-lg font-bold text-gray-800">Link không hợp lệ</h1>
-      <p className="text-sm text-gray-500">Link đã hết hạn hoặc đã được sử dụng.</p>
-      <p className="text-xs text-gray-400">This link has expired or already been used.</p>
+      {error ? (
+        <p className="text-sm text-gray-500 whitespace-pre-line">{error}</p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-500">Link đã hết hạn hoặc đã được sử dụng.</p>
+          <p className="text-xs text-gray-400">This link has expired or already been used.</p>
+        </>
+      )}
       <a href="/forgot-password" className="block w-full bg-blue-600 text-white font-medium py-3 rounded-xl text-sm mt-2">
         Yêu cầu link mới / Request new link
       </a>

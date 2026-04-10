@@ -794,8 +794,8 @@ export default function CustomersPage() {
     setError('')
     try {
       const res = await fetch('/api/lark/customers')
-      if (!res.ok) throw new Error()
       const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       setCustomers(data.customers ?? [])
       const r = data.role ?? ''
       setRole(r)
@@ -804,8 +804,9 @@ export default function CustomersPage() {
         roleLoaded.current = true
         setTimePreset(['sales', 'partner'].includes(r) ? 'month' : 'all')
       }
-    } catch {
-      setError('Không tải được dữ liệu. Kiểm tra kết nối.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      setError(`Không tải được dữ liệu: ${msg}`)
     } finally {
       setLoading(false)
     }

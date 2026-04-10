@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { listAllRecords, createRecord } from '@/lib/lark/client'
+import { createRecord } from '@/lib/lark/client'
+import { cachedListAllRecords } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mapProduct, productToFields } from './_mapper'
 
@@ -10,7 +12,7 @@ export async function GET(_req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const records = await listAllRecords(TABLES.PRODUCTS)
+    const records = await cachedListAllRecords(TABLES.PRODUCTS)
     return NextResponse.json({ data: records.map(mapProduct) })
   } catch (err) {
     console.error('GET /api/lark/products:', err)
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const record = await createRecord(TABLES.PRODUCTS, productToFields(body))
+    revalidateTag('lark-products')
     return NextResponse.json({ data: mapProduct(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/products:', err)

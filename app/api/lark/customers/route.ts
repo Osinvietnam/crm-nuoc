@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { listAllRecords, createRecord, LarkRecord } from '@/lib/lark/client'
+import { createRecord, LarkRecord } from '@/lib/lark/client'
+import { cachedListAllRecords } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 
 export interface Customer {
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
       filter = `CurrentValue.[Người phụ trách] = "${profile.full_name}"`
     }
 
-    const records = await listAllRecords(TABLES.CUSTOMERS, filter)
+    const records = await cachedListAllRecords(TABLES.CUSTOMERS, filter)
     let customers = records.map(mapRecord)
 
     // Accountant: filter by their assigned region (if set)
@@ -153,6 +155,7 @@ export async function POST(req: NextRequest) {
     if (khu_vuc)            fields['Khu vực'] = khu_vuc
 
     const record = await createRecord(TABLES.CUSTOMERS, fields)
+    revalidateTag('lark-customers')
     return NextResponse.json({ customer: mapRecord(record) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/customers:', err)

@@ -20,7 +20,12 @@ export default function ForgotPasswordPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
 
     if (error) {
-      setError('Không thể gửi email. Vui lòng kiểm tra lại địa chỉ email.')
+      // Rate limit
+      if (error.message?.toLowerCase().includes('rate limit') || error.status === 429) {
+        setError('Đã gửi quá nhiều yêu cầu. Vui lòng đợi vài phút rồi thử lại.\nToo many requests — please wait a few minutes and try again.')
+      } else {
+        setError(`Lỗi: ${error.message}`)
+      }
       setLoading(false)
       return
     }
@@ -82,7 +87,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
+              <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl whitespace-pre-line">
                 {error}
               </div>
             )}

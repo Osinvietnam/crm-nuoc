@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { listAllRecords, createRecord, updateRecord } from '@/lib/lark/client'
+import { createRecord, updateRecord } from '@/lib/lark/client'
+import { cachedListAllRecords } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mapQuote } from './_mappers'
 
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
       const ids = (links ?? []).map(l => l.quote_record_id)
       if (ids.length === 0) return NextResponse.json({ data: [] })
       // Lark không support filter by record_id list → fetch all rồi filter phía server
-      const all = await listAllRecords(TABLES.QUOTES)
+      const all = await cachedListAllRecords(TABLES.QUOTES)
       const filtered = all.filter(r => ids.includes(r.record_id)).map(mapQuote)
       return NextResponse.json({ data: filtered })
     }
@@ -66,7 +68,7 @@ export async function GET(req: NextRequest) {
       filter = `CurrentValue.[Người phụ trách] = "${profile.full_name}"`
     }
 
-    const records = await listAllRecords(TABLES.QUOTES, filter)
+    const records = await cachedListAllRecords(TABLES.QUOTES, filter)
     return NextResponse.json({ data: records.map(mapQuote) })
   } catch (err) {
     console.error('GET /api/lark/quotes:', err)
@@ -141,6 +143,8 @@ export async function POST(req: NextRequest) {
       }).catch(() => {}) // non-blocking
     }
 
+    revalidateTag('lark-quotes')
+    revalidateTag('lark-customers') // pipeline may have changed
     return NextResponse.json({ data: mapQuote(record) }, { status: 201 })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { listRecords, listAllRecords } from '@/lib/lark/client'
+import { listRecords } from '@/lib/lark/client'
+import { cachedListAllRecords } from '@/lib/lark/cached'
 import { TABLES, PIPELINE_STAGES } from '@/lib/lark/tables'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ export async function GET() {
         filter: [custFilter, `CurrentValue.[Ngày liên hệ đầu] >= ${from}`, `CurrentValue.[Ngày liên hệ đầu] <= ${to}`]
           .filter(Boolean).join(' && '),
       }),
-      listAllRecords(TABLES.CUSTOMERS, custFilter),
+      cachedListAllRecords(TABLES.CUSTOMERS, custFilter),
     ])
 
     stats.total_customers     = custTotal.total
@@ -230,10 +231,10 @@ export async function GET() {
       sixMonthsAgo.setHours(0, 0, 0, 0)
 
       const [allContracts6M, allCommercial6M, unpaid] = await Promise.all([
-        listAllRecords(TABLES.CONTRACTS,
+        cachedListAllRecords(TABLES.CONTRACTS,
           `CurrentValue.[Ngày ký] >= ${sixMonthsAgo.getTime()}`,
         ),
-        listAllRecords(TABLES.COMMERCIAL,
+        cachedListAllRecords(TABLES.COMMERCIAL,
           `CurrentValue.[Ngày giao thực] >= ${sixMonthsAgo.getTime()}`,
         ),
         // HĐ chưa thanh toán: các đợt chờ TT

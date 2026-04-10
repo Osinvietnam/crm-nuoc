@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { listAllRecords } from '@/lib/lark/client'
+import { cachedListAllRecords } from '@/lib/lark/cached'
 import { TABLES } from '@/lib/lark/tables'
 import { mappers } from './_mappers'
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       const filter = isTechRestricted
         ? `CurrentValue.[KTV phụ trách] = "${profile.full_name}"`
         : undefined
-      const records = await listAllRecords(TABLES.CONSTRUCTION, filter)
+      const records = await cachedListAllRecords(TABLES.CONSTRUCTION, filter)
       return NextResponse.json({ data: records.map(mappers.construction) })
     }
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       const filter = (isTechRestricted || isPartnerRestricted)
         ? `CurrentValue.[NV phụ trách].[text] = "${profile.full_name}"`
         : undefined
-      const records = await listAllRecords(TABLES.PERIODIC_SERVICE, filter)
+      const records = await cachedListAllRecords(TABLES.PERIODIC_SERVICE, filter)
       return NextResponse.json({ data: records.map(mappers.periodic) })
     }
 
