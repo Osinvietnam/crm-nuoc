@@ -30,9 +30,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: data ?? [] })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('GET /api/tasks:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('GET /api/tasks:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
 
@@ -76,9 +75,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('POST /api/tasks:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('POST /api/tasks:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
 
@@ -109,8 +107,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('DELETE /api/tasks:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('DELETE /api/tasks:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }

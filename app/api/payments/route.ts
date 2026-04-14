@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
       .from('profiles').select('role').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
-    const { searchParams } = new URL(req.url)
-    const customer_record_id = searchParams.get('customer_record_id')
+    const customer_record_id = req.nextUrl.searchParams.get('customer_record_id')
     if (!customer_record_id) {
       return NextResponse.json({ error: 'Thiếu customer_record_id' }, { status: 400 })
     }
@@ -42,9 +41,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: sanitized })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('GET /api/payments:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('GET /api/payments:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
 
@@ -148,9 +146,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: { ...record, lark_record_id: larkRecordId } })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('POST /api/payments:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('POST /api/payments:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
 
@@ -227,9 +224,8 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: record })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('PATCH /api/payments:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('PATCH /api/payments:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
 
@@ -247,8 +243,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Chỉ admin/CEO mới xóa được' }, { status: 403 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
+    const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
     const service = createServiceClient()
@@ -269,8 +264,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('DELETE /api/payments:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('DELETE /api/payments:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
