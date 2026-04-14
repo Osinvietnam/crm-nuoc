@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { updateRecord, listAllRecords } from '@/lib/lark/client'
-import { invalidateCache } from '@/lib/lark/cached'
-import { TABLES } from '@/lib/lark/tables'
 import { logAudit } from '@/lib/audit'
 
 /**
  * POST /api/admin/users/[id]/offboard
- * 1. Tìm tất cả KH của NV này trên LarkBase
- * 2. Chuyển "Người phụ trách" → full_name của CEO
- * 3. Set trang_thai_nv = 'Nghỉ việc', is_active = false
- * 4. Ban Supabase Auth account
+ * 1. Chuyển tất cả KH (nguoi_phu_trach) sang CEO trong Supabase
+ * 2. Set trang_thai_nv = 'Nghỉ việc', is_active = false
+ * 3. Ban Supabase Auth account
  */
 export async function POST(
   req: NextRequest,
@@ -42,29 +38,20 @@ export async function POST(
       return NextResponse.json({ error: 'Nhân viên đã ở trạng thái Nghỉ việc' }, { status: 400 })
     }
 
-    // Lấy full_name của CEO để chuyển KH
-    const { data: ceoProfile } = await service
-      .from('profiles').select('full_name').eq('role', 'ceo').single()
-    const ceoName = ceoProfile?.full_name ?? me.full_name // fallback về người thực hiện
+    // Lấy CEO để chuyển KH
+    const { data: ceo } = await service
+      .from('profiles').select('id, full_name').eq('role', 'ceo').single()
+    const ceoName = ceo?.full_name ?? me.full_name // fallback về người thực hiện
 
-    // Tìm KH trên LarkBase thuộc NV này
+    // Chuyển tất cả KH trong Supabase về CEO
     let transferred = 0
-    try {
-      const filter = `CurrentValue.[Người phụ trách] = "${target.full_name}"`
-      const records = await listAllRecords(TABLES.CUSTOMERS, filter)
-
-      // Cập nhật từng record (batch nếu nhiều)
-      await Promise.all(
-        records.map(r =>
-          updateRecord(TABLES.CUSTOMERS, r.record_id, {
-            'Người phụ trách': ceoName,
-          }).catch(() => null)
-        )
-      )
-      transferred = records.length
-      invalidateCache(TABLES.CUSTOMERS)
-    } catch {
-      // LarkBase lỗi không block offboarding
+    if (ceo) {
+      const { data: updated } = await service
+        .from('customers')
+        .update({ nguoi_phu_trach: ceo.id })
+        .eq('nguoi_phu_trach', id)
+        .select('id')
+      transferred = updated?.length ?? 0
     }
 
     // Disable Supabase Auth (ban ~100 năm)

@@ -1,0 +1,730 @@
+{
+  "name": "CRM Nước — Supabase → LarkBase Nightly Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 2 * * *" }]
+        }
+      },
+      "id": "trigger-cron",
+      "name": "Cron — 2AM Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tính window sync: 25 giờ để tránh bỏ lỡ nếu job chạy muộn\nconst now = new Date();\nconst since = new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString();\nreturn [{ json: { since, nowIso: now.toISOString() } }];"
+      },
+      "id": "calc-window",
+      "name": "Tính sync window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/customers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "updated_at", "value": "=gte.{{ $('Tính sync window').item.json.since }}" },
+            { "name": "select", "value": "id,lark_record_id,ho_ten,sdt,sdt_khac,email,ma_kh,dia_chi_hd,dia_chi_ct,pipeline,muc_uu_tien,nguon_kh,doi_tac_gt,loai_hinh_nha,nguon_nuoc,khu_vuc,noi_dung,ngay_lien_he_dau,bao_gia,updated_at,nguoi_phu_trach,profiles!nguoi_phu_trach(full_name)" },
+            { "name": "limit", "value": "500" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-customers",
+      "name": "Fetch customers Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "updated_at", "value": "=gte.{{ $('Tính sync window').item.json.since }}" },
+            { "name": "type", "value": "eq.b2c" },
+            { "name": "select", "value": "id,lark_record_id,type,trang_thai,ma_hd,gia_tri_hd,san_pham,ngay_ky,ngay_giao_dk,ngay_giao_thuc,dia_chi_ct,khu_vuc,ghi_chu,updated_at,customers!customer_id(ho_ten,sdt),profiles!nguoi_phu_trach(full_name)" },
+            { "name": "limit", "value": "200" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-b2c",
+      "name": "Fetch B2C orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/maintenance_construction",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "updated_at", "value": "=gte.{{ $('Tính sync window').item.json.since }}" },
+            { "name": "select", "value": "id,lark_record_id,trang_thai,san_pham,khu_vuc,ngay_can_cs,ngay_het_bh,ghi_chu,updated_at,customers!customer_id(ho_ten,sdt,dia_chi_ct),profiles!ktv_phu_trach(full_name)" },
+            { "name": "limit", "value": "200" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-construction",
+      "name": "Fetch maintenance construction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/maintenance_periodic",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "updated_at", "value": "=gte.{{ $('Tính sync window').item.json.since }}" },
+            { "name": "select", "value": "id,lark_record_id,trang_thai,san_pham_da_lap,chu_ky,lan_bd_gan_nhat,lan_bd_tiep_theo,ghi_chu,updated_at,customers!customer_id(ho_ten,sdt,dia_chi_ct),profiles!nv_phu_trach(full_name)" },
+            { "name": "limit", "value": "200" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-periodic",
+      "name": "Fetch maintenance periodic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 700]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Map Supabase customer row → LarkBase fields\nconst items = $input.all();\nreturn items.map(item => {\n  const r = item.json;\n  const fields = {\n    'Họ tên':            r.ho_ten ?? '',\n    'SĐT':               r.sdt ?? '',\n    'SĐT khác':          r.sdt_khac ?? '',\n    'Email':             r.email ?? '',\n    'Mã KH':             r.ma_kh ?? '',\n    'Địa chỉ HĐ':        r.dia_chi_hd ?? '',\n    'Địa chỉ CT':        r.dia_chi_ct ?? '',\n    'Pipeline':          r.pipeline ?? 'Lead mới',\n    'Mức ưu tiên':       r.muc_uu_tien ?? '',\n    'Nguồn KH':          r.nguon_kh ?? '',\n    'Đối tác GT':        r.doi_tac_gt ?? '',\n    'Loại hình nhà':     r.loai_hinh_nha ?? '',\n    'Nguồn nước':        r.nguon_nuoc ?? '',\n    'Khu vực':           r.khu_vuc ?? '',\n    'Nội dung':          r.noi_dung ?? '',\n    'Báo giá':           r.bao_gia ?? 0,\n    'Người phụ trách':   r.profiles?.full_name ?? '',\n  };\n  if (r.ngay_lien_he_dau) fields['Ngày liên hệ đầu'] = new Date(r.ngay_lien_he_dau).getTime();\n  return {\n    json: {\n      supabase_id:    r.id,\n      lark_record_id: r.lark_record_id,\n      table_id:       'tbl56uB4wSaACzgm',\n      table_name:     'customers',\n      fields,\n    }\n  };\n});"
+      },
+      "id": "map-customers",
+      "name": "Map customers → Lark fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map Supabase B2C order → LarkBase fields (CONTRACTS table)\nconst items = $input.all();\nreturn items.map(item => {\n  const r = item.json;\n  const fields = {\n    'Mã HĐ':             r.ma_hd ?? '',\n    'Khách hàng':        r.customers?.ho_ten ?? '',\n    'SĐT':               r.customers?.sdt ?? '',\n    'Sản phẩm':          (r.san_pham ?? []).join(', '),\n    'Giá trị HĐ':        r.gia_tri_hd ?? 0,\n    'Khu vực':           r.khu_vuc ?? '',\n    'Trạng thái':        r.trang_thai ?? '',\n    'Địa chỉ CT':        r.dia_chi_ct ?? '',\n    'Ghi chú':           r.ghi_chu ?? '',\n    'Người phụ trách':   r.profiles?.full_name ?? '',\n  };\n  if (r.ngay_ky)       fields['Ngày ký']          = new Date(r.ngay_ky).getTime();\n  if (r.ngay_giao_dk)  fields['Ngày giao dự kiến']= new Date(r.ngay_giao_dk).getTime();\n  if (r.ngay_giao_thuc)fields['Ngày giao thực tế']= new Date(r.ngay_giao_thuc).getTime();\n  return {\n    json: {\n      supabase_id:    r.id,\n      lark_record_id: r.lark_record_id,\n      table_id:       'tbl2l6Z9vPaHfNHs',\n      table_name:     'orders',\n      fields,\n    }\n  };\n});"
+      },
+      "id": "map-b2c",
+      "name": "Map B2C → Lark fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map Supabase maintenance_construction → LarkBase CONSTRUCTION table\nconst items = $input.all();\nreturn items.map(item => {\n  const r = item.json;\n  const fields = {\n    'Khách hàng':      r.customers?.ho_ten ?? '',\n    'SĐT':             r.customers?.sdt ?? '',\n    'Địa chỉ':         r.customers?.dia_chi_ct ?? '',\n    'Sản phẩm':        r.san_pham ?? '',\n    'Khu vực':         r.khu_vuc ?? '',\n    'Trạng thái':      r.trang_thai ?? '',\n    'Ghi chú':         r.ghi_chu ?? '',\n    'KTV phụ trách':   r.profiles?.full_name ?? '',\n  };\n  if (r.ngay_can_cs)  fields['Ngày cần CS']   = new Date(r.ngay_can_cs).getTime();\n  if (r.ngay_het_bh)  fields['Ngày hết BH']   = new Date(r.ngay_het_bh).getTime();\n  return {\n    json: {\n      supabase_id:    r.id,\n      lark_record_id: r.lark_record_id,\n      table_id:       'tbl2XRs8cikrVZXL',\n      table_name:     'maintenance_construction',\n      fields,\n    }\n  };\n});"
+      },
+      "id": "map-construction",
+      "name": "Map construction → Lark fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map Supabase maintenance_periodic → LarkBase PERIODIC_SERVICE table\nconst items = $input.all();\nreturn items.map(item => {\n  const r = item.json;\n  const fields = {\n    'Khách hàng':        r.customers?.ho_ten ?? '',\n    'SĐT':               r.customers?.sdt ?? '',\n    'Địa chỉ':           r.customers?.dia_chi_ct ?? '',\n    'Sản phẩm đã lắp':  (r.san_pham_da_lap ?? []).join(', '),\n    'Chu kỳ (tháng)':   r.chu_ky ?? 6,\n    'Trạng thái':        r.trang_thai ?? '',\n    'Ghi chú':           r.ghi_chu ?? '',\n    'NV phụ trách':      r.profiles?.full_name ?? '',\n  };\n  if (r.lan_bd_gan_nhat) fields['Lần BĐ gần nhất'] = new Date(r.lan_bd_gan_nhat).getTime();\n  if (r.lan_bd_tiep_theo)fields['Lần BĐ tiếp theo'] = new Date(r.lan_bd_tiep_theo).getTime();\n  return {\n    json: {\n      supabase_id:    r.id,\n      lark_record_id: r.lark_record_id,\n      table_id:       'tbl6sFK3nDfFRtLN',\n      table_name:     'maintenance_periodic',\n      fields,\n    }\n  };\n});"
+      },
+      "id": "map-periodic",
+      "name": "Map periodic → Lark fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-has-lark-id",
+              "leftValue": "={{ $json.lark_record_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-update-or-create-customers",
+      "name": "Customers: Update hay Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-has-lark-id",
+              "leftValue": "={{ $json.lark_record_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-update-or-create-orders",
+      "name": "Orders: Update hay Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-has-lark-id",
+              "leftValue": "={{ $json.lark_record_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-update-or-create-construction",
+      "name": "Construction: Update hay Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-has-lark-id",
+              "leftValue": "={{ $json.lark_record_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-update-or-create-periodic",
+      "name": "Periodic: Update hay Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 700]
+    },
+
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records/{{ $json.lark_record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-update-customers",
+      "name": "Lark UPDATE customers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 60]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-create-customers",
+      "name": "Lark CREATE customers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 160]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records/{{ $json.lark_record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-update-orders",
+      "name": "Lark UPDATE orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 260]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-create-orders",
+      "name": "Lark CREATE orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 360]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records/{{ $json.lark_record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-update-construction",
+      "name": "Lark UPDATE construction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 460]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-create-construction",
+      "name": "Lark CREATE construction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 560]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records/{{ $json.lark_record_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-update-periodic",
+      "name": "Lark UPDATE periodic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 660]
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/{{ $env.LARK_BASE_APP_TOKEN }}/tables/{{ $json.table_id }}/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LARK_TENANT_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "fields", "value": "={{ JSON.stringify($json.fields) }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lark-create-periodic",
+      "name": "Lark CREATE periodic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 760]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Sau khi Lark tạo record mới, lưu lại lark_record_id vào Supabase\nconst larkResp = $input.item.json;\nconst larkRecordId = larkResp?.data?.record?.record_id;\nconst { supabase_id, table_name } = $('Lark CREATE customers').item.json;\nif (!larkRecordId) {\n  console.log('Không có lark_record_id trả về, bỏ qua patch');\n  return [];\n}\nreturn [{ json: { supabase_id, table_name, lark_record_id: larkRecordId } }];"
+      },
+      "id": "extract-lark-id-customers",
+      "name": "Extract Lark ID (customers)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const larkResp = $input.item.json;\nconst larkRecordId = larkResp?.data?.record?.record_id;\nconst { supabase_id, table_name } = $('Lark CREATE orders').item.json;\nif (!larkRecordId) return [];\nreturn [{ json: { supabase_id, table_name, lark_record_id: larkRecordId } }];"
+      },
+      "id": "extract-lark-id-orders",
+      "name": "Extract Lark ID (orders)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "const larkResp = $input.item.json;\nconst larkRecordId = larkResp?.data?.record?.record_id;\nconst { supabase_id, table_name } = $('Lark CREATE construction').item.json;\nif (!larkRecordId) return [];\nreturn [{ json: { supabase_id, table_name, lark_record_id: larkRecordId } }];"
+      },
+      "id": "extract-lark-id-construction",
+      "name": "Extract Lark ID (construction)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const larkResp = $input.item.json;\nconst larkRecordId = larkResp?.data?.record?.record_id;\nconst { supabase_id, table_name } = $('Lark CREATE periodic').item.json;\nif (!larkRecordId) return [];\nreturn [{ json: { supabase_id, table_name, lark_record_id: larkRecordId } }];"
+      },
+      "id": "extract-lark-id-periodic",
+      "name": "Extract Lark ID (periodic)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 760]
+    },
+
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.table_name }}?id=eq.{{ $json.supabase_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lark_record_id: $json.lark_record_id }) }}",
+        "options": {}
+      },
+      "id": "patch-supabase-customers",
+      "name": "Patch lark_record_id (customers)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 160]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.table_name }}?id=eq.{{ $json.supabase_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lark_record_id: $json.lark_record_id }) }}",
+        "options": {}
+      },
+      "id": "patch-supabase-orders",
+      "name": "Patch lark_record_id (orders)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 360]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.table_name }}?id=eq.{{ $json.supabase_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lark_record_id: $json.lark_record_id }) }}",
+        "options": {}
+      },
+      "id": "patch-supabase-construction",
+      "name": "Patch lark_record_id (construction)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 560]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.table_name }}?id=eq.{{ $json.supabase_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lark_record_id: $json.lark_record_id }) }}",
+        "options": {}
+      },
+      "id": "patch-supabase-periodic",
+      "name": "Patch lark_record_id (periodic)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 760]
+    }
+  ],
+
+  "connections": {
+    "Cron — 2AM Daily": {
+      "main": [[{ "node": "Tính sync window", "type": "main", "index": 0 }]]
+    },
+    "Tính sync window": {
+      "main": [[
+        { "node": "Fetch customers Supabase",    "type": "main", "index": 0 },
+        { "node": "Fetch B2C orders",            "type": "main", "index": 0 },
+        { "node": "Fetch maintenance construction","type": "main", "index": 0 },
+        { "node": "Fetch maintenance periodic",  "type": "main", "index": 0 }
+      ]]
+    },
+    "Fetch customers Supabase": {
+      "main": [[{ "node": "Map customers → Lark fields", "type": "main", "index": 0 }]]
+    },
+    "Fetch B2C orders": {
+      "main": [[{ "node": "Map B2C → Lark fields", "type": "main", "index": 0 }]]
+    },
+    "Fetch maintenance construction": {
+      "main": [[{ "node": "Map construction → Lark fields", "type": "main", "index": 0 }]]
+    },
+    "Fetch maintenance periodic": {
+      "main": [[{ "node": "Map periodic → Lark fields", "type": "main", "index": 0 }]]
+    },
+    "Map customers → Lark fields": {
+      "main": [[{ "node": "Customers: Update hay Create?", "type": "main", "index": 0 }]]
+    },
+    "Map B2C → Lark fields": {
+      "main": [[{ "node": "Orders: Update hay Create?", "type": "main", "index": 0 }]]
+    },
+    "Map construction → Lark fields": {
+      "main": [[{ "node": "Construction: Update hay Create?", "type": "main", "index": 0 }]]
+    },
+    "Map periodic → Lark fields": {
+      "main": [[{ "node": "Periodic: Update hay Create?", "type": "main", "index": 0 }]]
+    },
+    "Customers: Update hay Create?": {
+      "main": [
+        [{ "node": "Lark UPDATE customers", "type": "main", "index": 0 }],
+        [{ "node": "Lark CREATE customers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Orders: Update hay Create?": {
+      "main": [
+        [{ "node": "Lark UPDATE orders", "type": "main", "index": 0 }],
+        [{ "node": "Lark CREATE orders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construction: Update hay Create?": {
+      "main": [
+        [{ "node": "Lark UPDATE construction", "type": "main", "index": 0 }],
+        [{ "node": "Lark CREATE construction", "type": "main", "index": 0 }]
+      ]
+    },
+    "Periodic: Update hay Create?": {
+      "main": [
+        [{ "node": "Lark UPDATE periodic", "type": "main", "index": 0 }],
+        [{ "node": "Lark CREATE periodic", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lark CREATE customers": {
+      "main": [[{ "node": "Extract Lark ID (customers)", "type": "main", "index": 0 }]]
+    },
+    "Lark CREATE orders": {
+      "main": [[{ "node": "Extract Lark ID (orders)", "type": "main", "index": 0 }]]
+    },
+    "Lark CREATE construction": {
+      "main": [[{ "node": "Extract Lark ID (construction)", "type": "main", "index": 0 }]]
+    },
+    "Lark CREATE periodic": {
+      "main": [[{ "node": "Extract Lark ID (periodic)", "type": "main", "index": 0 }]]
+    },
+    "Extract Lark ID (customers)": {
+      "main": [[{ "node": "Patch lark_record_id (customers)", "type": "main", "index": 0 }]]
+    },
+    "Extract Lark ID (orders)": {
+      "main": [[{ "node": "Patch lark_record_id (orders)", "type": "main", "index": 0 }]]
+    },
+    "Extract Lark ID (construction)": {
+      "main": [[{ "node": "Patch lark_record_id (construction)", "type": "main", "index": 0 }]]
+    },
+    "Extract Lark ID (periodic)": {
+      "main": [[{ "node": "Patch lark_record_id (periodic)", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+
+  "staticData": null,
+  "tags": ["crm", "sync", "supabase", "larkbase"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-14T00:00:00.000Z",
+  "versionId": "1"
+}
