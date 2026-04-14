@@ -1,92 +1,85 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { listRecords } from '@/lib/lark/client'
-import { cachedListAllRecords } from '@/lib/lark/cached'
-import { TABLES, PIPELINE_STAGES } from '@/lib/lark/tables'
+import { PIPELINE_STAGES } from '@/lib/lark/tables'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface MonthRevenue { label: string; value: number }
 
 export interface DashboardStats {
-  // Base (mọi role)
-  total_customers:      number
-  new_customers_month:  number
-  pending_quotes:       number
-  orders_month:         number
-  maintenance_today:    number
-  pipeline:             Record<string, number>
-
-  // Manager group (admin/ceo/tech_lead/accountant)
-  revenue_month:        number
-  revenue_6months:      MonthRevenue[]
-  contracts_unpaid:     number
-
-  // Tech
-  maintenance_week:     number
-  construction_ongoing: number
-  maintenance_overdue:  number
-
-  // Logistics
-  logistics_pending:        number
-  logistics_delivering:     number
+  total_customers:           number
+  new_customers_month:       number
+  pending_quotes:            number
+  orders_month:              number
+  maintenance_today:         number
+  pipeline:                  Record<string, number>
+  revenue_month:             number
+  revenue_6months:           MonthRevenue[]
+  contracts_unpaid:          number
+  maintenance_week:          number
+  construction_ongoing:      number
+  maintenance_overdue:       number
+  logistics_pending:         number
+  logistics_delivering:      number
   logistics_delivered_month: number
-  logistics_overdue:        number
-
-  // Alerts
-  kh_no_contact_30d: number
-  quotes_stale:      number
+  logistics_overdue:         number
+  kh_no_contact_30d:         number
+  quotes_stale:              number
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
-function monthRange(offsetMonths = 0) {
+function monthBounds(offsetMonths = 0) {
+  const now   = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1)
+  const end   = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0)
+  return {
+    from: start.toISOString().split('T')[0],
+    to:   end.toISOString().split('T')[0],
+  }
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function weekBounds() {
   const now  = new Date()
-  const from = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1).getTime()
-  const to   = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0, 23, 59, 59, 999).getTime()
-  return { from, to }
+  const day  = now.getDay() || 7
+  const mon  = new Date(now); mon.setDate(now.getDate() - day + 1)
+  const sun  = new Date(mon); sun.setDate(mon.getDate() + 6)
+  return { from: mon.toISOString().split('T')[0], to: sun.toISOString().split('T')[0] }
 }
 
-function todayRange() {
-  const now   = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  return { start, end: start + 86_399_999 }
+function daysAgo(n: number) {
+  return new Date(Date.now() - n * 86_400_000).toISOString().split('T')[0]
 }
 
-function weekRange() {
-  const now   = new Date()
-  const day   = now.getDay() || 7                        // Mon=1 … Sun=7
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1).getTime()
-  const end   = start + 7 * 86_400_000 - 1
-  return { start, end }
-}
-
-function last6Months(): MonthRevenue[] {
-  const months: MonthRevenue[] = []
+function last6MonthsLabels(): MonthRevenue[] {
+  const result: MonthRevenue[] = []
   const now = new Date()
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push({
-      label: `T${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`,
-      value: 0,
-    })
+    result.push({ label: `T${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`, value: 0 })
   }
-  return months
+  return result
 }
 
-function monthLabel(ts: number) {
-  const d = new Date(ts)
-  return `T${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
+function monthLabelFromDate(d: string): string {
+  const dt = new Date(d)
+  return `T${dt.getMonth() + 1}/${String(dt.getFullYear()).slice(2)}`
 }
 
-const zero = (): DashboardStats => ({
-  total_customers: 0, new_customers_month: 0, pending_quotes: 0,
-  orders_month: 0, maintenance_today: 0, pipeline: {},
-  revenue_month: 0, revenue_6months: last6Months(), contracts_unpaid: 0,
-  maintenance_week: 0, construction_ongoing: 0, maintenance_overdue: 0,
-  logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0, logistics_overdue: 0,
-  kh_no_contact_30d: 0, quotes_stale: 0,
-})
+function zero(): DashboardStats {
+  return {
+    total_customers: 0, new_customers_month: 0, pending_quotes: 0,
+    orders_month: 0, maintenance_today: 0, pipeline: {},
+    revenue_month: 0, revenue_6months: last6MonthsLabels(), contracts_unpaid: 0,
+    maintenance_week: 0, construction_ongoing: 0, maintenance_overdue: 0,
+    logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
+    logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0,
+  }
+}
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -98,213 +91,150 @@ export async function GET() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, role')
+      .select('id, full_name, role, khu_vuc')
       .eq('id', user.id)
       .single()
-
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
-    const { role, full_name } = profile
-    const isManagerGroup = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
-    const isSales        = role === 'sales' || role === 'partner'
-    const isTech         = role === 'tech'
-    const isLogistics    = role === 'logistics'
+    const { role } = profile
+    const isManager  = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
+    const isSales    = role === 'sales' || role === 'partner'
+    const isTech     = role === 'tech'
+    const isLogistics = role === 'logistics'
 
-    const own = (field: string) => `CurrentValue.[${field}] = "${full_name}"`
-    const { from, to }   = monthRange()
-    const { start, end } = todayRange()
-    const { start: wStart, end: wEnd } = weekRange()
-    const thirtyDaysAgo  = Date.now() - 30 * 86_400_000
+    const { from: mFrom, to: mTo } = monthBounds()
+    const today   = todayStr()
+    const { from: wFrom, to: wTo } = weekBounds()
+    const ago30   = daysAgo(30)
+    const sixMoAgo = monthBounds(-5).from
 
     const stats = zero()
 
     // ── A. Khách hàng ─────────────────────────────────────────────────────────
-    const custFilter = isSales ? own('Người phụ trách') : undefined
+    // RLS already filters: sales sees own, tech sees khu_vuc, admin/ceo see all
 
-    const [custTotal, custMonth, allCust] = await Promise.all([
-      listRecords(TABLES.CUSTOMERS, { pageSize: 1, filter: custFilter }),
-      listRecords(TABLES.CUSTOMERS, {
-        pageSize: 1,
-        filter: [custFilter, `CurrentValue.[Ngày liên hệ đầu] >= ${from}`, `CurrentValue.[Ngày liên hệ đầu] <= ${to}`]
-          .filter(Boolean).join(' && '),
-      }),
-      cachedListAllRecords(TABLES.CUSTOMERS, custFilter),
+    const [custAllRes, custMonthRes, noContactRes, pipelineRes] = await Promise.all([
+      supabase.from('customers').select('*', { count: 'exact', head: true }),
+      supabase.from('customers').select('*', { count: 'exact', head: true })
+        .gte('ngay_lien_he_dau', mFrom).lte('ngay_lien_he_dau', mTo),
+      supabase.from('customers').select('*', { count: 'exact', head: true })
+        .lt('updated_at', ago30 + 'T00:00:00Z'),
+      supabase.from('customers').select('pipeline'),
     ])
 
-    stats.total_customers     = custTotal.total
-    stats.new_customers_month = custMonth.total
+    stats.total_customers     = custAllRes.count   ?? 0
+    stats.new_customers_month = custMonthRes.count ?? 0
+    stats.kh_no_contact_30d   = noContactRes.count ?? 0
 
-    // Pipeline
     for (const stage of PIPELINE_STAGES) stats.pipeline[stage] = 0
-    for (const r of allCust) {
-      const s = String(r.fields['Trạng thái pipeline'] ?? '')
+    for (const r of pipelineRes.data ?? []) {
+      const s = r.pipeline as string
       if (s in stats.pipeline) stats.pipeline[s]++
     }
 
-    // KH chưa liên hệ 30 ngày
-    const noContactFilter = [
-      custFilter,
-      `CurrentValue.[Ngày cập nhật cuối] < ${thirtyDaysAgo}`,
-    ].filter(Boolean).join(' && ')
-    const noContact = await listRecords(TABLES.CUSTOMERS, { pageSize: 1, filter: noContactFilter })
-    stats.kh_no_contact_30d = noContact.total
-
     // ── B. Báo giá ────────────────────────────────────────────────────────────
     if (!isLogistics && !isTech) {
-      const quoteOwner = isSales ? own('Người phụ trách') : undefined
-      const statusOr   = `(CurrentValue.[Trạng thái] = "Nháp" || CurrentValue.[Trạng thái] = "Đã gửi")`
-      const pendingFilter = quoteOwner ? `${statusOr} && ${quoteOwner}` : statusOr
-      const staleFilter   = quoteOwner
-        ? `CurrentValue.[Trạng thái] = "Đã gửi" && ${quoteOwner}`
-        : `CurrentValue.[Trạng thái] = "Đã gửi"`
+      let pendingQ = supabase.from('quotes').select('*', { count: 'exact', head: true })
+        .in('trang_thai', ['Nháp', 'Đã gửi'])
+      let staleQ   = supabase.from('quotes').select('*', { count: 'exact', head: true })
+        .eq('trang_thai', 'Đã gửi')
 
-      const [pq, stale] = await Promise.all([
-        listRecords(TABLES.QUOTES, { pageSize: 1, filter: pendingFilter }),
-        listRecords(TABLES.QUOTES,  { pageSize: 1, filter: staleFilter }),
-      ])
-      stats.pending_quotes = pq.total
-      stats.quotes_stale   = stale.total
+      if (isSales) {
+        pendingQ = pendingQ.eq('nguoi_phu_trach', profile.id)
+        staleQ   = staleQ.eq('nguoi_phu_trach', profile.id)
+      }
+
+      const [pq, sq] = await Promise.all([pendingQ, staleQ])
+      stats.pending_quotes = pq.count ?? 0
+      stats.quotes_stale   = sq.count ?? 0
     }
 
     // ── C. Đơn hàng tháng ────────────────────────────────────────────────────
     if (!isTech) {
-      const orderOwner = (isSales && role !== 'partner') ? own('Người phụ trách') : undefined
-      const [contracts, commercial] = await Promise.all([
-        listRecords(TABLES.CONTRACTS, {
-          pageSize: 1,
-          filter: [orderOwner, `CurrentValue.[Ngày ký] >= ${from}`, `CurrentValue.[Ngày ký] <= ${to}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
-        listRecords(TABLES.COMMERCIAL, {
-          pageSize: 1,
-          filter: [orderOwner, `CurrentValue.[Ngày giao thực] >= ${from}`, `CurrentValue.[Ngày giao thực] <= ${to}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
-      ])
-      stats.orders_month = contracts.total + commercial.total
+      let ordersQ = supabase.from('orders').select('*', { count: 'exact', head: true })
+        .gte('created_at', mFrom + 'T00:00:00Z')
+        .lte('created_at', mTo   + 'T23:59:59Z')
+      if (isSales) ordersQ = ordersQ.eq('nguoi_phu_trach', profile.id)
+
+      const { count } = await ordersQ
+      stats.orders_month = count ?? 0
     }
 
     // ── D. Bảo trì ───────────────────────────────────────────────────────────
     if (!isLogistics) {
-      const techFilter = isTech ? own('KTV phụ trách') : undefined
-      const nvFilter   = isTech ? own('NV phụ trách')  : undefined
+      // Build base queries then conditionally filter
+      const techId = isTech ? profile.id : null
 
-      const [ctToday, ptToday, ptWeek, ctOngoing, ptOverdue] = await Promise.all([
-        listRecords(TABLES.CONSTRUCTION, {
-          pageSize: 1,
-          filter: [techFilter, `CurrentValue.[Ngày nghiệm thu dự kiến] >= ${start}`, `CurrentValue.[Ngày nghiệm thu dự kiến] <= ${end}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
-        listRecords(TABLES.PERIODIC_SERVICE, {
-          pageSize: 1,
-          filter: [nvFilter, `CurrentValue.[Lần BĐ tiếp theo] >= ${start}`, `CurrentValue.[Lần BĐ tiếp theo] <= ${end}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
-        listRecords(TABLES.PERIODIC_SERVICE, {
-          pageSize: 1,
-          filter: [nvFilter, `CurrentValue.[Lần BĐ tiếp theo] >= ${wStart}`, `CurrentValue.[Lần BĐ tiếp theo] <= ${wEnd}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
-        listRecords(TABLES.CONSTRUCTION, {
-          pageSize: 1,
-          filter: `CurrentValue.[Trạng thái thi công] = "Đang thi công"`,
-        }),
-        listRecords(TABLES.PERIODIC_SERVICE, {
-          pageSize: 1,
-          filter: [nvFilter, `CurrentValue.[Lần BĐ tiếp theo] < ${start}`]
-            .filter(Boolean).join(' && ') || undefined,
-        }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const addTech = (q: any, col: string) => techId ? q.eq(col, techId) : q
+
+      const [ptTodayR, ptWeekR, ptOverdueR, ctTodayR, ctOngoingR] = await Promise.all([
+        addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).eq('lan_bd_tiep_theo', today), 'nv_phu_trach'),
+        addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).gte('lan_bd_tiep_theo', wFrom).lte('lan_bd_tiep_theo', wTo), 'nv_phu_trach'),
+        addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).lt('lan_bd_tiep_theo', today).eq('trang_thai', 'Đang hoạt động'), 'nv_phu_trach'),
+        addTech(supabase.from('maintenance_construction').select('*', { count: 'exact', head: true }).eq('ngay_can_cs', today), 'ktv_phu_trach'),
+        addTech(supabase.from('maintenance_construction').select('*', { count: 'exact', head: true }).eq('trang_thai', 'Đang thi công'), 'ktv_phu_trach'),
       ])
 
-      stats.maintenance_today    = ctToday.total + ptToday.total
-      stats.maintenance_week     = ctToday.total + ptWeek.total
-      stats.construction_ongoing = ctOngoing.total
-      stats.maintenance_overdue  = ptOverdue.total
+      stats.maintenance_today    = (ptTodayR.count ?? 0) + (ctTodayR.count ?? 0)
+      stats.maintenance_week     = (ptWeekR.count  ?? 0) + (ctTodayR.count ?? 0)
+      stats.maintenance_overdue  = ptOverdueR.count  ?? 0
+      stats.construction_ongoing = ctOngoingR.count  ?? 0
     }
 
     // ── E. Revenue (manager group) ────────────────────────────────────────────
-    if (isManagerGroup) {
-      // Tháng hiện tại: contracts + commercial
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-      sixMonthsAgo.setDate(1)
-      sixMonthsAgo.setHours(0, 0, 0, 0)
+    if (isManager) {
+      // Lấy payment_records đã thanh toán trong 6 tháng qua
+      const { data: payments6M } = await supabase
+        .from('payment_records')
+        .select('amount, paid_date')
+        .eq('is_paid', true)
+        .gte('paid_date', sixMoAgo)
 
-      const [allContracts6M, allCommercial6M, unpaid] = await Promise.all([
-        cachedListAllRecords(TABLES.CONTRACTS,
-          `CurrentValue.[Ngày ký] >= ${sixMonthsAgo.getTime()}`,
-        ),
-        cachedListAllRecords(TABLES.COMMERCIAL,
-          `CurrentValue.[Ngày giao thực] >= ${sixMonthsAgo.getTime()}`,
-        ),
-        // HĐ chưa thanh toán: các đợt chờ TT
-        listRecords(TABLES.CONTRACTS, {
-          pageSize: 1,
-          filter: `(CurrentValue.[Trạng thái HĐ] = "Đã ký - Chờ TT đợt 1" || CurrentValue.[Trạng thái HĐ] = "Đã ký - Chờ TT đợt 2" || CurrentValue.[Trạng thái HĐ] = "Đã ký - Chờ TT đợt 3")`,
-        }),
-      ])
+      // Unpaid installments
+      const { count: unpaid } = await supabase
+        .from('payment_records')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_paid', false)
 
-      stats.contracts_unpaid = unpaid.total
+      stats.contracts_unpaid = unpaid ?? 0
 
-      // Build 6-month revenue
-      const months = last6Months()
-      const monthMap: Record<string, number> = {}
-      for (const m of months) monthMap[m.label] = 0
+      const months   = last6MonthsLabels()
+      const monthMap = Object.fromEntries(months.map(m => [m.label, 0]))
 
-      for (const r of allContracts6M) {
-        const ts = r.fields['Ngày ký'] ? Number(r.fields['Ngày ký']) : null
-        if (!ts) continue
-        const label = monthLabel(ts)
-        if (label in monthMap) {
-          monthMap[label] += Number(r.fields['Giá trị HĐ (VNĐ)'] ?? 0)
-        }
-      }
-      for (const r of allCommercial6M) {
-        const ts = r.fields['Ngày giao thực'] ? Number(r.fields['Ngày giao thực']) : null
-        if (!ts) continue
-        const label = monthLabel(ts)
-        if (label in monthMap) {
-          monthMap[label] += Number(r.fields['Tổng tiền (VNĐ)'] ?? 0)
-        }
+      for (const p of payments6M ?? []) {
+        const label = monthLabelFromDate(p.paid_date)
+        if (label in monthMap) monthMap[label] += p.amount ?? 0
       }
 
-      const currentMonthLabel = monthLabel(Date.now())
-      stats.revenue_month   = monthMap[currentMonthLabel] ?? 0
-      stats.revenue_6months = months.map(m => ({ label: m.label, value: monthMap[m.label] ?? 0 }))
+      const currentLabel       = `T${new Date().getMonth() + 1}/${String(new Date().getFullYear()).slice(2)}`
+      stats.revenue_month      = monthMap[currentLabel] ?? 0
+      stats.revenue_6months    = months.map(m => ({ label: m.label, value: monthMap[m.label] ?? 0 }))
     }
 
     // ── F. Logistics ──────────────────────────────────────────────────────────
-    if (isLogistics || isManagerGroup) {
+    if (isLogistics || isManager) {
       const [lPending, lDelivering, lDelivered, lOverdue] = await Promise.all([
-        listRecords(TABLES.COMMERCIAL, {
-          pageSize: 1,
-          filter: `(CurrentValue.[Trạng thái đơn] = "Chờ xác nhận" || CurrentValue.[Trạng thái đơn] = "Đang chuẩn bị")`,
-        }),
-        listRecords(TABLES.COMMERCIAL, {
-          pageSize: 1,
-          filter: `CurrentValue.[Trạng thái đơn] = "Đang giao"`,
-        }),
-        listRecords(TABLES.COMMERCIAL, {
-          pageSize: 1,
-          filter: [
-            `(CurrentValue.[Trạng thái đơn] = "Đã giao" || CurrentValue.[Trạng thái đơn] = "Đã thanh toán")`,
-            `CurrentValue.[Ngày giao thực] >= ${from}`,
-            `CurrentValue.[Ngày giao thực] <= ${to}`,
-          ].join(' && '),
-        }),
-        listRecords(TABLES.COMMERCIAL, {
-          pageSize: 1,
-          filter: [
-            `CurrentValue.[Ngày giao hàng DK] < ${start}`,
-            `(CurrentValue.[Trạng thái đơn] = "Chờ xác nhận" || CurrentValue.[Trạng thái đơn] = "Đang chuẩn bị" || CurrentValue.[Trạng thái đơn] = "Đang giao")`,
-          ].join(' && '),
-        }),
+        supabase.from('orders').select('*', { count: 'exact', head: true })
+          .eq('type', 'commercial')
+          .in('trang_thai', ['Chờ xác nhận', 'Đang chuẩn bị']),
+        supabase.from('orders').select('*', { count: 'exact', head: true })
+          .eq('type', 'commercial').eq('trang_thai', 'Đang giao'),
+        supabase.from('orders').select('*', { count: 'exact', head: true })
+          .eq('type', 'commercial')
+          .in('trang_thai', ['Đã giao', 'Đã thanh toán'])
+          .gte('updated_at', mFrom + 'T00:00:00Z')
+          .lte('updated_at', mTo   + 'T23:59:59Z'),
+        supabase.from('orders').select('*', { count: 'exact', head: true })
+          .eq('type', 'commercial')
+          .in('trang_thai', ['Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao'])
+          .lt('ngay_giao_dk', today),
       ])
 
-      stats.logistics_pending         = lPending.total
-      stats.logistics_delivering      = lDelivering.total
-      stats.logistics_delivered_month = lDelivered.total
-      stats.logistics_overdue         = lOverdue.total
+      stats.logistics_pending         = lPending.count   ?? 0
+      stats.logistics_delivering      = lDelivering.count ?? 0
+      stats.logistics_delivered_month = lDelivered.count  ?? 0
+      stats.logistics_overdue         = lOverdue.count    ?? 0
     }
 
     return NextResponse.json({ data: stats, role })

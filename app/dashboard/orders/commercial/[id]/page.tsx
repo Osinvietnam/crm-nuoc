@@ -138,7 +138,7 @@ export default function CommercialDetailPage() {
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">CHI TIẾT ĐƠN HÀNG</p>
           <InfoRow label="Mã đơn" value={order.ma_don} />
-          <InfoRow label="Ngày đặt" value={order.ngay_dat} />
+          <InfoRow label="Ngày đặt" value={fmtDate(order.ngay_dat)} />
           <InfoRow label="Loại khách" value={order.loai_khach} />
           <InfoRow label="Tỉnh / Thành" value={order.tinh_thanh} />
           <InfoRow label="Mã SP/VT" value={order.ma_sp} />

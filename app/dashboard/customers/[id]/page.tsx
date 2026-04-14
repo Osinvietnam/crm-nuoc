@@ -184,37 +184,8 @@ export default function CustomerDetailPage() {
         const res = await fetch(`/api/lark/customers/${id}`)
         const data = await res.json()
         if (!res.ok) throw new Error()
-
-        // Map raw Lark record fields to Customer shape
-        const f = data.record.fields
-        setCustomer({
-          record_id:       id,
-          ho_ten:          String(f['Họ tên KH'] ?? ''),
-          sdt:             String(f['SĐT di động'] ?? ''),
-          sdt_khac:        String(f['SĐT khác'] ?? ''),
-          email:           String(f['Email'] ?? ''),
-          ma_kh:           String(f['Mã KH (tự đặt)'] ?? ''),
-          dia_chi_hd:      String(f['Địa chỉ ký HĐ'] ?? ''),
-          dia_chi_ct:      String(f['Địa chỉ công trình'] ?? ''),
-          pipeline:        String(f['Trạng thái pipeline'] ?? ''),
-          nguoi_phu_trach: String(f['Người phụ trách'] ?? ''),
-          nguon_kh:        String(f['Nguồn KH'] ?? ''),
-          doi_tac_gt:      String(f['Đối tác giới thiệu'] ?? ''),
-          loai_hinh_nha:   String(f['Loại hình nhà'] ?? ''),
-          nguon_nuoc:      String(f['Nguồn nước'] ?? ''),
-          san_pham_quan_tam: Array.isArray(f['Sản phẩm quan tâm'])
-            ? f['Sản phẩm quan tâm'] as string[]
-            : [],
-          bao_gia:         Number(f['Giá trị báo giá (VNĐ)'] ?? 0),
-          muc_uu_tien:     String(f['Mức ưu tiên'] ?? ''),
-          ngay_lien_he_dau: f['Ngày liên hệ đầu'] ? Number(f['Ngày liên hệ đầu']) : null,
-          ngay_cap_nhat:   f['Ngày cập nhật cuối'] ? Number(f['Ngày cập nhật cuối']) : null,
-          noi_dung:        String(f['Nội dung trao đổi'] ?? ''),
-          ly_do_tu_choi:   String(f['Lý do từ chối'] ?? ''),
-          nhom_dv:         String(f['Nhóm dịch vụ'] ?? ''),
-          tien_do_ct:      String(f['Tiến độ công trình'] ?? ''),
-          khu_vuc:         String(f['Khu vực'] ?? ''),
-        })
+        // API now returns flat { customer } — no field mapping needed
+        setCustomer(data.customer)
       } catch {
         // silently fail — user can go back
       } finally {

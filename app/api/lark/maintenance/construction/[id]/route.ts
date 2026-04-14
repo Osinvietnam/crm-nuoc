@@ -1,40 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getRecord, updateRecord, createRecord, type LarkRecord } from '@/lib/lark/client'
-import { TABLES } from '@/lib/lark/tables'
 import { mappers } from '../../_mappers'
 
-type Supabase = Awaited<ReturnType<typeof createClient>>
+const SELECT = `
+  *,
+  ktv:ktv_phu_trach(id, full_name),
+  customers!customer_id(id, ho_ten, sdt, dia_chi)
+`
 
-// Q5: CT "Đã nghiệm thu" → tự tạo bản ghi TB11 (Bảo dưỡng định kỳ)
-async function autoCreatePeriodic(supabase: Supabase, constructionRecord: LarkRecord, constructionId: string) {
-  // Dedup: chỉ tạo một lần
-  const { data: link } = await supabase
-    .from('construction_contract_links')
-    .select('customer_record_id, periodic_service_created')
-    .eq('construction_record_id', constructionId)
-    .single()
-  if (link?.periodic_service_created) return
+// ─── Q5: CT "Nghiệm thu hoàn thành" → tự tạo maintenance_periodic ─────────────
 
-  const f = constructionRecord.fields
-
-  const fields: Record<string, unknown> = {
-    'Khách hàng':     String(f['Khách hàng'] ?? ''),
-    'SĐT':            String(f['SĐT đại diện'] ?? ''),
-    'Chu kỳ (tháng)': 6,
-    'Trạng thái':     'Chờ xác nhận',
+async function autoCreatePeriodic(supabase: any, construction: any) {
+  // Dedup: check by order_id if available
+  if (construction.order_id) {
+    const { data: existing } = await supabase
+      .from('maintenance_periodic')
+      .select('id')
+      .eq('order_id', construction.order_id)
+      .maybeSingle()
+    if (existing) return
   }
 
-  await createRecord(TABLES.PERIODIC_SERVICE, fields)
-
-  // Đánh dấu đã tạo TB11 (nếu link tồn tại; CT tạo từ app)
-  if (link) {
-    await supabase
-      .from('construction_contract_links')
-      .update({ periodic_service_created: true })
-      .eq('construction_record_id', constructionId)
-  }
+  await supabase.from('maintenance_periodic').insert({
+    customer_id:     construction.customer_id  ?? null,
+    order_id:        construction.order_id     ?? null,
+    san_pham_da_lap: construction.san_pham ? [construction.san_pham] : [],
+    chu_ky:          6,
+    trang_thai:      'Đang hoạt động',
+    khu_vuc:         construction.khu_vuc ?? null,
+  })
 }
+
+// ─── GET /api/lark/maintenance/construction/[id] ──────────────────────────────
 
 export async function GET(
   _req: NextRequest,
@@ -46,13 +43,21 @@ export async function GET(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id } = await params
-    const record = await getRecord(TABLES.CONSTRUCTION, id)
-    return NextResponse.json({ data: mappers.construction(record) })
+    const query = supabase.from('maintenance_construction').select(SELECT)
+    const { data, error } = await (/^\d+$/.test(id)
+      ? query.eq('id', parseInt(id))
+      : query.eq('lark_record_id', id)
+    ).single()
+
+    if (error || !data) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 })
+    return NextResponse.json({ data: mappers.construction(data) })
   } catch (err) {
-    console.error(err)
+    console.error('GET /api/lark/maintenance/construction/[id]:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
+
+// ─── PATCH /api/lark/maintenance/construction/[id] ────────────────────────────
 
 export async function PATCH(
   req: NextRequest,
@@ -65,23 +70,33 @@ export async function PATCH(
 
     const { id } = await params
     const body = await req.json()
-    const fields: Record<string, unknown> = {}
 
-    if (body.trang_thai !== undefined)   fields['Trạng thái thi công'] = body.trang_thai
-    if (body.ghi_chu !== undefined)      fields['Ghi chú thi công'] = body.ghi_chu
-    if (body.ngay_nt !== undefined)      fields['Ngày NT'] = body.ngay_nt
-    if (body.ngay_gh_thuc !== undefined) fields['Ngày GH thực'] = body.ngay_gh_thuc
-
-    const record = await updateRecord(TABLES.CONSTRUCTION, id, fields)
-
-    // Q5: CT Nghiệm thu hoàn thành → tự tạo TB11 (Bảo dưỡng định kỳ)
-    if (body.trang_thai === 'Nghiệm thu hoàn thành') {
-      await autoCreatePeriodic(supabase, record, id).catch(e => console.error('autoCreatePeriodic:', e))
+    const updates: Record<string, unknown> = {}
+    for (const key of ['trang_thai', 'ghi_chu', 'san_pham', 'ktv_phu_trach', 'ma_ct']) {
+      if (key in body) updates[key] = body[key]
+    }
+    // Date fields: UI sends ms timestamp → convert to ISO date
+    for (const f of ['ngay_gh_thuc', 'ngay_nt']) {
+      if (f in body) {
+        updates[f] = body[f] ? new Date(Number(body[f])).toISOString().split('T')[0] : null
+      }
     }
 
-    return NextResponse.json({ data: mappers.construction(record) })
+    const baseQuery = supabase.from('maintenance_construction').update(updates).select(SELECT)
+    const { data, error } = await (/^\d+$/.test(id)
+      ? baseQuery.eq('id', parseInt(id))
+      : baseQuery.eq('lark_record_id', id)
+    ).single()
+    if (error) throw error
+
+    // Q5: CT Nghiệm thu hoàn thành → tự tạo maintenance_periodic
+    if (body.trang_thai === 'Nghiệm thu hoàn thành') {
+      void autoCreatePeriodic(supabase, data).catch((e: unknown) => console.error('autoCreatePeriodic:', e))
+    }
+
+    return NextResponse.json({ data: mappers.construction(data) })
   } catch (err) {
-    console.error(err)
+    console.error('PATCH /api/lark/maintenance/construction/[id]:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }

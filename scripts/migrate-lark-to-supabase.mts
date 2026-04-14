@@ -28,16 +28,16 @@ const DRY_RUN       = process.argv.includes('--dry-run')
 const ONLY_TABLES   = process.argv.find(a => a.startsWith('--only='))
   ?.replace('--only=', '').split(',') ?? null
 
-// LarkBase Table IDs — lấy từ lib/lark/tables.ts
+// LarkBase Table IDs — sync với lib/lark/tables.ts
 const TABLES = {
   CUSTOMERS:               'tbl56uB4wSaACzgm',
-  PRODUCTS:                'tblN5F3lAvhOSSay',
-  QUOTES:                  'tblqxJPDoB9piBAe',
-  CONTRACTS:               'tblB2TiUXzB28e2p',   // B2C (hợp đồng)
-  COMMERCIAL_ORDERS:       'tblYSt5ztdmFqL6d',   // Thương mại
-  PROJECTS:                'tblh9iEqajhE1JiE',   // Dự án
-  MAINTENANCE_PERIODIC:    'tblwWXkfRBGSIVxf',
-  MAINTENANCE_CONSTRUCTION:'tblJzEqd7yc4c8fO',
+  PRODUCTS:                'tbl5ekXxzmCADqQw',
+  QUOTES:                  'tblJi0l9GSDGgiFu',
+  CONTRACTS:               'tbl2l6Z9vPaHfNHs',   // B2C (hợp đồng)
+  COMMERCIAL_ORDERS:       'tbl47Uve7oTPQ3b0',   // Thương mại
+  PROJECTS:                'tbl5zCezRWITxnXL',   // Dự án
+  MAINTENANCE_PERIODIC:    'tbl6sFK3nDfFRtLN',
+  MAINTENANCE_CONSTRUCTION:'tbl2XRs8cikrVZXL',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -453,11 +453,10 @@ async function main() {
 
   const shouldRun = (name: string) => !ONLY_TABLES || ONLY_TABLES.includes(name)
 
+  try {
   const profileMap  = await buildProfileMap()
   const customerMap = new Map<string, number>()
   const productMap  = new Map<string, number>()
-
-  try {
     if (shouldRun('products'))     await migrateProducts()
     if (shouldRun('customers'))    await migrateCustomers(profileMap)
 
@@ -482,4 +481,8 @@ async function main() {
   }
 }
 
-main()
+main().catch(err => {
+  console.error('\n❌ Unhandled error:', JSON.stringify(err, null, 2))
+  console.error(err)
+  process.exit(1)
+})

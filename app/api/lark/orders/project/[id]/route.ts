@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getRecord, updateRecord } from '@/lib/lark/client'
-import { TABLES } from '@/lib/lark/tables'
-import { mappers } from '../../_mappers'
+import { mapProject } from '../../_mappers'
+
+const SELECT = `
+  *,
+  staff:nguoi_phu_trach(id, full_name)
+`
+
+// ─── GET /api/lark/orders/project/[id] ────────────────────────────────────────
 
 export async function GET(
   _req: NextRequest,
@@ -14,13 +19,21 @@ export async function GET(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id } = await params
-    const record = await getRecord(TABLES.PROJECTS, id)
-    return NextResponse.json({ data: mappers.project(record) })
+    const query = supabase.from('orders').select(SELECT).eq('type', 'project')
+    const { data, error } = await (/^\d+$/.test(id)
+      ? query.eq('id', parseInt(id))
+      : query.eq('lark_record_id', id)
+    ).single()
+
+    if (error || !data) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 })
+    return NextResponse.json({ data: mapProject(data) })
   } catch (err) {
-    console.error(err)
+    console.error('GET /api/lark/orders/project/[id]:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
+
+// ─── PATCH /api/lark/orders/project/[id] ──────────────────────────────────────
 
 export async function PATCH(
   req: NextRequest,
@@ -33,18 +46,30 @@ export async function PATCH(
 
     const { id } = await params
     const body = await req.json()
-    const fields: Record<string, unknown> = {}
 
-    if (body.giai_doan !== undefined)    fields['Giai đoạn dự án'] = body.giai_doan
-    if (body.ghi_chu !== undefined)      fields['Ghi chú'] = body.ghi_chu
-    if (body.ty_le_thang !== undefined)  fields['Tỷ lệ thắng thầu (%)'] = String(body.ty_le_thang)
-    if (body.gia_tri_hd !== undefined)   fields['Giá trị HĐ ký (VNĐ)'] = String(body.gia_tri_hd)
-    if (body.cong_no !== undefined)      fields['Công nợ còn lại (VNĐ)'] = String(body.cong_no)
+    const updates: Record<string, unknown> = {}
+    for (const key of ['trang_thai', 'ghi_chu', 'giai_doan', 'ten_da', 'chu_dau_tu', 'tong_thau', 'loai_da', 'quy_mo', 'tinh_thanh', 'gia_tri_dt', 'gia_tri_hd', 'ty_le_thang', 'cong_no']) {
+      if (key in body) updates[key] = body[key]
+    }
+    // doi_tac from UI maps to doi_tac_da in DB
+    if ('doi_tac' in body) updates.doi_tac_da = body.doi_tac
+    // Date fields: UI sends ms timestamp → convert to ISO date
+    for (const f of ['ngay_bao_gia', 'ngay_du_kien_ky', 'ngay_bt_tc', 'ngay_hoan_thanh']) {
+      if (f in body) {
+        updates[f] = body[f] ? new Date(Number(body[f])).toISOString().split('T')[0] : null
+      }
+    }
 
-    const record = await updateRecord(TABLES.PROJECTS, id, fields)
-    return NextResponse.json({ data: mappers.project(record) })
+    const baseQuery = supabase.from('orders').update(updates).select(SELECT)
+    const { data, error } = await (/^\d+$/.test(id)
+      ? baseQuery.eq('id', parseInt(id))
+      : baseQuery.eq('lark_record_id', id)
+    ).single()
+    if (error) throw error
+
+    return NextResponse.json({ data: mapProject(data) })
   } catch (err) {
-    console.error(err)
+    console.error('PATCH /api/lark/orders/project/[id]:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }

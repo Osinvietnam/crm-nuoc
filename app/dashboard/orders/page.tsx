@@ -28,10 +28,10 @@ const fmtDate = (ms: number | null) => {
   return new Date(ms).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const fmtDateStr = (s: string) => {
+const fmtDateStr = (s: string | number | null | undefined) => {
   if (!s) return '—'
-  const d = new Date(s)
-  return isNaN(d.getTime()) ? s : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const d = typeof s === 'number' ? new Date(s) : new Date(s)
+  return isNaN(d.getTime()) ? String(s) : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function StatusBadge({ label, colors }: { label: string; colors: Record<string, { bg: string; text: string }> }) {
