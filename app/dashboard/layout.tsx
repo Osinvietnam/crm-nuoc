@@ -35,7 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'global' })
     router.push('/login')
   }
 

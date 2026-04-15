@@ -98,7 +98,7 @@ function ResetPasswordContent() {
       setSaving(false)
       return
     }
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'global' })
     setStep('success')
     setSaving(false)
   }

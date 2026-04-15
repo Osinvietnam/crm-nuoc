@@ -169,8 +169,8 @@ Tất cả `/api/lark/*` routes giữ URL cũ nhưng backend chuyển sang Supab
 - `app/api/lark/quotes/duplicate/route.ts` rewrite sang Supabase hoàn toàn
 - `app/api/admin/users/[id]/offboard/route.ts` rewrite bỏ LarkBase calls
 
-#### Security Audit (2026-04-14)
-Critical + High issues đã fix:
+#### Security Audit Round 1 (2026-04-14)
+Critical + High issues đã fix (commit ac50273):
 - C1: Drop đúng policy cũ (3 bảng 009/010/011)
 - C2: profiles bật RLS + policies
 - C3: system_config write restrict admin/ceo only
@@ -178,6 +178,22 @@ Critical + High issues đã fix:
 - H1: `flowType: 'implicit'` → `'pkce'`
 - H2: Error messages generic `'Lỗi server'`
 - H3: quote_items policies restrict by user
+
+#### Security Audit Round 2 (2026-04-15 — migration 023 + code)
+Áp dụng `supabase/migrations/023_fix_rls_security.sql` trên Dashboard:
+- DROP legacy `"auth users" FOR ALL USING (true)` từ kpi_targets, payment_records, task_completions
+- company_settings write: DROP `authenticated_write_company` → tạo lại `admin_write_company` (admin/ceo only)
+- DROP 3 link tables legacy (contract_customer_links, construction_contract_links, quote_customer_links)
+- Code: `signOut({ scope: 'global' })` trong layout.tsx + reset-password/page.tsx
+- **Verify query chạy sau khi apply:** `SELECT tablename, policyname FROM pg_policies WHERE tablename IN ('kpi_targets','payment_records','task_completions','company_settings') ORDER BY 1,2;` — không còn policy nào tên `"auth users"`
+
+#### Security Audit Round 3 (2026-04-15 — proxy.ts)
+- `proxy.ts` (Next.js 16 — đổi tên từ `middleware.ts`): server-side route guard + security headers
+  - Auth guard: unauthenticated → redirect `/login`; root `/` → redirect `/dashboard`; `/dashboard/admin` → admin only
+  - Security headers trên mọi response: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+    `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`
+  - Dùng `proxyConfig` (v16+ rename từ `config`) + Node.js runtime (default, không cần khai báo)
+  - Supabase session tự refresh qua `setAll()` cookie handler
 
 ### Routes còn dùng LarkBase trực tiếp (chưa rewrite)
 | Route | Lý do giữ lại |
