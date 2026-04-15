@@ -636,7 +636,7 @@ export default function StaffPage() {
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Vai trò *</label>
                 <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
@@ -649,7 +649,7 @@ export default function StaffPage() {
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Khu vực</label>
                 <select value={createForm.khu_vuc} onChange={e => setCreateForm(f => ({ ...f, khu_vuc: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">-- Chọn khu vực --</option>
                   {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
@@ -663,7 +663,7 @@ export default function StaffPage() {
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Trạng thái</label>
                 <select value={createForm.trang_thai_nv} onChange={e => setCreateForm(f => ({ ...f, trang_thai_nv: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>

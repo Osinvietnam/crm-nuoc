@@ -117,61 +117,115 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
 
   const menu = menuByRole[profile?.role ?? 'sales'] ?? []
+  const initials = profile?.full_name?.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase() ?? 'U'
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex">
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+      {/* ── Desktop Sidebar (lg+) ─────────────────────────────────────── */}
+      <aside className="hidden lg:flex lg:flex-col fixed left-0 top-0 bottom-0 w-56 bg-white border-r border-gray-100 z-20">
+
+        {/* User info */}
         <button
           onClick={() => router.push('/dashboard/profile')}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left"
+          className="flex items-center gap-3 px-4 py-5 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 shrink-0"
         >
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-bold">
-              {profile?.full_name?.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase() ?? 'U'}
-            </span>
+          <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+            <span className="text-white text-xs font-bold">{initials}</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-800 leading-none">{profile?.full_name}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-800 leading-none truncate">{profile?.full_name}</p>
             <p className="text-xs text-blue-600 mt-0.5">{roleLabel[profile?.role ?? 'sales']}</p>
           </div>
         </button>
-        <button
-          onClick={handleLogout}
-          className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
-        >
-          Đăng xuất
-        </button>
-      </header>
 
-      {/* Content — content-safe phủ đủ chiều cao nav + iPhone notch */}
-      <main className="flex-1 overflow-auto content-safe">
-        <div className="max-w-2xl mx-auto w-full">
-          {children}
-        </div>
-      </main>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 nav-safe z-10">
-        <div className="max-w-2xl mx-auto flex overflow-x-auto scrollbar-none px-1 pt-1">
+        {/* Menu items */}
+        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {menu.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <button
                 key={item.href}
                 onClick={() => router.push(item.href)}
-                className={`flex flex-col items-center py-2 rounded-xl transition-colors flex-shrink-0 ${
-                  menu.length <= 5 ? 'flex-1 px-1' : 'px-4'
-                } ${isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
+                }`}
               >
-                <span className="text-xl leading-none">{item.icon}</span>
-                <span className="text-[10px] mt-1 font-semibold whitespace-nowrap">{item.label}</span>
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span>{item.label}</span>
               </button>
             )
           })}
+        </nav>
+
+        {/* Logout */}
+        <div className="p-2 border-t border-gray-100 shrink-0">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors text-left"
+          >
+            <span className="text-lg">🚪</span>
+            <span>Đăng xuất</span>
+          </button>
         </div>
-      </nav>
+      </aside>
+
+      {/* ── Main area ─────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-h-screen lg:ml-56">
+
+        {/* Header — mobile only */}
+        <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+          <button
+            onClick={() => router.push('/dashboard/profile')}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+              <span className="text-white text-xs font-bold">{initials}</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800 leading-none">{profile?.full_name}</p>
+              <p className="text-xs text-blue-600 mt-0.5">{roleLabel[profile?.role ?? 'sales']}</p>
+            </div>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
+          >
+            Đăng xuất
+          </button>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-auto content-safe lg:pb-8 lg:pt-6">
+          <div className="max-w-2xl mx-auto w-full">
+            {children}
+          </div>
+        </main>
+
+        {/* Bottom Navigation — mobile only */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 nav-safe z-10">
+          <div className="max-w-2xl mx-auto flex overflow-x-auto scrollbar-none px-1 pt-1">
+            {menu.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => router.push(item.href)}
+                  className={`flex flex-col items-center py-2 rounded-xl transition-colors flex-shrink-0 ${
+                    menu.length <= 5 ? 'flex-1 px-1' : 'px-4'
+                  } ${isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <span className="text-xl leading-none">{item.icon}</span>
+                  <span className="text-xs mt-1 font-semibold whitespace-nowrap">{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+
+      </div>
     </div>
   )
 }

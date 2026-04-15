@@ -155,11 +155,11 @@ export default function ProfilePage() {
                 placeholder="Số nhà, đường, quận/huyện, tỉnh/thành" />
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditing(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-600">
+                  className="flex-1 py-3 rounded-xl border border-gray-300 text-sm text-gray-600">
                   Hủy
                 </button>
                 <button onClick={handleSave} disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+                  className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
                   {saving ? 'Đang lưu...' : 'Lưu'}
                 </button>
               </div>
@@ -223,7 +223,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-3 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )

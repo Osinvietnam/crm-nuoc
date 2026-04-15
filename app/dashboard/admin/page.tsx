@@ -541,7 +541,7 @@ function AuditLogTab() {
           <button
             onClick={() => load(Math.max(0, offset - LIMIT))}
             disabled={offset === 0}
-            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl disabled:opacity-40"
+            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40"
           >
             ← Trước
           </button>
@@ -551,7 +551,7 @@ function AuditLogTab() {
           <button
             onClick={() => load(offset + LIMIT)}
             disabled={offset + LIMIT >= total}
-            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-xl disabled:opacity-40"
+            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40"
           >
             Sau →
           </button>
@@ -649,7 +649,7 @@ function SystemConfigTab() {
         <button
           onClick={() => testConnection('lark')}
           disabled={testing === 'lark'}
-          className="w-full border border-blue-200 text-blue-600 text-sm font-medium py-2.5 rounded-xl hover:bg-blue-50 disabled:opacity-50"
+          className="w-full border border-blue-200 text-blue-600 text-sm font-medium py-3 rounded-xl hover:bg-blue-50 disabled:opacity-50"
         >
           {testing === 'lark' ? 'Đang kiểm tra...' : '🔌 Kiểm tra kết nối LarkBase'}
         </button>
@@ -675,7 +675,7 @@ function SystemConfigTab() {
         <button
           onClick={() => testConnection('n8n')}
           disabled={testing === 'n8n' || !n8nUrl}
-          className="w-full border border-blue-200 text-blue-600 text-sm font-medium py-2.5 rounded-xl hover:bg-blue-50 disabled:opacity-50"
+          className="w-full border border-blue-200 text-blue-600 text-sm font-medium py-3 rounded-xl hover:bg-blue-50 disabled:opacity-50"
         >
           {testing === 'n8n' ? 'Đang kiểm tra...' : '🔌 Kiểm tra kết nối N8n'}
         </button>
