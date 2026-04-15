@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { PIPELINE_STAGES } from '@/lib/lark/tables'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +25,10 @@ export interface DashboardStats {
   logistics_overdue:         number
   kh_no_contact_30d:         number
   quotes_stale:              number
+  // Phase 8 — Finance
+  hoa_hong_chua_tra:         number   // tổng VNĐ hoa hồng chưa trả
+  khau_hao_thang:            number   // tổng khấu hao tháng hiện tại
+  cong_no_qua_han:           number   // tổng công nợ quá hạn (due_date < today)
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -78,6 +82,7 @@ function zero(): DashboardStats {
     maintenance_week: 0, construction_ongoing: 0, maintenance_overdue: 0,
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
     logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0,
+    hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0,
   }
 }
 
@@ -210,6 +215,28 @@ export async function GET() {
       const currentLabel       = `T${new Date().getMonth() + 1}/${String(new Date().getFullYear()).slice(2)}`
       stats.revenue_month      = monthMap[currentLabel] ?? 0
       stats.revenue_6months    = months.map(m => ({ label: m.label, value: monthMap[m.label] ?? 0 }))
+
+      // Phase 8: hoa hồng chưa trả, khấu hao tháng, công nợ quá hạn
+      const service = createServiceClient()
+      const [commRes, assetsRes, overdueRes] = await Promise.all([
+        service.from('orders').select('hh_kinh_doanh').eq('type', 'b2c').eq('hh_da_tra', false).gt('hh_kinh_doanh', 0),
+        service.from('assets').select('gia_tri_ban_dau, ngay_mua, thoi_gian_kh_thang').eq('is_active', true),
+        service.from('payment_records').select('amount').eq('is_paid', false).lt('due_date', today),
+      ])
+
+      stats.hoa_hong_chua_tra = (commRes.data ?? []).reduce((s, o) => s + (o.hh_kinh_doanh ?? 0), 0)
+      stats.cong_no_qua_han   = (overdueRes.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
+
+      const now = new Date()
+      let khtong = 0
+      for (const a of assetsRes.data ?? []) {
+        const purchase = new Date(a.ngay_mua)
+        const elapsed  = (now.getFullYear() - purchase.getFullYear()) * 12 + (now.getMonth() - purchase.getMonth())
+        if (elapsed < a.thoi_gian_kh_thang) {
+          khtong += Math.round(a.gia_tri_ban_dau / a.thoi_gian_kh_thang)
+        }
+      }
+      stats.khau_hao_thang = khtong
     }
 
     // ── F. Logistics ──────────────────────────────────────────────────────────

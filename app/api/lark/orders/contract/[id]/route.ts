@@ -69,8 +69,18 @@ export async function PATCH(
     const body = await req.json()
 
     const updates: Record<string, unknown> = {}
-    for (const key of ['trang_thai', 'ghi_chu', 'gia_tri_hd', 'gia_tri_gws', 'hh_kinh_doanh', 'san_pham', 'dia_chi_ct']) {
+    for (const key of ['trang_thai', 'ghi_chu', 'gia_tri_hd', 'gia_tri_gws', 'san_pham', 'dia_chi_ct', 'hh_phan_tram', 'hh_da_tra', 'hh_ngay_tra']) {
       if (key in body) updates[key] = body[key]
+    }
+    // hh_phan_tram đổi → tự tính lại hh_kinh_doanh
+    if ('hh_phan_tram' in body || 'gia_tri_hd' in body) {
+      const pct = Number(body.hh_phan_tram ?? 0)
+      const val = Number(body.gia_tri_hd   ?? 0)
+      if (pct > 0 && val > 0) {
+        updates.hh_kinh_doanh = Math.round(val * pct / 100)
+      }
+    } else if ('hh_kinh_doanh' in body) {
+      updates.hh_kinh_doanh = body.hh_kinh_doanh
     }
     // Date fields: UI sends ms timestamp → convert to ISO date
     for (const f of ['ngay_ky', 'ngay_giao_dk', 'ngay_giao_thuc']) {
