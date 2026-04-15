@@ -86,8 +86,8 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
-// v16+: config renamed to proxyConfig
-export const proxyConfig = {
+// Note: export name stays "config" in v16 — only the file name and function changed.
+export const config = {
   // Exclude static assets and API routes (API routes protect themselves via getUser())
   matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api).*)'],
 }
