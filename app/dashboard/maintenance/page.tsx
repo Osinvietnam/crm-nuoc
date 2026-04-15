@@ -253,7 +253,7 @@ export default function MaintenancePage() {
             placeholder="Tìm khách hàng, mã..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-9 pr-4 text-sm outline-none focus:border-blue-400"
           />
         </div>
 

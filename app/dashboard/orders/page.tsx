@@ -897,12 +897,12 @@ function AddQuoteForm({ onClose, onCreated, prefilledCustomer }: {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+                  <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-0.5">
                     <button onClick={() => changeItem(item.id, 'so_luong', Math.max(1, item.so_luong - 1))}
-                      className="w-5 h-5 flex items-center justify-center text-gray-500">−</button>
-                    <span className="text-sm font-semibold text-gray-700 w-5 text-center">{item.so_luong}</span>
+                      className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">−</button>
+                    <span className="text-sm font-semibold text-gray-700 w-6 text-center">{item.so_luong}</span>
                     <button onClick={() => changeItem(item.id, 'so_luong', item.so_luong + 1)}
-                      className="w-5 h-5 flex items-center justify-center text-gray-500">+</button>
+                      className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">+</button>
                   </div>
                   <span className="text-gray-300 text-sm">×</span>
                   <input type="number" value={item.don_gia || ''}
@@ -1106,7 +1106,7 @@ export default function OrdersPage() {
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
           <input
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-9 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-9 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder={searchPlaceholder}
             value={search}
             onChange={e => setSearch(e.target.value)}

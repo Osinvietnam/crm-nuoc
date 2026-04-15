@@ -48,7 +48,7 @@ function SkeletonDashboard() {
   return (
     <div className="p-4 space-y-5">
       <Shimmer className="h-28 rounded-2xl" />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <Shimmer className="h-24" />
         <Shimmer className="h-24" />
         <Shimmer className="h-24" />
@@ -106,7 +106,7 @@ function KPIGrid({ cards, loading }: { cards: KPICard[]; loading: boolean }) {
   return (
     <div>
       <p className="text-sm font-semibold text-gray-700 mb-3">Tổng quan</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {cards.map(c => (
           <button
             key={c.label}

@@ -281,7 +281,7 @@ export default function CustomerDetailPage() {
             <button
               onClick={() => setShowPipeline(true)}
               disabled={updating}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-xl"
+              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl"
             >
               {updating ? 'Đang lưu...' : 'Cập nhật'}
             </button>
@@ -389,7 +389,7 @@ export default function CustomerDetailPage() {
           <div className="px-4 pt-4 pb-3 flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-400">LỊCH SỬ BÁO GIÁ</p>
             <button onClick={() => setShowQuoteForm(true)}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-xl">
+              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
               + Tạo mới
             </button>
           </div>
@@ -525,10 +525,10 @@ export default function CustomerDetailPage() {
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
-                            <button onClick={() => qChangeItem(item.id, 'so_luong', Math.max(1, item.so_luong - 1))} className="w-5 h-5 flex items-center justify-center text-gray-500">−</button>
-                            <span className="text-sm font-semibold text-gray-700 w-5 text-center">{item.so_luong}</span>
-                            <button onClick={() => qChangeItem(item.id, 'so_luong', item.so_luong + 1)} className="w-5 h-5 flex items-center justify-center text-gray-500">+</button>
+                          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-0.5">
+                            <button onClick={() => qChangeItem(item.id, 'so_luong', Math.max(1, item.so_luong - 1))} className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">−</button>
+                            <span className="text-sm font-semibold text-gray-700 w-6 text-center">{item.so_luong}</span>
+                            <button onClick={() => qChangeItem(item.id, 'so_luong', item.so_luong + 1)} className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">+</button>
                           </div>
                           <span className="text-gray-300 text-sm">×</span>
                           <input type="number" value={item.don_gia || ''}

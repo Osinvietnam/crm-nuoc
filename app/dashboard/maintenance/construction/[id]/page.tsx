@@ -113,7 +113,7 @@ export default function ConstructionDetailPage() {
               {item.trang_thai || '—'}
             </span>
             <button onClick={() => setShowStatus(true)} disabled={updating}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-xl">
+              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
               {updating ? 'Đang lưu...' : 'Cập nhật'}
             </button>
           </div>

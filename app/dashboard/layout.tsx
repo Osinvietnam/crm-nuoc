@@ -139,7 +139,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
         <button
           onClick={handleLogout}
-          className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50"
+          className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
         >
           Đăng xuất
         </button>
@@ -147,12 +147,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Content — content-safe phủ đủ chiều cao nav + iPhone notch */}
       <main className="flex-1 overflow-auto content-safe">
-        {children}
+        <div className="max-w-2xl mx-auto w-full">
+          {children}
+        </div>
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 nav-safe z-10">
-        <div className="flex overflow-x-auto scrollbar-none px-1 pt-1">
+        <div className="max-w-2xl mx-auto flex overflow-x-auto scrollbar-none px-1 pt-1">
           {menu.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             return (

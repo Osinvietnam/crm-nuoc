@@ -277,9 +277,9 @@ export default function FinancePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-800">Tài chính</h1>
         <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200">‹</button>
+          <button onClick={prevMonth} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200">‹</button>
           <span className="text-sm font-semibold text-gray-700 w-20 text-center">T{thang}/{nam}</span>
-          <button onClick={nextMonth} disabled={thang === now.getMonth() + 1 && nam === now.getFullYear()} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-30">›</button>
+          <button onClick={nextMonth} disabled={thang === now.getMonth() + 1 && nam === now.getFullYear()} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-30">›</button>
         </div>
       </div>
 
