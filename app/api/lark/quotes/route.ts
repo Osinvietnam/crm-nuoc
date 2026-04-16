@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapQuote } from './_mappers'
+import { logAudit } from '@/lib/audit'
 
 // ─── Tạo mã báo giá tự động ──────────────────────────────────────────────────
 
@@ -122,6 +123,15 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // H3: Audit log tạo báo giá
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile.full_name,
+      action:    'quote_created',
+      entity:    'quote',
+      detail:    `Tạo BG ${data.ma_bao_gia} cho KH ${data.customers?.ho_ten ?? 'N/A'} (v${data.phien_ban})`,
+    })
 
     // Cập nhật pipeline KH → "Báo giá"
     if (customerId) {

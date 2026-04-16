@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapQuote } from '../_mappers'
+import { logAudit } from '@/lib/audit'
 
 const SELECT = `
   *,
@@ -45,8 +46,27 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profile } = await supabase
+      .from('profiles').select('id, full_name, role').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
+
     const { id } = await params
     const body   = await req.json()
+
+    // C3 guard: fetch current quote trước
+    const fetchQuery = supabase.from('quotes').select('id, trang_thai, tong_gia_tri, chiet_khau, customer_id')
+    const { data: current, error: fetchErr } = await (/^\d+$/.test(id)
+      ? fetchQuery.eq('id', parseInt(id))
+      : fetchQuery.eq('lark_record_id', id)
+    ).single()
+    if (fetchErr || !current) return NextResponse.json({ error: 'Không tìm thấy báo giá' }, { status: 404 })
+
+    // C3: Nếu báo giá đã bị khóa, xóa các field nhạy cảm khỏi body
+    const isLocked = ['Chấp nhận', 'Từ chối'].includes(current.trang_thai)
+    if (isLocked) {
+      const LOCKED_BLOCKED = ['san_pham', 'tong_gia_tri', 'chiet_khau', 'kenh_tiep_nhan', 'ngay_gui_kh', 'ma_hd_tham_chieu']
+      for (const f of LOCKED_BLOCKED) delete body[f]
+    }
 
     const allowed = [
       'trang_thai', 'ly_do_tu_choi', 'ma_hd_tham_chieu', 'tong_gia_tri',
@@ -56,6 +76,13 @@ export async function PATCH(
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) updates[key] = body[key]
+    }
+
+    // M2: Recompute gia_tri_sau_ck server-side
+    if ('tong_gia_tri' in updates || 'chiet_khau' in updates) {
+      const tong = Number('tong_gia_tri' in updates ? updates.tong_gia_tri : current.tong_gia_tri) || 0
+      const ck   = Number('chiet_khau'   in updates ? updates.chiet_khau   : current.chiet_khau)  || 0
+      updates.gia_tri_sau_ck = Math.round(tong * (1 - ck / 100))
     }
 
     // Date fields — convert ms timestamp to ISO date string
@@ -94,6 +121,17 @@ export async function PATCH(
         .update({ pipeline: 'Đàm phán' })
         .in('pipeline', ['Báo giá'])
         .eq('id', data.customer_id)
+    }
+
+    // H3: Audit log khi thay đổi trạng thái quan trọng
+    if (body.trang_thai && ['Chấp nhận', 'Từ chối', 'Hết hạn'].includes(body.trang_thai)) {
+      void logAudit(supabase, {
+        user_id:   user.id,
+        user_name: profile.full_name,
+        action:    'quote_status_changed',
+        entity:    'quote',
+        detail:    `BG ${data.ma_bao_gia} → ${body.trang_thai}`,
+      })
     }
 
     return NextResponse.json({ data: mapQuote(data) })

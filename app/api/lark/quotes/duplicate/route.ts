@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapQuote } from '../_mappers'
+import { logAudit } from '@/lib/audit'
 
 function genMaBaoGia(): string {
   const now   = new Date()
@@ -61,8 +62,6 @@ export async function POST(req: NextRequest) {
       .from('quotes')
       .insert({
         ma_bao_gia:         genMaBaoGia(),
-        khach_hang:         source.khach_hang,
-        sdt:                source.sdt,
         nguoi_phu_trach:    profile.id,
         phien_ban:          nextVersion,
         san_pham:           source.san_pham ?? [],
@@ -91,15 +90,19 @@ export async function POST(req: NextRequest) {
         quote_id:     newQuote.id,
         product_id:   item.product_id ?? null,
         ten_sp:       item.ten_sp,
-        mo_ta:        item.mo_ta ?? null,
         so_luong:     item.so_luong,
         don_gia:      item.don_gia,
-        thanh_tien:   item.thanh_tien,
-        ghi_chu:      item.ghi_chu ?? null,
       }))
       await supabase.from('quote_items').insert(itemsToInsert)
     }
 
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile.full_name,
+      action:    'quote_duplicated',
+      entity:    'quote',
+      detail:    `Duplicate BG ${source.ma_bao_gia} → ${newQuote.ma_bao_gia} (v${nextVersion})`,
+    })
     return NextResponse.json({ data: mapQuote(newQuote) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/quotes/duplicate:', err)

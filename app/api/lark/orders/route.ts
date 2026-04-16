@@ -128,6 +128,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // H7: Block nếu BG đã được liên kết với HĐ khác
+      if (quoteId) {
+        const { data: existingQuote } = await supabase
+          .from('quotes')
+          .select('ma_hd_tham_chieu')
+          .eq('id', quoteId)
+          .single()
+        if (existingQuote?.ma_hd_tham_chieu) {
+          return NextResponse.json({
+            error: `Báo giá này đã được liên kết với hợp đồng ${existingQuote.ma_hd_tham_chieu}. Không thể tạo thêm hợp đồng từ cùng báo giá.`,
+          }, { status: 409 })
+        }
+      }
+
       const { data, error } = await supabase.from('orders').insert({
         type:            'b2c',
         ma_hd:           ma_hd || genCode('HD'),

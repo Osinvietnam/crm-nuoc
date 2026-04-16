@@ -38,7 +38,7 @@ export function mapQuote(r: any): Quote {
   return {
     record_id:          r.id?.toString() ?? '',
     ma_bao_gia:         r.ma_bao_gia          ?? '',
-    khach_hang:         r.khach_hang          ?? r.profiles?.full_name ?? '',
+    khach_hang:         r.customers?.ho_ten   ?? '',
     sdt:                r.sdt                 ?? '',
     dia_chi_ct:         r.customers?.dia_chi_ct ?? r.customers?.dia_chi_hd ?? '',
     nguoi_phu_trach:    r.staff?.full_name    ?? '',
