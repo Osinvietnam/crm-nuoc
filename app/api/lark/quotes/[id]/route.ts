@@ -5,7 +5,7 @@ import { mapQuote } from '../_mappers'
 const SELECT = `
   *,
   staff:nguoi_phu_trach(id, full_name),
-  customers!customer_id(id, ho_ten, sdt)
+  customers!customer_id(id, ho_ten, sdt, dia_chi_ct, dia_chi_hd)
 `
 
 // ─── GET /api/lark/quotes/[id] ────────────────────────────────────────────────

@@ -101,9 +101,24 @@ export async function PATCH(
       void autoCreateConstruction(supabase, data).catch((e: unknown) => console.error('autoCreateConstruction:', e))
     }
 
-    // Q3: HĐ Hoàn thành → pipeline KH → "Bảo hành"
-    if (body.trang_thai === 'Hoàn thành' && data.customer_id) {
-      void supabase.from('customers').update({ pipeline: 'Bảo hành' }).eq('id', data.customer_id)
+    // C6: Tự động cập nhật pipeline KH theo trạng thái hợp đồng
+    // Giao hàng (thi công) → Nghiệm thu → Bảo hành
+    // Mapping contract.trang_thai → customer.pipeline (đúng với CONTRACT_STATUS_COLORS)
+    const PIPELINE_BY_CONTRACT_STATUS: Record<string, string> = {
+      'Đang thi công':  'Giao hàng',
+      'Chờ nghiệm thu': 'Nghiệm thu',
+      'Hoàn thành':     'Bảo hành',
+    }
+    if (body.trang_thai && data.customer_id) {
+      const newPipeline = PIPELINE_BY_CONTRACT_STATUS[body.trang_thai]
+      if (newPipeline) {
+        void (async () => {
+          const { error: pipelineErr } = await supabase.from('customers')
+            .update({ pipeline: newPipeline })
+            .eq('id', data.customer_id)
+          if (pipelineErr) console.error('Pipeline sync (contract):', pipelineErr)
+        })()
+      }
     }
 
     return NextResponse.json({ data: mapContract(data) })

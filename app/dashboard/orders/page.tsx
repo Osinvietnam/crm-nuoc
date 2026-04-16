@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import {
   CONTRACT_STATUS_COLORS,
@@ -312,9 +312,31 @@ function priceKeyLabel(loai: string): string {
 
 // ─── Add Forms ────────────────────────────────────────────────────────────────
 
-function AddContractForm({ onClose, onCreated }: { onClose: () => void; onCreated: (c: Contract) => void }) {
+function AddContractForm({
+  onClose,
+  onCreated,
+  fromQuoteRecordId = '',
+  initialKhachHang  = '',
+  initialSdt        = '',
+  initialGiaTri     = '',
+  initialDiaChiCt   = '',
+}: {
+  onClose:            () => void
+  onCreated:          (c: Contract) => void
+  fromQuoteRecordId?: string
+  initialKhachHang?:  string
+  initialSdt?:        string
+  initialGiaTri?:     string
+  initialDiaChiCt?:   string
+}) {
   const [form, setForm] = useState({
-    khach_hang: '', sdt: '', san_pham: '', gia_tri_hd: '', dia_chi_ct: '', ghi_chu: '',
+    // C3: pre-fill từ URL params khi navigate từ BG detail
+    khach_hang: initialKhachHang,
+    sdt:        initialSdt,
+    san_pham:   '',
+    gia_tri_hd: initialGiaTri,
+    dia_chi_ct: initialDiaChiCt,
+    ghi_chu:    '',
   })
   const [customerRecordId, setCustomerRecordId] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -365,6 +387,8 @@ function AddContractForm({ onClose, onCreated }: { onClose: () => void; onCreate
           // customer_id (Supabase integer) để link HĐ với KH — bắt buộc cho sync pipeline + commission
           customer_id:        selectedCustomer?.id         || undefined,
           customer_record_id: customerRecordId             || undefined,
+          // C3: link ngược BG → HĐ (quote.record_id = String(quotes.id))
+          quote_record_id:    fromQuoteRecordId            || undefined,
         }),
       })
       const data = await res.json()
@@ -1013,10 +1037,19 @@ function useQuoteData() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
   const [tab, setTab]           = useState<Tab>('quotes')
   const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
+
+  // C3: Nếu navigate từ BG detail → tự mở form tạo HĐ B2C
+  useEffect(() => {
+    if (searchParams.get('from_quote')) {
+      setTab('b2c')
+      setShowForm(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Quotes tab có hook riêng; các tab còn lại dùng chung
   const orderTab = tab !== 'quotes' ? tab : 'b2c'
@@ -1187,7 +1220,15 @@ export default function OrdersPage() {
         <AddQuoteForm onClose={() => setShowForm(false)} onCreated={q => handleCreated(q)} />
       )}
       {showForm && tab === 'b2c' && (
-        <AddContractForm onClose={() => setShowForm(false)} onCreated={item => handleCreated(item as Contract)} />
+        <AddContractForm
+          onClose={() => setShowForm(false)}
+          onCreated={item => handleCreated(item as Contract)}
+          fromQuoteRecordId={searchParams.get('from_quote')  ?? undefined}
+          initialKhachHang= {searchParams.get('khach_hang')  ?? undefined}
+          initialSdt=       {searchParams.get('sdt')         ?? undefined}
+          initialGiaTri=    {searchParams.get('gia_tri')     ?? undefined}
+          initialDiaChiCt=  {searchParams.get('dia_chi_ct')  ?? undefined}
+        />
       )}
       {showForm && tab === 'commercial' && (
         <AddCommercialForm onClose={() => setShowForm(false)} onCreated={item => handleCreated(item as CommercialOrder)} />

@@ -5,6 +5,7 @@ export interface Quote {
   ma_bao_gia:          string
   khach_hang:          string
   sdt:                 string
+  dia_chi_ct:          string   // Địa chỉ công trình từ KH (dùng để pre-fill HĐ)
   nguoi_phu_trach:     string   // full_name
   phien_ban:           number
   san_pham:            string[]
@@ -39,6 +40,7 @@ export function mapQuote(r: any): Quote {
     ma_bao_gia:         r.ma_bao_gia          ?? '',
     khach_hang:         r.khach_hang          ?? r.profiles?.full_name ?? '',
     sdt:                r.sdt                 ?? '',
+    dia_chi_ct:         r.customers?.dia_chi_ct ?? r.customers?.dia_chi_hd ?? '',
     nguoi_phu_trach:    r.staff?.full_name    ?? '',
     phien_ban:          r.phien_ban           ?? 1,
     san_pham:           r.san_pham            ?? [],

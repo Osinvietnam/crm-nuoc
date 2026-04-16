@@ -90,8 +90,17 @@ export async function PATCH(
     if (error) throw error
 
     // Q5: CT Nghiệm thu hoàn thành → tự tạo maintenance_periodic
+    //     + tự động đẩy pipeline KH → "Bảo hành" (C6)
     if (body.trang_thai === 'Nghiệm thu hoàn thành') {
       void autoCreatePeriodic(supabase, data).catch((e: unknown) => console.error('autoCreatePeriodic:', e))
+      if (data.customer_id) {
+        void (async () => {
+          const { error: pipelineErr } = await supabase.from('customers')
+            .update({ pipeline: 'Bảo hành' })
+            .eq('id', data.customer_id)
+          if (pipelineErr) console.error('Pipeline sync (construction):', pipelineErr)
+        })()
+      }
     }
 
     return NextResponse.json({ data: mappers.construction(data) })

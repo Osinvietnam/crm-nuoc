@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     // ── B2C (Hợp đồng) ───────────────────────────────────────────────────────
     if (tab === 'b2c') {
-      const { ma_hd, san_pham, gia_tri_hd, gia_tri_gws, dia_chi_ct, ngay_ky, ghi_chu, customer_id } = body
+      const { ma_hd, san_pham, gia_tri_hd, gia_tri_gws, dia_chi_ct, ngay_ky, ghi_chu, customer_id, quote_record_id } = body
       if (!gia_tri_hd) {
         return NextResponse.json({ error: 'Giá trị HĐ là bắt buộc' }, { status: 400 })
       }
@@ -109,10 +109,14 @@ export async function POST(req: NextRequest) {
         ? san_pham.split(',').map((s: string) => s.trim()).filter(Boolean)
         : (Array.isArray(san_pham) ? san_pham : [])
 
+      // C3: quote.record_id = String(quotes.id) → dùng trực tiếp làm FK
+      const quoteId: number | null = quote_record_id ? (parseInt(quote_record_id) || null) : null
+
       const { data, error } = await supabase.from('orders').insert({
         type:            'b2c',
         ma_hd:           ma_hd || genCode('HD'),
         customer_id:     customer_id ? parseInt(customer_id) : null,
+        quote_id:        quoteId,
         nguoi_phu_trach: profile.id,
         trang_thai:      'Đã ký - Chờ TT đợt 1',
         san_pham:        sanPhamArr,
@@ -124,10 +128,28 @@ export async function POST(req: NextRequest) {
       }).select(B2C_SELECT).single()
       if (error) throw error
 
-      // Sync customer pipeline → "Chốt HĐ"
+      // Sync customer pipeline → "Chốt HĐ" (guard: không kéo lùi KH đã ≥ Chốt HĐ)
       if (data.customer_id) {
-        void supabase.from('customers').update({ pipeline: 'Chốt HĐ' }).eq('id', data.customer_id)
+        void supabase.from('customers')
+          .update({ pipeline: 'Chốt HĐ' })
+          .in('pipeline', ['Tiềm năng', 'Báo giá', 'Đàm phán'])
+          .eq('id', data.customer_id)
       }
+
+      // C3: Ghi mã HĐ + tự động chấp nhận BG (câu hỏi 3 xác nhận)
+      if (quoteId && data.ma_hd) {
+        void (async () => {
+          const { error: linkErr } = await supabase.from('quotes')
+            .update({
+              ma_hd_tham_chieu: data.ma_hd,
+              trang_thai:       'Chấp nhận',   // Auto-accept khi HĐ được tạo từ BG
+            })
+            .eq('id', quoteId)
+            .neq('trang_thai', 'Chấp nhận')   // Idempotent: không ghi đè nếu đã accept
+          if (linkErr) console.error('Quote back-link:', linkErr)
+        })()
+      }
+
       return NextResponse.json({ data: mapContract(data) }, { status: 201 })
     }
 
