@@ -362,7 +362,9 @@ function AddContractForm({ onClose, onCreated }: { onClose: () => void; onCreate
         body: JSON.stringify({
           ...form,
           gia_tri_hd: Number(form.gia_tri_hd.replace(/\D/g, '')),
-          customer_record_id: customerRecordId || undefined,
+          // customer_id (Supabase integer) để link HĐ với KH — bắt buộc cho sync pipeline + commission
+          customer_id:        selectedCustomer?.id         || undefined,
+          customer_record_id: customerRecordId             || undefined,
         }),
       })
       const data = await res.json()

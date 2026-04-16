@@ -79,16 +79,20 @@ export async function PATCH(
     if (error) throw error
 
     // Automation: Báo giá chấp nhận → KH pipeline → "Chốt HĐ"
+    // Guard: chỉ update nếu KH đang ở 'Báo giá' hoặc 'Đàm phán' (tránh kéo lùi KH đã qua stage)
     if (body.trang_thai === 'Chấp nhận' && data.customer_id) {
       void supabase.from('customers')
         .update({ pipeline: 'Chốt HĐ' })
+        .in('pipeline', ['Báo giá', 'Đàm phán'])
         .eq('id', data.customer_id)
     }
 
     // Automation: Từ chối → KH pipeline → "Đàm phán"
+    // Guard: chỉ update nếu KH đang ở 'Báo giá' (tránh kéo lùi KH đã qua Đàm phán/Chốt HĐ trở đi)
     if (body.trang_thai === 'Từ chối' && data.customer_id) {
       void supabase.from('customers')
         .update({ pipeline: 'Đàm phán' })
+        .in('pipeline', ['Báo giá'])
         .eq('id', data.customer_id)
     }
 
