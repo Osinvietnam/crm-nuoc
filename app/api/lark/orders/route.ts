@@ -112,6 +112,22 @@ export async function POST(req: NextRequest) {
       // C3: quote.record_id = String(quotes.id) → dùng trực tiếp làm FK
       const quoteId: number | null = quote_record_id ? (parseInt(quote_record_id) || null) : null
 
+      // H3: Kiểm tra KH đã có BG Chấp nhận chưa (warning only)
+      const orderWarnings: string[] = []
+      const customerId_int = customer_id ? parseInt(customer_id) : null
+      if (customerId_int && !quoteId) {
+        // Chỉ warn nếu không tạo HĐ từ BG (không có quote_record_id)
+        const { data: acceptedQuote } = await supabase
+          .from('quotes')
+          .select('id')
+          .eq('customer_id', customerId_int)
+          .eq('trang_thai', 'Chấp nhận')
+          .maybeSingle()
+        if (!acceptedQuote) {
+          orderWarnings.push('Khách hàng chưa có báo giá được chấp nhận — đề nghị tạo và xác nhận báo giá trước khi ký hợp đồng')
+        }
+      }
+
       const { data, error } = await supabase.from('orders').insert({
         type:            'b2c',
         ma_hd:           ma_hd || genCode('HD'),
@@ -150,7 +166,10 @@ export async function POST(req: NextRequest) {
         })()
       }
 
-      return NextResponse.json({ data: mapContract(data) }, { status: 201 })
+      return NextResponse.json({
+        data: mapContract(data),
+        ...(orderWarnings.length ? { warnings: orderWarnings } : {}),
+      }, { status: 201 })
     }
 
     // ── Commercial (Thương mại / Đại lý) ─────────────────────────────────────

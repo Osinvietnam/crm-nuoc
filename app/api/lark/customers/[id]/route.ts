@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { STAGE_TASKS } from '@/lib/tasks/checklist'
 
 function toMs(d: string | null | undefined): number | null {
   if (!d) return null
@@ -100,18 +101,74 @@ export async function PATCH(
       return NextResponse.json({ error: 'Không có trường nào để cập nhật' }, { status: 400 })
     }
 
-    const query = supabase
+    // Load current customer + caller profile in parallel (for warning checks)
+    const numericId = /^\d+$/.test(id) ? parseInt(id) : null
+    const [{ data: current }, { data: profile }] = await Promise.all([
+      numericId
+        ? supabase.from('customers').select('id, pipeline').eq('id', numericId).single()
+        : supabase.from('customers').select('id, pipeline').eq('lark_record_id', id).single(),
+      supabase.from('profiles').select('role').eq('id', user.id).single(),
+    ])
+
+    const updateQuery = supabase
       .from('customers')
       .update(updates)
       .select('*, profiles!nguoi_phu_trach(id, full_name)')
 
-    const { data, error } = await (/^\d+$/.test(id)
-      ? query.eq('id', parseInt(id))
-      : query.eq('lark_record_id', id)
+    const { data, error } = await (numericId !== null
+      ? updateQuery.eq('id', numericId)
+      : updateQuery.eq('lark_record_id', id)
     ).single()
 
     if (error) throw error
-    return NextResponse.json({ customer: mapRow(data) })
+
+    // ── Warning checks (H5 + H6) — non-blocking ──────────────────────────────
+    const warnings: string[] = []
+    const newPipeline = updates.pipeline as string | undefined
+    const isManager = ['admin', 'ceo'].includes(profile?.role ?? '')
+
+    if (newPipeline && current && newPipeline !== current.pipeline && !isManager) {
+      const customerId: number = (data as any).id ?? current?.id
+
+      // H5: Payment prerequisite warnings
+      const paymentStages: Record<string, { installment: number; label: string }> = {
+        'Giao hàng':  { installment: 1, label: 'Đợt 1 (60%)' },
+        'Nghiệm thu': { installment: 2, label: 'Đợt 2 (35%)' },
+        'Bảo hành':   { installment: 3, label: 'Đợt 3 (5%)' },
+      }
+      const payReq = paymentStages[newPipeline]
+      if (payReq) {
+        const { data: payRow } = await supabase
+          .from('payment_records')
+          .select('is_paid')
+          .eq('customer_id', customerId)
+          .eq('installment', payReq.installment)
+          .maybeSingle()
+        if (!payRow?.is_paid) {
+          warnings.push(`Chưa xác nhận thanh toán ${payReq.label} — đề nghị kế toán cập nhật trước khi chuyển sang "${newPipeline}"`)
+        }
+      }
+
+      // H6: Task checklist completion warnings
+      const stageTasks = STAGE_TASKS[current.pipeline] ?? []
+      if (stageTasks.length > 0) {
+        const { data: completed } = await supabase
+          .from('task_completions')
+          .select('task_key')
+          .eq('customer_id', customerId)
+          .eq('stage', current.pipeline)
+        const completedKeys = new Set((completed ?? []).map((t: any) => t.task_key))
+        const missing = stageTasks.filter(t => !completedKeys.has(t.key))
+        if (missing.length > 0) {
+          warnings.push(`Còn ${missing.length} việc chưa hoàn thành ở bước "${current.pipeline}": ${missing.map(t => t.label).join(', ')}`)
+        }
+      }
+    }
+
+    return NextResponse.json({
+      customer: mapRow(data),
+      ...(warnings.length ? { warnings } : {}),
+    })
   } catch (err) {
     console.error('PATCH /api/lark/customers/[id]:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })

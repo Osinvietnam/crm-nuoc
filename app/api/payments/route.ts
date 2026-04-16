@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { createRecord, updateRecord } from '@/lib/lark/client'
 import { TABLES } from '@/lib/lark/tables'
 import { logAudit } from '@/lib/audit'
@@ -21,8 +21,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu customer_record_id' }, { status: 400 })
     }
 
-    const service = createServiceClient()
-    const { data, error } = await service
+    const { data, error } = await supabase
       .from('payment_records')
       .select('*')
       .eq('customer_record_id', customer_record_id)
@@ -83,13 +82,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'installment phải là 1, 2 hoặc 3' }, { status: 400 })
     }
 
-    const service = createServiceClient()
+    // H8: Lookup Supabase customer.id từ customer_record_id (Lark record ID)
+    const { data: cust } = await supabase.from('customers')
+      .select('id').eq('lark_record_id', customer_record_id).maybeSingle()
+    const customerId = cust?.id ?? null
 
     // Upsert vào Supabase
-    const { data: record, error } = await service
+    const { data: record, error } = await supabase
       .from('payment_records')
       .upsert({
         customer_record_id,
+        customer_id:        customerId,
         customer_name:      customer_name    ?? null,
         nguoi_phu_trach:    nguoi_phu_trach  ?? null,
         contract_record_id: contract_record_id ?? null,
@@ -126,7 +129,7 @@ export async function POST(req: NextRequest) {
         larkRecordId = larkRecord.record_id
 
         // Lưu lại lark_record_id vào Supabase
-        await service
+        await supabase
           .from('payment_records')
           .update({ lark_record_id: larkRecordId })
           .eq('id', record.id)
@@ -180,14 +183,13 @@ export async function PATCH(req: NextRequest) {
     if (percent   !== undefined) updates.percent    = percent != null ? Number(percent) : null
     if (notes     !== undefined) updates.notes      = notes
 
-    const service = createServiceClient()
-    const { data: before } = await service
+    const { data: before } = await supabase
       .from('payment_records')
       .select('*')
       .eq('id', id)
       .single()
 
-    const { data: record, error } = await service
+    const { data: record, error } = await supabase
       .from('payment_records')
       .update(updates)
       .eq('id', id)
@@ -246,8 +248,7 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
-    const service = createServiceClient()
-    const { error } = await service
+    const { error } = await supabase
       .from('payment_records')
       .delete()
       .eq('id', id)

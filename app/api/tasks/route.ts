@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 // ─── GET /api/tasks?customer_record_id=&stage= ───────────────────────────────
 
@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu customer_record_id' }, { status: 400 })
     }
 
-    const service = createServiceClient()
-    let query = service
+    let query = supabase
       .from('task_completions')
       .select('*')
       .eq('customer_record_id', customer_record_id)
@@ -54,11 +53,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu customer_record_id, stage hoặc task_key' }, { status: 400 })
     }
 
-    const service = createServiceClient()
-    const { data, error } = await service
+    // H7: Lookup Supabase customer.id từ customer_record_id (Lark record ID)
+    const { data: cust } = await supabase.from('customers')
+      .select('id').eq('lark_record_id', customer_record_id).maybeSingle()
+    const customerId = cust?.id ?? null
+
+    const { data, error } = await supabase
       .from('task_completions')
       .upsert({
         customer_record_id,
+        customer_id:       customerId,
         stage,
         task_key,
         completed_by:      user.id,
@@ -95,11 +99,9 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
-    const service = createServiceClient()
-
     // Admin/CEO có thể xóa bất kỳ; role khác chỉ xóa task của mình
     const isManager = ['admin', 'ceo'].includes(me.role)
-    let query = service.from('task_completions').delete().eq('id', id)
+    let query = supabase.from('task_completions').delete().eq('id', id)
     if (!isManager) query = query.eq('completed_by', user.id)
 
     const { error } = await query
