@@ -141,8 +141,10 @@ export async function GET() {
     if (!isLogistics && !isTech) {
       let pendingQ = supabase.from('quotes').select('*', { count: 'exact', head: true })
         .in('trang_thai', ['Nháp', 'Đã gửi'])
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0]
       let staleQ   = supabase.from('quotes').select('*', { count: 'exact', head: true })
         .eq('trang_thai', 'Đã gửi')
+        .or(`ngay_gui_kh.is.null,ngay_gui_kh.lt.${sevenDaysAgo}`)
 
       if (isSales) {
         pendingQ = pendingQ.eq('nguoi_phu_trach', profile.id)

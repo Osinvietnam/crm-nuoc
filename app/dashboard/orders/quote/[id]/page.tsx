@@ -462,6 +462,7 @@ export default function QuoteDetailPage() {
   const [updating,    setUpdating]    = useState(false)
   const [duplicating,   setDuplicating]   = useState(false)
   const [exportingPDF,  setExportingPDF]  = useState(false)
+  const [sending,       setSending]       = useState(false)
   const [successMsg,    setSuccessMsg]    = useState('')
   const [errorMsg,      setErrorMsg]      = useState('')
 
@@ -515,6 +516,37 @@ export default function QuoteDetailPage() {
       setTimeout(() => router.replace(`/dashboard/orders/quote/${data.data.record_id}`), 1200)
     } catch { notify('Lỗi kết nối', true) }
     finally { setDuplicating(false) }
+  }
+
+  // Gửi KH — xuất PDF + cập nhật trạng thái "Đã gửi"
+  const handleSend = async () => {
+    if (!quote) return
+    setSending(true)
+    try {
+      // Bước 1: Xuất PDF
+      await downloadQuotePDF(quote)
+      // Bước 2: Cập nhật trạng thái "Đã gửi" + ghi ngay_gui_kh = today
+      const today = new Date().toISOString().split('T')[0]
+      const res = await fetch(`/api/lark/quotes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trang_thai:  'Đã gửi',
+          ngay_gui_kh: new Date(today).getTime(), // ms timestamp
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setQuote(data.data)
+        notify('Đã xuất PDF và cập nhật trạng thái "Đã gửi"')
+      } else {
+        notify(data.error || 'Xuất PDF thành công nhưng cập nhật trạng thái thất bại', true)
+      }
+    } catch {
+      notify('Lỗi kết nối', true)
+    } finally {
+      setSending(false)
+    }
   }
 
   // Chuyển thành HĐ
@@ -686,6 +718,17 @@ export default function QuoteDetailPage() {
 
         {/* Action buttons */}
         <div className="space-y-2 pb-6">
+          {/* Gửi KH — chỉ khi Nháp hoặc Đàm phán */}
+          {['Nháp', 'Đàm phán'].includes(quote.trang_thai) && (
+            <button
+              onClick={handleSend}
+              disabled={sending}
+              className="w-full bg-green-600 disabled:bg-green-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
+              <span>📤</span>
+              {sending ? 'Đang gửi...' : 'Gửi KH (Xuất PDF + Cập nhật trạng thái)'}
+            </button>
+          )}
+
           {/* Xuất PDF */}
           <button
             onClick={async () => {

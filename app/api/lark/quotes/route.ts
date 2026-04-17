@@ -34,7 +34,14 @@ export async function GET(req: NextRequest) {
     // customer_record_id = Supabase customer id (string) — filter quotes by customer
     const customerIdParam = req.nextUrl.searchParams.get('customer_record_id')
 
-    let query = supabase.from('quotes').select(SELECT).order('created_at', { ascending: false })
+    const pageParam     = req.nextUrl.searchParams.get('page')
+    const pageSizeParam = req.nextUrl.searchParams.get('pageSize')
+    const page     = Math.max(1, parseInt(pageParam     ?? '1'))
+    const pageSize = Math.min(100, Math.max(10, parseInt(pageSizeParam ?? '50')))
+    const from = (page - 1) * pageSize
+    const to   = from + pageSize - 1
+
+    let query = supabase.from('quotes').select(SELECT, { count: 'exact' }).order('created_at', { ascending: false })
 
     if (customerIdParam) {
       query = query.eq('customer_id', parseInt(customerIdParam))
@@ -42,10 +49,18 @@ export async function GET(req: NextRequest) {
       query = query.eq('nguoi_phu_trach', profile.id)
     }
 
-    const { data, error } = await query
+    const { data, error, count } = await query.range(from, to)
     if (error) throw error
 
-    return NextResponse.json({ data: (data ?? []).map(mapQuote) })
+    return NextResponse.json({
+      data: (data ?? []).map(mapQuote),
+      meta: {
+        page,
+        pageSize,
+        total: count ?? 0,
+        hasMore: to < (count ?? 0) - 1,
+      },
+    })
   } catch (err) {
     console.error('GET /api/lark/quotes:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })

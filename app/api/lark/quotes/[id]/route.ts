@@ -55,7 +55,7 @@ export async function PATCH(
     const body   = await req.json()
 
     // C3 guard: fetch current quote trước
-    const fetchQuery = supabase.from('quotes').select('id, trang_thai, tong_gia_tri, chiet_khau, customer_id')
+    const fetchQuery = supabase.from('quotes').select('id, trang_thai, tong_gia_tri, chiet_khau, customer_id, ngay_gui_kh')
     const { data: current, error: fetchErr } = await (/^\d+$/.test(id)
       ? fetchQuery.eq('id', parseInt(id))
       : fetchQuery.eq('lark_record_id', id)
@@ -67,6 +67,28 @@ export async function PATCH(
     if (isLocked) {
       const LOCKED_BLOCKED = ['san_pham', 'tong_gia_tri', 'chiet_khau', 'kenh_tiep_nhan', 'ngay_gui_kh', 'ma_hd_tham_chieu']
       for (const f of LOCKED_BLOCKED) delete body[f]
+    }
+
+    // M6: State machine — block nhảy trạng thái không hợp lệ (trừ admin/ceo)
+    if (body.trang_thai && body.trang_thai !== current.trang_thai) {
+      const isManager = ['admin', 'ceo'].includes(profile.role)
+      if (!isManager) {
+        // Định nghĩa chuyển trạng thái hợp lệ
+        const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+          'Nháp':      ['Đã gửi', 'Hết hạn'],
+          'Đã gửi':   ['Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'],
+          'Đàm phán':  ['Chấp nhận', 'Từ chối', 'Hết hạn'],
+          'Chấp nhận': ['Từ chối'],            // Chỉ admin có thể reopen
+          'Từ chối':   [],                     // Terminal (chỉ admin)
+          'Hết hạn':   ['Nháp', 'Đã gửi'],    // Cho phép reopen manual
+        }
+        const allowed = ALLOWED_TRANSITIONS[current.trang_thai] ?? []
+        if (!allowed.includes(body.trang_thai)) {
+          return NextResponse.json({
+            error: `Không thể chuyển từ "${current.trang_thai}" sang "${body.trang_thai}"`,
+          }, { status: 422 })
+        }
+      }
     }
 
     const allowed = [
@@ -84,6 +106,11 @@ export async function PATCH(
       const tong = Number('tong_gia_tri' in updates ? updates.tong_gia_tri : current.tong_gia_tri) || 0
       const ck   = Number('chiet_khau'   in updates ? updates.chiet_khau   : current.chiet_khau)  || 0
       updates.gia_tri_sau_ck = Math.round(tong * (1 - ck / 100))
+    }
+
+    // M4: Tự set ngay_gui_kh khi chuyển "Đã gửi"
+    if (body.trang_thai === 'Đã gửi' && !current.ngay_gui_kh && !body.ngay_gui_kh) {
+      updates.ngay_gui_kh = new Date().toISOString().split('T')[0]
     }
 
     // Date fields — convert ms timestamp to ISO date string

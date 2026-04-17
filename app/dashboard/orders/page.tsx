@@ -1025,27 +1025,38 @@ function useOrderData(tab: Exclude<Tab, 'quotes'>) {
 }
 
 function useQuoteData() {
-  const [data, setData]       = useState<Quote[]>([])
+  const [data,    setData]    = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
+  const [error,   setError]   = useState('')
+  const [page,    setPage]    = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [total,   setTotal]   = useState(0)
 
-  const load = useCallback(async () => {
-    setLoading(true); setError('')
+  const fetchPage = useCallback(async (pg: number) => {
+    if (pg === 1) setLoading(true)
+    setError('')
     try {
-      const res = await fetch('/api/lark/quotes')
-      if (!res.ok) throw new Error()
+      const res  = await fetch(`/api/lark/quotes?pageSize=30&page=${pg}`)
       const json = await res.json()
-      setData(json.data ?? [])
-    } catch {
-      setError('Không tải được dữ liệu')
+      if (!res.ok) throw new Error(json.error)
+      const newData = json.data ?? []
+      setData(prev => pg === 1 ? newData : [...prev, ...newData])
+      setHasMore(json.meta?.hasMore ?? false)
+      setTotal(json.meta?.total ?? 0)
+      setPage(pg)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lỗi tải dữ liệu')
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { fetchPage(1) }, [fetchPage])
 
-  return { data, loading, error, reload: load, setData }
+  const reload   = useCallback(() => fetchPage(1), [fetchPage])
+  const loadMore = useCallback(() => { if (hasMore) fetchPage(page + 1) }, [fetchPage, hasMore, page])
+
+  return { data, setData, loading, error, reload, loadMore, hasMore, total }
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -1056,6 +1067,7 @@ export default function OrdersPage() {
   const [tab, setTab]           = useState<Tab>('quotes')
   const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // C3: Nếu navigate từ BG detail → tự mở form tạo HĐ B2C
   useEffect(() => {
@@ -1077,8 +1089,17 @@ export default function OrdersPage() {
 
   const filtered = data.filter(item => {
     const q = search.toLowerCase()
-    if (!q) return true
-    return JSON.stringify(item).toLowerCase().includes(q)
+    const textMatch = !q || JSON.stringify(item).toLowerCase().includes(q)
+    // M7: Filter status cho tab quotes
+    if (tab === 'quotes' && statusFilter !== 'all') {
+      const quote = item as Quote
+      const now = Date.now()
+      const isExpired = quote.ngay_het_han && now > quote.ngay_het_han
+        && !['Chấp nhận', 'Từ chối'].includes(quote.trang_thai)
+      const displayStatus = isExpired ? 'Hết hạn' : quote.trang_thai
+      if (displayStatus !== statusFilter) return false
+    }
+    return textMatch
   })
 
   const followUpCount = quotesHook.data.filter(isDueForFollowUp).length
@@ -1119,7 +1140,7 @@ export default function OrdersPage() {
           <div>
             <h1 className="text-lg font-bold text-gray-800">Đơn hàng</h1>
             <p className="text-xs text-gray-400">
-              {loading ? 'Đang tải...' : `${data.length} ${tab === 'quotes' ? 'báo giá' : 'đơn'}`}
+              {loading ? 'Đang tải...' : tab === 'quotes' ? `${quotesHook.total} báo giá` : `${data.length} đơn`}
             </p>
           </div>
           <button
@@ -1135,7 +1156,7 @@ export default function OrdersPage() {
           {tabs.map(t => (
             <button
               key={t.key}
-              onClick={() => { setTab(t.key); setSearch('') }}
+              onClick={() => { setTab(t.key); setSearch(''); setStatusFilter('all') }}
               className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all relative ${
                 tab === t.key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
               }`}
@@ -1164,6 +1185,25 @@ export default function OrdersPage() {
             <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">✕</button>
           )}
         </div>
+
+        {/* M7: Status filter — chỉ hiện ở tab Báo giá */}
+        {tab === 'quotes' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+            {['all', 'Nháp', 'Đã gửi', 'Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'].map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                  statusFilter === s
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                {s === 'all' ? 'Tất cả' : s}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -1212,6 +1252,13 @@ export default function OrdersPage() {
               <QuoteCard key={q.record_id} q={q}
                 onClick={() => router.push(`/dashboard/orders/quote/${q.record_id}`)} />
             ))}
+            {tab === 'quotes' && quotesHook.hasMore && !search && statusFilter === 'all' && (
+              <button
+                onClick={quotesHook.loadMore}
+                className="w-full py-3 text-sm text-blue-600 font-semibold text-center border border-blue-100 rounded-2xl bg-blue-50 active:bg-blue-100">
+                Tải thêm ({quotesHook.total - quotesHook.data.length} còn lại)
+              </button>
+            )}
           </>
         ) : tab === 'b2c' ? (
           (filtered as Contract[]).map(c => (
