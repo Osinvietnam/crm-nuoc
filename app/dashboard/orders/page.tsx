@@ -81,7 +81,7 @@ function Field({ label, value, onChange, placeholder, type = 'text', readOnly }:
       <label className="text-sm font-semibold text-gray-600 mb-1 block">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         readOnly={readOnly}
-        className={`w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${readOnly ? 'bg-gray-50 text-gray-400' : ''}`} />
+        className={`w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${readOnly ? 'bg-gray-50 text-gray-700' : ''}`} />
     </div>
   )
 }

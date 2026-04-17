@@ -6,14 +6,19 @@ import {
 import type { Quote } from '@/app/api/lark/quotes/_mappers'
 
 // ─── Font ────────────────────────────────────────────────────────────────────
+// Dùng absolute URL vì @react-pdf/renderer v4 render trong Blob URL Web Worker
+// — relative paths (/fonts/...) fail trong Worker context (null origin)
 
-Font.register({
-  family: 'Roboto',
-  fonts: [
-    { src: '/fonts/Roboto-Regular.ttf', fontWeight: 400 },
-    { src: '/fonts/Roboto-Bold.ttf',    fontWeight: 700 },
-  ],
-})
+function registerFonts() {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  Font.register({
+    family: 'Roboto',
+    fonts: [
+      { src: `${origin}/fonts/Roboto-Regular.ttf`, fontWeight: 400 },
+      { src: `${origin}/fonts/Roboto-Bold.ttf`,    fontWeight: 700 },
+    ],
+  })
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -294,6 +299,7 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
 // ─── Download helper ──────────────────────────────────────────────────────────
 
 export async function downloadQuotePDF(quote: Quote, company?: CompanyInfo) {
+  registerFonts()
   const blob = await pdf(<QuotePDFDocument quote={quote} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')

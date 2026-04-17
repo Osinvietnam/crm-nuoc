@@ -941,27 +941,31 @@ export default function CustomersPage() {
         )}
 
         {/* Pipeline stage filter chips */}
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
-          {(['Tất cả', ...PIPELINE_STAGES] as const).map(s => {
-            const active = stage === s
-            const pc = s !== 'Tất cả' ? PIPELINE_COLORS[s] : null
-            const count = s === 'Tất cả' ? customers.length : customers.filter(c => c.pipeline === s).length
-            return (
-              <button
-                key={s}
-                onClick={() => setStage(s)}
-                className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
-                  active
-                    ? pc
-                      ? `${pc.bg} ${pc.text} border-transparent`
-                      : 'bg-blue-600 text-white border-transparent'
-                    : 'bg-white text-gray-500 border-gray-200'
-                }`}
-              >
-                {s} <span className="opacity-60">{count}</span>
-              </button>
-            )
-          })}
+        <div className="relative -mx-4">
+          <div className="flex gap-2 overflow-x-auto pb-1 px-4 scrollbar-none">
+            {(['Tất cả', ...PIPELINE_STAGES] as const).map(s => {
+              const active = stage === s
+              const pc = s !== 'Tất cả' ? PIPELINE_COLORS[s] : null
+              const count = s === 'Tất cả' ? customers.length : customers.filter(c => c.pipeline === s).length
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStage(s)}
+                  className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                    active
+                      ? pc
+                        ? `${pc.bg} ${pc.text} border-transparent`
+                        : 'bg-blue-600 text-white border-transparent'
+                      : 'bg-white text-gray-500 border-gray-200'
+                  }`}
+                >
+                  {s} <span className="opacity-60">{count}</span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Fade gợi ý scroll phải */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 to-transparent" />
         </div>
       </div>
 

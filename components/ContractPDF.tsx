@@ -7,14 +7,19 @@ import type { Contract } from '@/app/api/lark/orders/_mappers'
 import type { CompanyInfo } from '@/components/QuotePDF'
 
 // ─── Font ────────────────────────────────────────────────────────────────────
+// Dùng absolute URL vì @react-pdf/renderer v4 render trong Blob URL Web Worker
+// — relative paths (/fonts/...) fail trong Worker context (null origin)
 
-Font.register({
-  family: 'Roboto',
-  fonts: [
-    { src: '/fonts/Roboto-Regular.ttf', fontWeight: 400 },
-    { src: '/fonts/Roboto-Bold.ttf',    fontWeight: 700 },
-  ],
-})
+function registerFonts() {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  Font.register({
+    family: 'Roboto',
+    fonts: [
+      { src: `${origin}/fonts/Roboto-Regular.ttf`, fontWeight: 400 },
+      { src: `${origin}/fonts/Roboto-Bold.ttf`,    fontWeight: 700 },
+    ],
+  })
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -275,6 +280,7 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
 // ─── Download helper ──────────────────────────────────────────────────────────
 
 export async function downloadContractPDF(contract: Contract, company?: CompanyInfo) {
+  registerFonts()
   const blob = await pdf(<ContractPDFDocument contract={contract} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
