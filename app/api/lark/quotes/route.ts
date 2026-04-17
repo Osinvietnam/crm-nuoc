@@ -95,8 +95,17 @@ export async function POST(req: NextRequest) {
       ? san_pham.split(',').map((s: string) => s.trim()).filter(Boolean)
       : (Array.isArray(san_pham) ? san_pham : [])
 
+    // M3: Lấy số ngày hạn BG từ company_settings (default 14)
+    let expiryDays = 14
+    const { data: settings } = await supabase
+      .from('company_settings')
+      .select('quote_expiry_days')
+      .limit(1)
+      .single()
+    if (settings?.quote_expiry_days) expiryDays = settings.quote_expiry_days
+
     const today       = new Date().toISOString().split('T')[0]
-    const twoWeeksOut = new Date(Date.now() + 14 * 86_400_000).toISOString().split('T')[0]
+    const twoWeeksOut = new Date(Date.now() + expiryDays * 86_400_000).toISOString().split('T')[0]
     const ngayGuiStr  = ngay_gui_kh
       ? new Date(Number(ngay_gui_kh)).toISOString().split('T')[0]
       : null
@@ -123,6 +132,20 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // H1: Insert quote_items nếu có items structured
+    if (Array.isArray(body.items) && body.items.length > 0 && data.id) {
+      const itemsToInsert = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }) => ({
+        quote_id:   data.id,
+        product_id: item.product_id ?? null,
+        ten_sp:     item.ten_sp,
+        don_gia:    Number(item.don_gia) || 0,
+        so_luong:   Number(item.so_luong) || 1,
+        sort_order: 0,
+      }))
+      const { error: itemsErr } = await supabase.from('quote_items').insert(itemsToInsert)
+      if (itemsErr) console.error('Insert quote_items:', itemsErr.message)
+    }
 
     // H3: Audit log tạo báo giá
     void logAudit(supabase, {

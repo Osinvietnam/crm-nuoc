@@ -343,8 +343,9 @@ function AddContractForm({
   const [selectedProduct, setSelectedProduct]   = useState<Product | null>(null)
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [showProductPicker, setShowProductPicker]   = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [error, setError]     = useState('')
+  const [warnMsg, setWarnMsg] = useState('')
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSelectCustomer = (c: Customer) => {
@@ -393,6 +394,12 @@ function AddContractForm({
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi tạo HĐ'); return }
+      // M1: Hiển thị warnings nếu có (không block, hiện trước khi đóng form)
+      if (data.warnings?.length) {
+        setWarnMsg(data.warnings.join(' | '))
+        // Delay nhỏ để user thấy warning trước khi form đóng
+        await new Promise(r => setTimeout(r, 1800))
+      }
       onCreated(data.data)
     } catch { setError('Lỗi kết nối') }
     finally { setSaving(false) }
@@ -409,6 +416,13 @@ function AddContractForm({
 
       <BottomSheet title="Tạo hợp đồng B2C" onClose={onClose} error={error}
         footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
+        {/* M1: Warning banner từ POST orders */}
+        {warnMsg && (
+          <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium flex items-start gap-2">
+            <span>⚠️</span>
+            <span>{warnMsg}</span>
+          </div>
+        )}
         {/* Customer picker */}
         <div>
           <label className="text-sm font-semibold text-gray-600 mb-1 block">KHÁCH HÀNG *</label>

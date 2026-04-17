@@ -6,7 +6,8 @@ import { logAudit } from '@/lib/audit'
 const SELECT = `
   *,
   staff:nguoi_phu_trach(id, full_name),
-  customers!customer_id(id, ho_ten, sdt, dia_chi_ct, dia_chi_hd)
+  customers!customer_id(id, ho_ten, sdt, dia_chi_ct, dia_chi_hd),
+  quote_items(id, product_id, ten_sp, don_gia, so_luong, thanh_tien, sort_order)
 `
 
 // ─── GET /api/lark/quotes/[id] ────────────────────────────────────────────────
@@ -132,6 +133,25 @@ export async function PATCH(
         entity:    'quote',
         detail:    `BG ${data.ma_bao_gia} → ${body.trang_thai}`,
       })
+    }
+
+    // H2: Sync quote_items khi PATCH có items
+    if (Array.isArray(body.items) && !isLocked) {
+      // Xóa items cũ
+      await supabase.from('quote_items').delete().eq('quote_id', data.id)
+      // Insert items mới
+      if (body.items.length > 0) {
+        const newItems = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }, idx: number) => ({
+          quote_id:   data.id,
+          product_id: item.product_id ?? null,
+          ten_sp:     item.ten_sp,
+          don_gia:    Number(item.don_gia) || 0,
+          so_luong:   Number(item.so_luong) || 1,
+          sort_order: idx,
+        }))
+        const { error: itemsErr } = await supabase.from('quote_items').insert(newItems)
+        if (itemsErr) console.error('Sync quote_items:', itemsErr.message)
+      }
     }
 
     return NextResponse.json({ data: mapQuote(data) })

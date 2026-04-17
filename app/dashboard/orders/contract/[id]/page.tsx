@@ -5,6 +5,14 @@ import { useRouter, useParams } from 'next/navigation'
 import { CONTRACT_STATUS_COLORS } from '@/lib/lark/tables'
 import type { Contract } from '@/app/api/lark/orders/route'
 
+const downloadContractPDF = async (contract: Contract) => {
+  const [{ downloadContractPDF: dl }, company] = await Promise.all([
+    import('@/components/ContractPDF'),
+    fetch('/api/admin/settings').then(r => r.json()).then(d => d.data ?? {}),
+  ])
+  await dl(contract, company)
+}
+
 const fmtMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
 const fmtDate  = (ms: number | null) => ms
   ? new Date(ms).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -38,6 +46,7 @@ export default function ContractDetailPage() {
   const [showStatus, setShowStatus] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [exportingPDF, setExportingPDF] = useState(false)
 
   useEffect(() => {
     fetch(`/api/lark/orders/contract/${id}`)
@@ -151,6 +160,20 @@ export default function ContractDetailPage() {
           <InfoRow label="Ngày giao DK" value={fmtDate(contract.ngay_giao_dk)} />
           {contract.ghi_chu && <InfoRow label="Ghi chú" value={contract.ghi_chu} />}
         </div>
+
+        {/* Xuất PDF */}
+        <button
+          onClick={async () => {
+            setExportingPDF(true)
+            try { await downloadContractPDF(contract) }
+            catch { /* silent */ }
+            finally { setExportingPDF(false) }
+          }}
+          disabled={exportingPDF}
+          className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-blue-700">
+          <span>📄</span>
+          {exportingPDF ? 'Đang tạo PDF...' : 'Xuất PDF Hợp đồng'}
+        </button>
       </div>
 
       {/* Status picker */}

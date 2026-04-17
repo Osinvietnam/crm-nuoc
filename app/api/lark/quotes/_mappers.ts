@@ -24,6 +24,15 @@ export interface Quote {
   ghi_chu_ky_thuat:    string
   ghi_chu_thuong_mai:  string
   customer_id:         number | null
+  items: Array<{
+    id:         number
+    ten_sp:     string
+    don_gia:    number
+    so_luong:   number
+    thanh_tien: number
+    product_id: number | null
+    sort_order: number
+  }>
 }
 
 function toMs(d: string | null | undefined): number | null {
@@ -59,5 +68,16 @@ export function mapQuote(r: any): Quote {
     ghi_chu_ky_thuat:   r.ghi_chu_ky_thuat    ?? '',
     ghi_chu_thuong_mai: r.ghi_chu_thuong_mai  ?? '',
     customer_id:        r.customer_id         ?? null,
+    items: Array.isArray(r.quote_items)
+      ? r.quote_items.map((it: any) => ({
+          id:         it.id,
+          ten_sp:     it.ten_sp     ?? '',
+          don_gia:    it.don_gia    ?? 0,
+          so_luong:   it.so_luong   ?? 1,
+          thanh_tien: it.thanh_tien ?? 0,
+          product_id: it.product_id ?? null,
+          sort_order: it.sort_order ?? 0,
+        }))
+      : [],
   }
 }

@@ -52,9 +52,18 @@ export async function POST(req: NextRequest) {
       nextVersion = (versions?.[0]?.phien_ban ?? 1) + 1
     }
 
+    // M3: Lấy số ngày hạn BG từ company_settings (default 14)
+    let expiryDays = 14
+    const { data: settings } = await supabase
+      .from('company_settings')
+      .select('quote_expiry_days')
+      .limit(1)
+      .single()
+    if (settings?.quote_expiry_days) expiryDays = settings.quote_expiry_days
+
     const today     = new Date()
     const ngayLap   = today.toISOString().slice(0, 10)
-    const deadline  = new Date(today.getTime() + 14 * 86400000)
+    const deadline  = new Date(today.getTime() + expiryDays * 86400000)
     const ngayHetHan = deadline.toISOString().slice(0, 10)
 
     // Tạo BG mới trong Supabase

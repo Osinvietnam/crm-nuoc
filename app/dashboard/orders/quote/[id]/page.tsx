@@ -273,13 +273,18 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
 
   // Seed items từ BG hiện tại nếu draft trống
   useEffect(() => {
-    if (items.length === 0 && quote.san_pham.length > 0) {
+    if (items.length > 0) return
+    if (quote.items && quote.items.length > 0) {
+      // H2: Có items structured — seed với đơn giá đầy đủ
+      quote.items
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .forEach(it => addItem({ ten_sp: it.ten_sp, don_gia: it.don_gia }))
+    } else if (quote.san_pham.length > 0) {
+      // Fallback: parse text cũ (mất đơn giá)
       quote.san_pham.forEach(sp => {
-        // Parse "Tên SP (2x)" nếu có
         const match = sp.match(/^(.*?)\s*\((\d+)x\)$/)
         if (match) {
           addItem({ ten_sp: match[1].trim(), don_gia: 0 })
-          changeItem('__placeholder__', 'so_luong', Number(match[2]))
         } else {
           addItem({ ten_sp: sp, don_gia: 0 })
         }
@@ -306,7 +311,17 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
       const res = await fetch(`/api/lark/quotes/${quote.record_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ san_pham, tong_gia_tri: total, chiet_khau: ck }),
+        body: JSON.stringify({
+          san_pham,
+          tong_gia_tri: total,
+          chiet_khau: ck,
+          items: items.map(it => ({
+            ten_sp:     it.ten_sp,
+            don_gia:    it.don_gia,
+            so_luong:   it.so_luong,
+            product_id: null,
+          })),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi lưu'); return }
