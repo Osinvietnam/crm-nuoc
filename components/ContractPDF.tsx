@@ -12,19 +12,28 @@ import type { CompanyInfo } from '@/components/QuotePDF'
 
 let _fontsReady: Promise<void> | null = null
 
+async function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result as string)
+    reader.onerror   = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 function ensureFonts(): Promise<void> {
   if (_fontsReady) return _fontsReady
   _fontsReady = (async () => {
     const origin = window.location.origin
-    const [regBlob, boldBlob] = await Promise.all([
-      fetch(`${origin}/fonts/Roboto-Regular.ttf`).then(r => r.blob()),
-      fetch(`${origin}/fonts/Roboto-Bold.ttf`).then(r => r.blob()),
+    const [regUri, boldUri] = await Promise.all([
+      fetch(`${origin}/fonts/Roboto-Regular.ttf`).then(r => r.blob()).then(blobToDataUri),
+      fetch(`${origin}/fonts/Roboto-Bold.ttf`).then(r => r.blob()).then(blobToDataUri),
     ])
     Font.register({
       family: 'Roboto',
       fonts: [
-        { src: URL.createObjectURL(regBlob),  fontWeight: 400 },
-        { src: URL.createObjectURL(boldBlob), fontWeight: 700 },
+        { src: regUri,  fontWeight: 400 },
+        { src: boldUri, fontWeight: 700 },
       ],
     })
   })()
