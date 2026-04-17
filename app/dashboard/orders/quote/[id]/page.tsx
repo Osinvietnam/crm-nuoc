@@ -317,7 +317,7 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
             ten_sp:     it.ten_sp,
             don_gia:    it.don_gia,
             so_luong:   it.so_luong,
-            product_id: it.product_id ?? null,
+            product_id: null,
           })),
         }),
       })
