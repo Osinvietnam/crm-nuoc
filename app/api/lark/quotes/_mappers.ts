@@ -52,7 +52,12 @@ export function mapQuote(r: any): Quote {
     dia_chi_ct:         r.customers?.dia_chi_ct ?? r.customers?.dia_chi_hd ?? '',
     nguoi_phu_trach:    r.staff?.full_name    ?? '',
     phien_ban:          r.phien_ban           ?? 1,
-    san_pham:           r.san_pham            ?? [],
+    // san_pham không phải cột trong quotes — derive từ quote_items để PDF vẫn hoạt động
+    san_pham:           Array.isArray(r.quote_items) && r.quote_items.length > 0
+                          ? r.quote_items
+                              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                              .map((it: any) => it.so_luong > 1 ? `${it.ten_sp} (${it.so_luong}x)` : it.ten_sp)
+                          : [],
     tong_gia_tri:       tong,
     chiet_khau:         ck,
     gia_tri_sau_ck:     r.gia_tri_sau_ck      ?? Math.round(tong * (1 - ck / 100)),

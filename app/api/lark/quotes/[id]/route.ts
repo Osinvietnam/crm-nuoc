@@ -93,8 +93,9 @@ export async function PATCH(
 
     const allowed = [
       'trang_thai', 'ly_do_tu_choi', 'ma_hd_tham_chieu', 'tong_gia_tri',
-      'chiet_khau', 'san_pham', 'ghi_chu_ky_thuat', 'ghi_chu_thuong_mai',
+      'chiet_khau', 'ghi_chu_ky_thuat', 'ghi_chu_thuong_mai',
       'kenh_tiep_nhan', 'ket_qua_follow_up',
+      // NOTE: 'san_pham' không phải cột trong bảng quotes — sản phẩm lưu qua quote_items
     ]
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {

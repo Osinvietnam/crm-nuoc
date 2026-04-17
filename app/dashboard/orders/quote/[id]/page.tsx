@@ -307,19 +307,17 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
     ;(document.activeElement as HTMLElement)?.blur()
     setSaving(true); setError('')
     try {
-      const { san_pham } = itemsToLarkFields(items)
       const res = await fetch(`/api/lark/quotes/${quote.record_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          san_pham,
           tong_gia_tri: total,
           chiet_khau: ck,
           items: items.map(it => ({
             ten_sp:     it.ten_sp,
             don_gia:    it.don_gia,
             so_luong:   it.so_luong,
-            product_id: null,
+            product_id: it.product_id ?? null,
           })),
         }),
       })

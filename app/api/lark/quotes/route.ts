@@ -85,10 +85,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      san_pham, tong_gia_tri, chiet_khau,
+      tong_gia_tri, chiet_khau,
       ghi_chu_ky_thuat, ghi_chu_thuong_mai,
       kenh_tiep_nhan, ngay_gui_kh,
       customer_record_id,  // = Supabase customer id
+      // NOTE: san_pham không phải cột trong quotes — sản phẩm lưu qua quote_items
     } = body
 
     const customerId = customer_record_id ? parseInt(customer_record_id) : null
@@ -104,11 +105,6 @@ export async function POST(req: NextRequest) {
         .limit(1)
       phien_ban = (existing?.[0]?.phien_ban ?? 0) + 1
     }
-
-    // san_pham arrives as a comma-separated string from itemsToLarkFields
-    const sanPhamArr = typeof san_pham === 'string'
-      ? san_pham.split(',').map((s: string) => s.trim()).filter(Boolean)
-      : (Array.isArray(san_pham) ? san_pham : [])
 
     // M3: Lấy số ngày hạn BG từ company_settings (default 14)
     let expiryDays = 14
@@ -133,7 +129,6 @@ export async function POST(req: NextRequest) {
         nguoi_phu_trach:    profile.id,
         phien_ban,
         trang_thai:         'Nháp',
-        san_pham:           sanPhamArr,
         tong_gia_tri:       Number(tong_gia_tri) || 0,
         chiet_khau:         Number(chiet_khau)   || 0,
         kenh_tiep_nhan:     kenh_tiep_nhan       || null,
