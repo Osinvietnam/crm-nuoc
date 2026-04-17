@@ -293,18 +293,6 @@ export async function downloadContractPDF(contract: Contract, company?: CompanyI
   await ensureFonts()
   const blob = await pdf(<ContractPDFDocument contract={contract} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
-
-  const isIOS = /iP(ad|hone|od)/i.test(navigator.userAgent)
-  if (isIOS) {
-    window.open(url, '_blank')
-    setTimeout(() => URL.revokeObjectURL(url), 30_000)
-  } else {
-    const a = document.createElement('a')
-    a.href     = url
-    a.download = `${contract.ma_hd}-hop-dong.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1_000)
-  }
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

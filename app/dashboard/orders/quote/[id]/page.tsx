@@ -732,7 +732,7 @@ export default function QuoteDetailPage() {
             onClick={async () => {
               setExportingPDF(true)
               try { await downloadQuotePDF(quote) }
-              catch { notify('Lỗi xuất PDF', true) }
+              catch (e) { notify('Lỗi xuất PDF: ' + (e instanceof Error ? e.message : String(e)), true) }
               finally { setExportingPDF(false) }
             }}
             disabled={exportingPDF}

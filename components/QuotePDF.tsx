@@ -313,20 +313,7 @@ export async function downloadQuotePDF(quote: Quote, company?: CompanyInfo) {
   await ensureFonts()
   const blob = await pdf(<QuotePDFDocument quote={quote} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
-
-  // iOS Safari không hỗ trợ a.download → mở tab mới để user lưu thủ công
-  const isIOS = /iP(ad|hone|od)/i.test(navigator.userAgent)
-  if (isIOS) {
-    window.open(url, '_blank')
-    setTimeout(() => URL.revokeObjectURL(url), 30_000)
-  } else {
-    // Android / Desktop: thêm vào DOM trước khi click (bắt buộc cho mobile Chrome)
-    const a = document.createElement('a')
-    a.href     = url
-    a.download = `${quote.ma_bao_gia}-v${quote.phien_ban}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1_000)
-  }
+  // Mở PDF trong tab mới — hoạt động trên mọi thiết bị, user bấm Save/Share
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
