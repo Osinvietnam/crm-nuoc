@@ -6,18 +6,29 @@ import {
 import type { Quote } from '@/app/api/lark/quotes/_mappers'
 
 // ─── Font ────────────────────────────────────────────────────────────────────
-// Dùng absolute URL vì @react-pdf/renderer v4 render trong Blob URL Web Worker
-// — relative paths (/fonts/...) fail trong Worker context (null origin)
+// Fetch font trong main thread → tạo Blob URL → pass vào Font.register
+// Blob URLs tạo từ main thread accessible trong Web Worker (global registry)
+// Tránh hoàn toàn vấn đề CORS / null-origin trong Blob URL Worker
 
-function registerFonts() {
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  Font.register({
-    family: 'Roboto',
-    fonts: [
-      { src: `${origin}/fonts/Roboto-Regular.ttf`, fontWeight: 400 },
-      { src: `${origin}/fonts/Roboto-Bold.ttf`,    fontWeight: 700 },
-    ],
-  })
+let _fontsReady: Promise<void> | null = null
+
+function ensureFonts(): Promise<void> {
+  if (_fontsReady) return _fontsReady
+  _fontsReady = (async () => {
+    const origin = window.location.origin
+    const [regBlob, boldBlob] = await Promise.all([
+      fetch(`${origin}/fonts/Roboto-Regular.ttf`).then(r => r.blob()),
+      fetch(`${origin}/fonts/Roboto-Bold.ttf`).then(r => r.blob()),
+    ])
+    Font.register({
+      family: 'Roboto',
+      fonts: [
+        { src: URL.createObjectURL(regBlob),  fontWeight: 400 },
+        { src: URL.createObjectURL(boldBlob), fontWeight: 700 },
+      ],
+    })
+  })()
+  return _fontsReady
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -299,12 +310,23 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
 // ─── Download helper ──────────────────────────────────────────────────────────
 
 export async function downloadQuotePDF(quote: Quote, company?: CompanyInfo) {
-  registerFonts()
+  await ensureFonts()
   const blob = await pdf(<QuotePDFDocument quote={quote} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href     = url
-  a.download = `${quote.ma_bao_gia}-v${quote.phien_ban}.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+
+  // iOS Safari không hỗ trợ a.download → mở tab mới để user lưu thủ công
+  const isIOS = /iP(ad|hone|od)/i.test(navigator.userAgent)
+  if (isIOS) {
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 30_000)
+  } else {
+    // Android / Desktop: thêm vào DOM trước khi click (bắt buộc cho mobile Chrome)
+    const a = document.createElement('a')
+    a.href     = url
+    a.download = `${quote.ma_bao_gia}-v${quote.phien_ban}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1_000)
+  }
 }

@@ -7,18 +7,28 @@ import type { Contract } from '@/app/api/lark/orders/_mappers'
 import type { CompanyInfo } from '@/components/QuotePDF'
 
 // ─── Font ────────────────────────────────────────────────────────────────────
-// Dùng absolute URL vì @react-pdf/renderer v4 render trong Blob URL Web Worker
-// — relative paths (/fonts/...) fail trong Worker context (null origin)
+// Fetch font trong main thread → Blob URL → pass vào Font.register
+// Dùng chung singleton với QuotePDF để tránh fetch 2 lần
 
-function registerFonts() {
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  Font.register({
-    family: 'Roboto',
-    fonts: [
-      { src: `${origin}/fonts/Roboto-Regular.ttf`, fontWeight: 400 },
-      { src: `${origin}/fonts/Roboto-Bold.ttf`,    fontWeight: 700 },
-    ],
-  })
+let _fontsReady: Promise<void> | null = null
+
+function ensureFonts(): Promise<void> {
+  if (_fontsReady) return _fontsReady
+  _fontsReady = (async () => {
+    const origin = window.location.origin
+    const [regBlob, boldBlob] = await Promise.all([
+      fetch(`${origin}/fonts/Roboto-Regular.ttf`).then(r => r.blob()),
+      fetch(`${origin}/fonts/Roboto-Bold.ttf`).then(r => r.blob()),
+    ])
+    Font.register({
+      family: 'Roboto',
+      fonts: [
+        { src: URL.createObjectURL(regBlob),  fontWeight: 400 },
+        { src: URL.createObjectURL(boldBlob), fontWeight: 700 },
+      ],
+    })
+  })()
+  return _fontsReady
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -280,12 +290,21 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
 // ─── Download helper ──────────────────────────────────────────────────────────
 
 export async function downloadContractPDF(contract: Contract, company?: CompanyInfo) {
-  registerFonts()
+  await ensureFonts()
   const blob = await pdf(<ContractPDFDocument contract={contract} company={company} />).toBlob()
   const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href     = url
-  a.download = `${contract.ma_hd}-hop-dong.pdf`
-  a.click()
-  URL.revokeObjectURL(url)
+
+  const isIOS = /iP(ad|hone|od)/i.test(navigator.userAgent)
+  if (isIOS) {
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 30_000)
+  } else {
+    const a = document.createElement('a')
+    a.href     = url
+    a.download = `${contract.ma_hd}-hop-dong.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1_000)
+  }
 }
