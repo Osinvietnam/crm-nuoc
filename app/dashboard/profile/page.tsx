@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  tech_lead:  'Trưởng phòng KT',
+  director:   'Phó Giám đốc / KT',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật viên',

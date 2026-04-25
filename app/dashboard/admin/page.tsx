@@ -25,20 +25,20 @@ interface StaffUser {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROLE_OPTIONS = [
-  { value: 'sales',      label: 'Kinh doanh'      },
-  { value: 'tech',       label: 'Kỹ thuật'         },
-  { value: 'logistics',  label: 'Hậu cần'          },
-  { value: 'tech_lead',  label: 'Trưởng phòng KT'  },
-  { value: 'accountant', label: 'Kế toán'           },
-  { value: 'ceo',        label: 'Giám đốc'          },
-  { value: 'admin',      label: 'Quản trị viên'     },
-  { value: 'partner',    label: 'Đối tác'           },
+  { value: 'sales',      label: 'Kinh doanh'         },
+  { value: 'tech',       label: 'Kỹ thuật'            },
+  { value: 'logistics',  label: 'Hậu cần'             },
+  { value: 'director',   label: 'Phó Giám đốc / KT'   },
+  { value: 'accountant', label: 'Kế toán'              },
+  { value: 'ceo',        label: 'Giám đốc'             },
+  { value: 'admin',      label: 'Quản trị viên'        },
+  { value: 'partner',    label: 'Đối tác'              },
 ]
 
 const ROLE_COLOR: Record<string, string> = {
   admin:      'bg-purple-100 text-purple-700',
   ceo:        'bg-indigo-100 text-indigo-700',
-  tech_lead:  'bg-orange-100 text-orange-700',
+  director:   'bg-orange-100 text-orange-700',
   accountant: 'bg-teal-100 text-teal-700',
   sales:      'bg-green-100 text-green-700',
   tech:       'bg-amber-100 text-amber-700',
@@ -49,7 +49,7 @@ const ROLE_COLOR: Record<string, string> = {
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  tech_lead:  'Trưởng phòng KT',
+  director:   'Phó Giám đốc / KT',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật',
