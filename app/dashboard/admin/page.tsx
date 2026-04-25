@@ -12,9 +12,11 @@ interface StaffUser {
   email: string
   role: string
   phone: string
-  department: string
   chuc_vu: string
   khu_vuc: string
+  bo_phan: string | null
+  ma_nv: string | null
+  chuc_danh: string | null
   target_thang: number | null
   ngay_vao_lam: string | null
   trang_thai_nv: string
@@ -453,23 +455,45 @@ interface AuditLog {
 }
 
 const ACTION_LABEL: Record<string, string> = {
-  role_changed:       'Đổi vai trò',
-  user_deactivated:   'Khoá tài khoản',
-  user_reactivated:   'Mở khoá tài khoản',
-  settings_updated:   'Cập nhật cài đặt',
-  logo_updated:       'Cập nhật logo',
-  logo_deleted:       'Xoá logo',
-  quote_status_changed: 'Đổi trạng thái báo giá',
+  // User management
+  role_changed:         'Đổi vai trò',
+  user_created:         'Tạo tài khoản',
+  user_deactivated:     'Khoá tài khoản',
+  user_reactivated:     'Mở khoá tài khoản',
+  profile_updated:      'Cập nhật hồ sơ',
+  // Settings
+  settings_updated:     'Cập nhật cài đặt',
+  logo_updated:         'Cập nhật logo',
+  logo_deleted:         'Xoá logo',
+  // Sales
+  quote_status_changed: 'Đổi trạng thái BG',
+  order_created:        'Tạo đơn hàng',
+  order_updated:        'Cập nhật đơn hàng',
+  // Tasks
+  task_completed:       'Hoàn thành task',
+  task_updated:         'Cập nhật task',
+  // Payments
+  payment_updated:      'Cập nhật thanh toán',
+  // Warranty
+  warranty_created:     'Tạo phiếu bảo hành',
 }
 
 const ACTION_COLOR: Record<string, string> = {
-  role_changed:       'bg-blue-100 text-blue-700',
-  user_deactivated:   'bg-red-100 text-red-700',
-  user_reactivated:   'bg-green-100 text-green-700',
-  settings_updated:   'bg-purple-100 text-purple-700',
-  logo_updated:       'bg-orange-100 text-orange-700',
-  logo_deleted:       'bg-gray-100 text-gray-600',
+  role_changed:         'bg-blue-100 text-blue-700',
+  user_created:         'bg-emerald-100 text-emerald-700',
+  user_deactivated:     'bg-red-100 text-red-700',
+  user_reactivated:     'bg-green-100 text-green-700',
+  profile_updated:      'bg-sky-100 text-sky-700',
+  settings_updated:     'bg-purple-100 text-purple-700',
+  logo_updated:         'bg-orange-100 text-orange-700',
+  logo_deleted:         'bg-gray-100 text-gray-600',
   quote_status_changed: 'bg-amber-100 text-amber-700',
+  order_created:        'bg-indigo-100 text-indigo-700',
+  order_updated:        'bg-indigo-100 text-indigo-700',
+  task_completed:       'bg-teal-100 text-teal-700',
+  task_updated:         'bg-teal-100 text-teal-700',
+  payment_updated:      'bg-lime-100 text-lime-700',
+  warranty_created:     'bg-rose-100 text-rose-700',
 }
 
 function AuditLogTab() {
@@ -1280,8 +1304,8 @@ export default function AdminPage() {
 
   useEffect(() => { loadUsers() }, [loadUsers])
 
-  // Danh sách admin + manager để bàn giao khi deactivate
-  const managers = users.filter(u => ['admin', 'manager'].includes(u.role))
+  // Danh sách có thể nhận bàn giao khi khoá tài khoản
+  const managers = users.filter(u => ['admin', 'ceo', 'director'].includes(u.role))
 
   const displayed = users.filter(u =>
     filter === 'all'      ? true :
@@ -1375,10 +1399,12 @@ export default function AdminPage() {
       <div className="bg-blue-50 rounded-xl px-4 py-3 space-y-1">
         <p className="text-xs font-semibold text-blue-700">Phân quyền hệ thống</p>
         <div className="text-xs text-blue-600 space-y-0.5">
-          <p>• <strong>Quản trị viên:</strong> Toàn quyền — quản lý user, đổi role, khoá tài khoản</p>
-          <p>• <strong>Quản lý:</strong> Tạo nhân viên, quản lý sản phẩm, xem toàn bộ dữ liệu</p>
-          <p>• <strong>Kinh doanh:</strong> Khách hàng, báo giá, đơn hàng (chỉ dữ liệu của mình)</p>
-          <p>• <strong>Kỹ thuật:</strong> Lịch bảo trì (chỉ công việc được phân)</p>
+          <p>• <strong>Quản trị viên:</strong> Toàn quyền — quản lý user, phân quyền, cấu hình hệ thống</p>
+          <p>• <strong>Giám đốc / Phó GĐ:</strong> Duyệt HĐ/BG, xem toàn bộ dữ liệu, duyệt task</p>
+          <p>• <strong>Kinh doanh:</strong> Khách hàng, báo giá, đơn hàng (khu vực của mình)</p>
+          <p>• <strong>Kỹ thuật:</strong> Checklist kỹ thuật, bảo hành/bảo trì (được phân công)</p>
+          <p>• <strong>Kế toán:</strong> Xem + nhập thanh toán, xem đơn hàng toàn hệ thống</p>
+          <p>• <strong>Hậu cần:</strong> Xem đơn hàng, quản lý giao hàng</p>
         </div>
       </div>
 
@@ -1427,15 +1453,20 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Role + department */}
+                {/* Role + WBS info */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                     ROLE_COLOR[u.role] ?? 'bg-gray-100 text-gray-600'
                   }`}>
                     {ROLE_LABEL[u.role] ?? u.role}
                   </span>
-                  {u.department && (
-                    <span className="text-xs text-gray-500">{u.department}</span>
+                  {u.khu_vuc && (
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      {u.khu_vuc === 'CN' ? 'Cả nước' : u.khu_vuc === 'MN' ? 'Miền Nam' : u.khu_vuc === 'MB' ? 'Miền Bắc' : u.khu_vuc === 'MT' ? 'Miền Trung' : u.khu_vuc}
+                    </span>
+                  )}
+                  {u.ma_nv && (
+                    <span className="text-[10px] font-mono text-gray-400">{u.ma_nv}</span>
                   )}
                   <span className="text-xs text-gray-300 ml-auto">
                     {new Date(u.created_at).toLocaleDateString('vi-VN')}
@@ -1460,10 +1491,26 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* User đã bị khoá — không có action */}
+                {/* User đã bị khoá — nút mở khoá */}
                 {!isMe && !u.is_active && (
-                  <div className="pt-1 border-t border-gray-50">
-                    <p className="text-xs text-gray-500 text-center py-1">Tài khoản đã khoá · không thể đăng nhập</p>
+                  <div className="flex gap-2 pt-1 border-t border-gray-50">
+                    <p className="flex-1 text-xs text-gray-400 self-center">Tài khoản đã khoá</p>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/admin/users', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: u.id, trang_thai_nv: 'Đang làm' }),
+                          })
+                          if (res.ok) { notify(`Đã mở khoá ${u.full_name}`); loadUsers() }
+                          else { const d = await res.json(); notify(d.error || 'Lỗi mở khoá', true) }
+                        } catch { notify('Lỗi kết nối', true) }
+                      }}
+                      className="border border-green-200 text-green-600 text-xs font-semibold px-3 py-2 rounded-xl hover:bg-green-50"
+                    >
+                      🔓 Mở khoá
+                    </button>
                   </div>
                 )}
               </div>
