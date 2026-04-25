@@ -1,16 +1,27 @@
 /**
  * Task checklist definitions theo từng stage pipeline.
- * Nguồn: "Lộ trình kinh doanh.xlsx" — Sheet3, Phase 5.
  *
- * roles_can_complete: các role được phép tick task này.
- * role_badge: role hiển thị trên badge (chịu trách nhiệm chính).
+ * @deprecated Static definitions — nguồn chân lý đã chuyển sang DB (migration 032: task_definitions).
+ * File này giữ lại cho backward compat với code UI cũ.
+ * Dữ liệu mới dùng API: GET /api/admin/task-definitions?stage=
+ *
+ * task_type: 'mandatory' | 'optional' | 'conditional'
+ * roles_can_update: ai được chuyển trạng thái (dang_lam → kiem_tra)
+ * roles_can_approve: ai được tick 'hoan_thanh'
+ * bo_phan: 'KD' | 'KT' | 'KTO' | 'BLD' | 'HC'
  */
 
 export interface TaskDef {
-  key: string
+  key: string           // WBS code: LM-KD-01 (mới) hoặc legacy: lead_01
   label: string
-  role_badge: string           // hiển thị badge nhân sự chính
-  roles_can_complete: string[] // ai được tick (admin/ceo luôn có quyền)
+  role_badge: string    // hiển thị badge nhân sự chính
+  roles_can_complete: string[] // alias → roles_can_update (backward compat)
+  // ── Fields mới (Phase A) ──
+  bo_phan?: string
+  task_type?: 'mandatory' | 'optional' | 'conditional'
+  requires_attachment?: boolean
+  order_types?: string[]       // ['B2C','Thuong_mai','Du_an']
+  roles_can_approve?: string[] // ai được duyệt Hoàn thành
 }
 
 export const STAGE_TASKS: Record<string, TaskDef[]> = {

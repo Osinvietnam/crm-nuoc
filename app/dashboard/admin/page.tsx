@@ -711,10 +711,542 @@ function SystemConfigTab() {
   )
 }
 
+// ─── Business Rules Tab ───────────────────────────────────────────────────────
+
+function BusinessRulesTab() {
+  const [threshold,  setThreshold]  = useState('')
+  const [discount,   setDiscount]   = useState('')
+  const [slaDays,    setSlaDays]    = useState('')
+  const [slaOverride,setSlaOverride]= useState<Record<string, string>>({ DN: '', GH: '', NT: '' })
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(false)
+  const [success,    setSuccess]    = useState('')
+  const [error,      setError]      = useState('')
+
+  useEffect(() => {
+    fetch('/api/admin/business-rules')
+      .then(r => r.json())
+      .then(d => {
+        const r = d.rules
+        if (!r) return
+        setThreshold(String(r.ceo_approval_threshold ?? ''))
+        setDiscount(String(r.sales_max_discount_pct ?? ''))
+        setSlaDays(String(r.default_stage_sla_days ?? ''))
+        const ov = r.stage_sla_override ?? {}
+        setSlaOverride({ DN: String(ov.DN ?? ''), GH: String(ov.GH ?? ''), NT: String(ov.NT ?? '') })
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      const body: Record<string, any> = {}
+      if (threshold) body.ceo_approval_threshold = Number(threshold)
+      if (discount)  body.sales_max_discount_pct = Number(discount)
+      if (slaDays)   body.default_stage_sla_days = Number(slaDays)
+      const ov: Record<string, number> = {}
+      if (slaOverride.DN) ov.DN = Number(slaOverride.DN)
+      if (slaOverride.GH) ov.GH = Number(slaOverride.GH)
+      if (slaOverride.NT) ov.NT = Number(slaOverride.NT)
+      if (Object.keys(ov).length) body.stage_sla_override = ov
+
+      const res = await fetch('/api/admin/business-rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || 'Lỗi lưu'); return }
+      setSuccess('Đã lưu cài đặt')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Lỗi kết nối') }
+    finally { setSaving(false) }
+  }
+
+  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <p className="text-sm font-semibold text-gray-800">Ngưỡng duyệt hợp đồng</p>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">CEO duyệt khi HĐ ≥ (VNĐ)</label>
+          <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)}
+            placeholder="10000000"
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <p className="text-xs text-gray-400 mt-1">Dưới ngưỡng này → Director duyệt</p>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Sale tự chiết khấu tối đa (%)</label>
+          <input type="number" value={discount} onChange={e => setDiscount(e.target.value)} min={0} max={100}
+            placeholder="1"
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <p className="text-sm font-semibold text-gray-800">SLA mặc định mỗi stage</p>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">SLA chung (ngày)</label>
+          <input type="number" value={slaDays} onChange={e => setSlaDays(e.target.value)} min={1}
+            placeholder="3"
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <p className="text-xs font-semibold text-gray-500">Ghi đè theo stage</p>
+        {[
+          { key: 'DN', label: 'Đàm phán (DN)' },
+          { key: 'GH', label: 'Giao hàng (GH)' },
+          { key: 'NT', label: 'Nghiệm thu (NT)' },
+        ].map(({ key, label }) => (
+          <div key={key}>
+            <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{label}</label>
+            <input type="number" value={slaOverride[key]} min={1}
+              onChange={e => setSlaOverride(prev => ({ ...prev, [key]: e.target.value }))}
+              placeholder="14"
+              className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        ))}
+      </div>
+
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+      {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
+      <button onClick={handleSave} disabled={saving}
+        className="w-full bg-blue-600 disabled:bg-blue-300 text-white font-medium py-3 rounded-xl text-sm">
+        {saving ? 'Đang lưu...' : 'Lưu cài đặt'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Roles / Permission Matrix Tab ────────────────────────────────────────────
+
+interface RoleRow {
+  id: number; code: string; display_name: string; is_system: boolean
+  permissions: Record<string, boolean>
+}
+
+const PERM_GROUPS = [
+  {
+    label: 'Khách hàng',
+    perms: [
+      { key: 'VIEW_CUSTOMERS',    label: 'Xem KH'       },
+      { key: 'EDIT_CUSTOMERS',    label: 'Sửa KH'       },
+      { key: 'DELETE_CUSTOMERS',  label: 'Xóa KH'       },
+    ],
+  },
+  {
+    label: 'Đơn hàng / Báo giá',
+    perms: [
+      { key: 'VIEW_ORDERS',       label: 'Xem đơn'      },
+      { key: 'CREATE_ORDER',      label: 'Tạo đơn'      },
+      { key: 'APPROVE_ORDER',     label: 'Duyệt đơn'    },
+    ],
+  },
+  {
+    label: 'Tasks',
+    perms: [
+      { key: 'UPDATE_OWN_TASK',   label: 'Cập nhật task' },
+      { key: 'APPROVE_OTHERS_TASK',label: 'Duyệt task'  },
+    ],
+  },
+  {
+    label: 'Tài chính',
+    perms: [
+      { key: 'VIEW_PAYMENTS',     label: 'Xem TT'       },
+      { key: 'MANAGE_PAYMENTS',   label: 'Quản lý TT'   },
+    ],
+  },
+  {
+    label: 'Quản trị',
+    perms: [
+      { key: 'MANAGE_USERS',      label: 'Quản lý user' },
+      { key: 'MANAGE_ROLES',      label: 'Phân quyền'   },
+      { key: 'VIEW_AUDIT_LOG',    label: 'Xem nhật ký'  },
+      { key: 'MANAGE_PIPELINE',   label: 'Cấu hình pipeline' },
+      { key: 'MANAGE_TASKS',      label: 'Cấu hình task'},
+      { key: 'MANAGE_SETTINGS',   label: 'Cài đặt hệ thống' },
+    ],
+  },
+]
+
+function RolesTab() {
+  const [roles,      setRoles]      = useState<RoleRow[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [pending,    setPending]    = useState<{ role_id: number; permission_key: string; is_enabled: boolean }[]>([])
+  const [saving,     setSaving]     = useState(false)
+  const [success,    setSuccess]    = useState('')
+  const [error,      setError]      = useState('')
+  const [expanded,   setExpanded]   = useState<string>('Khách hàng')
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/roles')
+      .then(r => r.json())
+      .then(d => setRoles(d.roles ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const toggle = (roleId: number, permKey: string, currentEnabled: boolean) => {
+    // Update UI optimistically
+    setRoles(prev => prev.map(r => {
+      if (r.id !== roleId) return r
+      return { ...r, permissions: { ...r.permissions, [permKey]: !currentEnabled } }
+    }))
+    // Queue update
+    setPending(prev => {
+      const filtered = prev.filter(p => !(p.role_id === roleId && p.permission_key === permKey))
+      return [...filtered, { role_id: roleId, permission_key: permKey, is_enabled: !currentEnabled }]
+    })
+  }
+
+  const saveAll = async () => {
+    if (!pending.length) return
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      const res = await fetch('/api/admin/roles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: pending }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || 'Lỗi lưu'); return }
+      setPending([])
+      setSuccess(`Đã lưu ${d.updated} thay đổi`)
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Lỗi kết nối') }
+    finally { setSaving(false) }
+  }
+
+  // Only show roles that users can actually see (not partner/system roles in a simple view)
+  const visibleRoles = roles.filter(r => ['admin','ceo','director','accountant','sales','tech','logistics'].includes(r.code))
+
+  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">Tích để cấp quyền. Thay đổi chưa lưu hiển thị màu vàng.</p>
+
+      {PERM_GROUPS.map(group => {
+        const isOpen = expanded === group.label
+        return (
+          <div key={group.label} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setExpanded(isOpen ? '' : group.label)}
+              className="w-full px-4 py-3.5 flex items-center justify-between"
+            >
+              <span className="text-sm font-semibold text-gray-800">{group.label}</span>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-gray-50 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      <th className="text-left px-4 py-2 text-gray-400 font-medium w-32">Quyền</th>
+                      {visibleRoles.map(r => (
+                        <th key={r.id} className="px-2 py-2 text-center text-gray-500 font-medium min-w-[48px]">
+                          {r.display_name.split(' ').pop()}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.perms.map(perm => (
+                      <tr key={perm.key} className="border-b border-gray-50 last:border-0">
+                        <td className="px-4 py-2.5 text-gray-600">{perm.label}</td>
+                        {visibleRoles.map(role => {
+                          const enabled    = role.permissions[perm.key] ?? false
+                          const isPending  = pending.some(p => p.role_id === role.id && p.permission_key === perm.key)
+                          return (
+                            <td key={role.id} className="px-2 py-2.5 text-center">
+                              <button
+                                onClick={() => toggle(role.id, perm.key, enabled)}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-all ${
+                                  enabled
+                                    ? isPending
+                                      ? 'bg-amber-400 border-amber-400'
+                                      : 'bg-blue-500 border-blue-500'
+                                    : isPending
+                                      ? 'bg-amber-50 border-amber-300'
+                                      : 'border-gray-300 bg-white'
+                                }`}
+                              >
+                                {enabled && (
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {pending.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+          ⚠️ Có {pending.length} thay đổi chưa lưu
+        </div>
+      )}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+      {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
+
+      <button onClick={saveAll} disabled={saving || !pending.length}
+        className="w-full bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium py-3 rounded-xl text-sm">
+        {saving ? 'Đang lưu...' : pending.length ? `Lưu ${pending.length} thay đổi` : 'Chưa có thay đổi'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Tasks Catalog Tab ────────────────────────────────────────────────────────
+
+interface TaskDef {
+  id: number; stage_code: string; stage_label: string; task_key: string
+  label: string; bo_phan: string; task_type: string; requires_attachment: boolean
+  sort_order: number; is_active: boolean; roles_can_update: string[]; roles_can_approve: string[]
+}
+
+function TasksTab() {
+  const [tasks,   setTasks]   = useState<TaskDef[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toggling,setToggling]= useState<Set<number>>(new Set())
+  const [success, setSuccess] = useState('')
+  const [showAll, setShowAll] = useState(false)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/task-definitions?active_only=false')
+      .then(r => r.json())
+      .then(d => setTasks(d.tasks ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const toggleActive = async (task: TaskDef) => {
+    setToggling(prev => new Set(prev).add(task.id))
+    try {
+      const res = await fetch(`/api/admin/task-definitions?id=${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !task.is_active }),
+      })
+      if (res.ok) {
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_active: !t.is_active } : t))
+        setSuccess(`${!task.is_active ? 'Bật' : 'Tắt'} task: ${task.label}`)
+        setTimeout(() => setSuccess(''), 2500)
+      }
+    } catch {}
+    finally { setToggling(prev => { const s = new Set(prev); s.delete(task.id); return s }) }
+  }
+
+  const displayed = showAll ? tasks : tasks.filter(t => t.is_active)
+  const grouped   = displayed.reduce<Record<string, TaskDef[]>>((acc, t) => {
+    if (!acc[t.stage_code]) acc[t.stage_code] = []
+    acc[t.stage_code].push(t)
+    return acc
+  }, {})
+
+  const BO_PHAN_COLOR: Record<string, string> = {
+    KD: 'bg-green-100 text-green-700',
+    KT: 'bg-blue-100 text-blue-700',
+    KTO:'bg-teal-100 text-teal-700',
+    BLD:'bg-purple-100 text-purple-700',
+  }
+
+  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">{tasks.filter(t => t.is_active).length}/{tasks.length} task đang bật</p>
+        <button onClick={() => setShowAll(p => !p)}
+          className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+          {showAll ? 'Chỉ hiện đang bật' : 'Hiện tất cả'}
+        </button>
+      </div>
+
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+
+      {Object.entries(grouped).map(([stage, stageTasks]) => (
+        <div key={stage} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <div>
+              <span className="text-sm font-semibold text-gray-800">{stageTasks[0]?.stage_label ?? stage}</span>
+              <span className="text-xs text-gray-400 ml-2">[{stage}]</span>
+            </div>
+            <span className="text-xs text-gray-400">{stageTasks.filter(t=>t.is_active).length}/{stageTasks.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {stageTasks.map(task => (
+              <div key={task.id} className={`flex items-start gap-3 px-4 py-3 ${!task.is_active ? 'opacity-50' : ''}`}>
+                <button
+                  onClick={() => toggleActive(task)}
+                  disabled={toggling.has(task.id)}
+                  className={`mt-0.5 w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                    task.is_active ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  {toggling.has(task.id) ? (
+                    <span className="crm-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                  ) : task.is_active ? (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : null}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-700 leading-snug">{task.label}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-[10px] font-mono text-gray-400">{task.task_key}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${BO_PHAN_COLOR[task.bo_phan] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {task.bo_phan}
+                    </span>
+                    {task.task_type !== 'mandatory' && (
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        {task.task_type === 'optional' ? 'tuỳ chọn' : 'điều kiện'}
+                      </span>
+                    )}
+                    {task.requires_attachment && (
+                      <span className="text-[10px] text-orange-500">📎</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Pipeline Config Tab ──────────────────────────────────────────────────────
+
+interface PipelineCfg {
+  order_type: string; display_name: string; stages: string[]
+  stage_labels: string[]; is_active: boolean; description: string | null
+}
+
+function PipelineTab() {
+  const [configs,  setConfigs]  = useState<PipelineCfg[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState<string | null>(null)
+  const [success,  setSuccess]  = useState('')
+  const [error,    setError]    = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/pipeline-config')
+      .then(r => r.json())
+      .then(d => setConfigs(d.configs ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const toggleActive = async (cfg: PipelineCfg) => {
+    setSaving(cfg.order_type); setError('')
+    try {
+      const res = await fetch(`/api/admin/pipeline-config?order_type=${encodeURIComponent(cfg.order_type)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !cfg.is_active }),
+      })
+      if (res.ok) {
+        setConfigs(prev => prev.map(c =>
+          c.order_type === cfg.order_type ? { ...c, is_active: !c.is_active } : c
+        ))
+        setSuccess(`${!cfg.is_active ? 'Bật' : 'Tắt'} pipeline: ${cfg.display_name}`)
+        setTimeout(() => setSuccess(''), 2500)
+      }
+    } catch { setError('Lỗi kết nối') }
+    finally { setSaving(null) }
+  }
+
+  const ORDER_TYPE_COLOR: Record<string, string> = {
+    B2C:        'bg-blue-100 text-blue-700',
+    Thuong_mai: 'bg-green-100 text-green-700',
+    Du_an:      'bg-purple-100 text-purple-700',
+  }
+
+  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">Kích hoạt / tắt từng loại pipeline. Mỗi loại có bộ stages riêng.</p>
+
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+      {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
+
+      {configs.map(cfg => (
+        <div key={cfg.order_type} className={`bg-white rounded-2xl border overflow-hidden ${
+          cfg.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'
+        }`}>
+          <div className="px-4 py-4 flex items-start gap-3">
+            {/* Toggle */}
+            <button
+              onClick={() => toggleActive(cfg)}
+              disabled={saving === cfg.order_type}
+              className={`mt-0.5 w-11 h-6 rounded-full flex-shrink-0 transition-colors relative ${
+                cfg.is_active ? 'bg-green-500' : 'bg-gray-200'
+              }`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                cfg.is_active ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-gray-800">{cfg.display_name}</span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ORDER_TYPE_COLOR[cfg.order_type] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {cfg.order_type}
+                </span>
+              </div>
+              {cfg.description && (
+                <p className="text-xs text-gray-500 mb-2">{cfg.description}</p>
+              )}
+              {/* Stages list */}
+              <div className="flex flex-wrap gap-1">
+                {cfg.stage_labels?.map((label, i) => (
+                  <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                    {i + 1}. {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+        ℹ️ Để chỉnh sửa stages trong từng pipeline, vui lòng liên hệ Admin hệ thống. Thay đổi stages có thể ảnh hưởng dữ liệu hiện tại.
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [tab,          setTab]          = useState<'users' | 'company' | 'audit' | 'system'>('users')
+  const [tab,          setTab]          = useState<'users' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks' | 'pipeline'>('users')
   const [users,        setUsers]        = useState<StaffUser[]>([])
   const [loading,      setLoading]      = useState(true)
   const [myId,         setMyId]         = useState('')
@@ -771,18 +1303,22 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Tab switcher — 2 hàng để tránh chật trên mobile */}
-      <div className="grid grid-cols-2 gap-1.5 bg-gray-100 p-1 rounded-xl">
+      {/* Tab switcher — 4x2 grid */}
+      <div className="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-xl">
         {([
-          { key: 'users',   label: '👥 Người dùng' },
-          { key: 'company', label: '🏢 Công ty'     },
-          { key: 'audit',   label: '📋 Nhật ký'     },
-          { key: 'system',  label: '⚙️ Hệ thống'    },
+          { key: 'users',    label: '👥 Users'    },
+          { key: 'roles',    label: '🔑 Quyền'    },
+          { key: 'tasks',    label: '✅ Tasks'    },
+          { key: 'pipeline', label: '🔀 Pipeline' },
+          { key: 'business', label: '📐 Rules'    },
+          { key: 'company',  label: '🏢 Công ty'  },
+          { key: 'audit',    label: '📋 Nhật ký'  },
+          { key: 'system',   label: '⚙️ Hệ thống' },
         ] as const).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`py-2 rounded-lg text-[10px] font-semibold transition-all leading-tight ${
               tab === t.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
             }`}
           >
@@ -791,9 +1327,13 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {tab === 'company' && <CompanySettingsTab />}
-      {tab === 'audit'   && <AuditLogTab />}
-      {tab === 'system'  && <SystemConfigTab />}
+      {tab === 'company'  && <CompanySettingsTab />}
+      {tab === 'audit'    && <AuditLogTab />}
+      {tab === 'system'   && <SystemConfigTab />}
+      {tab === 'business' && <BusinessRulesTab />}
+      {tab === 'roles'    && <RolesTab />}
+      {tab === 'tasks'    && <TasksTab />}
+      {tab === 'pipeline' && <PipelineTab />}
 
       {/* Users tab content */}
       {tab === 'users' && <>
