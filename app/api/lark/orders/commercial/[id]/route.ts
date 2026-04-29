@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapCommercial } from '../../_mappers'
+import { logAudit } from '@/lib/audit'
 
 const SELECT = `
   *,
@@ -45,6 +46,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
     const { id } = await params
     const body = await req.json()
 
@@ -68,6 +70,7 @@ export async function PATCH(
     ).single()
     if (error) throw error
 
+    void logAudit(supabase, { user_id: user.id, user_name: profile?.full_name ?? '', action: 'order_updated', entity: 'order', detail: `Đơn TM #${id}: ${Object.keys(updates).join(', ')}` })
     return NextResponse.json({ data: mapCommercial(data) })
   } catch (err) {
     console.error('PATCH /api/lark/orders/commercial/[id]:', err)

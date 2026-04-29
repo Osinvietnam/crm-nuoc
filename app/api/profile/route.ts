@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 const SELF_EDITABLE       = ['phone', 'dia_chi', 'ngay_sinh'] as const
 const ADMIN_SELF_EDITABLE = ['cccd', 'ngan_hang', 'so_tk_nh'] as const
@@ -39,7 +40,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json()
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     const isPrivileged = ['admin', 'ceo'].includes(me?.role ?? '')
 
     const updates: Record<string, unknown> = {}
@@ -60,6 +61,7 @@ export async function PATCH(req: NextRequest) {
     const { error } = await service.from('profiles').update(updates).eq('id', user.id)
     if (error) throw error
 
+    void logAudit(supabase, { user_id: user.id, user_name: me?.full_name ?? '', action: 'profile_updated', entity: 'user', detail: `Tự cập nhật: ${Object.keys(updates).join(', ')}` })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('PATCH /api/profile:', err)

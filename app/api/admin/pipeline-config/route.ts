@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── GET /api/admin/pipeline-config ──────────────────────────────────────────
 // Trả về cấu hình pipeline cho tất cả order_types
@@ -35,7 +36,7 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || me.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ Admin mới được chỉnh pipeline' }, { status: 403 })
     }
@@ -72,6 +73,7 @@ export async function PATCH(req: NextRequest) {
       .single()
 
     if (error) throw error
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'settings_updated', entity: 'system_config', detail: `Pipeline "${order_type}": ${Object.keys(patch).filter(k => k !== 'updated_at').join(', ')}` })
     return NextResponse.json({ config: data })
   } catch (err) {
     console.error('PATCH /api/admin/pipeline-config:', err)

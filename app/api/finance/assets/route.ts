@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 const ASSET_TYPES = ['may_moc', 'xe_cong', 'thiet_bi_van_phong', 'khac'] as const
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || !['admin', 'ceo'].includes(me.role)) {
       return NextResponse.json({ error: 'Chỉ admin/CEO mới thêm tài sản' }, { status: 403 })
     }
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
     }).select().single()
 
     if (error) throw error
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'asset_created', entity: 'asset', detail: `"${ten_tai_san}" — ${loai_tai_san}` })
     return NextResponse.json({ data: { ...data, ...calcDepreciation(data) } }, { status: 201 })
   } catch (err) {
     console.error('POST /api/finance/assets:', err)
@@ -111,7 +113,7 @@ export async function PATCH(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || !['admin', 'ceo'].includes(me.role)) {
       return NextResponse.json({ error: 'Chỉ admin/CEO mới sửa tài sản' }, { status: 403 })
     }
@@ -129,6 +131,7 @@ export async function PATCH(req: NextRequest) {
     const service = createServiceClient()
     const { data, error } = await service.from('assets').update(updates).eq('id', id).select().single()
     if (error) throw error
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'asset_updated', entity: 'asset', detail: `Tài sản #${id}: ${Object.keys(updates).filter(k => k !== 'updated_at').join(', ')}` })
     return NextResponse.json({ data: { ...data, ...calcDepreciation(data) } })
   } catch (err) {
     console.error('PATCH /api/finance/assets:', err)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { logAudit } from '@/lib/audit'
 import { createClient } from '@/lib/supabase/server'
 import { mapContract, mapCommercial, mapProject } from './_mappers'
 
@@ -208,6 +209,7 @@ export async function POST(req: NextRequest) {
         })()
       }
 
+      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `HĐ ${data.ma_hd} — KH #${data.customer_id}` })
       return NextResponse.json({
         data: mapContract(data),
         ...(orderWarnings.length ? { warnings: orderWarnings } : {}),
@@ -238,6 +240,7 @@ export async function POST(req: NextRequest) {
         ghi_chu:         ghi_chu || null,
       }).select(COMMERCIAL_SELECT).single()
       if (error) throw error
+      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Đơn TM ${data.ma_don} — ${ten_kh}` })
       return NextResponse.json({ data: mapCommercial(data) }, { status: 201 })
     }
 
@@ -264,6 +267,7 @@ export async function POST(req: NextRequest) {
         ghi_chu:         ghi_chu || null,
       }).select(PROJECT_SELECT).single()
       if (error) throw error
+      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Dự án ${data.ma_da} — ${ten_da}` })
       return NextResponse.json({ data: mapProject(data) }, { status: 201 })
     }
 

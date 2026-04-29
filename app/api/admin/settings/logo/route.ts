@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 const BUCKET = 'company-logo'
 const KEY    = 'logo'   // file key cố định, luôn overwrite
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (me?.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ admin mới có thể đổi logo' }, { status: 403 })
     }
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       .update({ logo_url: publicUrl, updated_at: new Date().toISOString() })
       .eq('id', 1)
 
+    void logAudit(supabase, { user_id: user.id, user_name: me?.full_name ?? '', action: 'logo_updated', entity: 'company_settings', detail: `Cập nhật logo: ${file.name}` })
     return NextResponse.json({ url: `${publicUrl}?t=${Date.now()}` })
   } catch (err) {
     console.error('POST /api/admin/settings/logo:', err)
@@ -63,7 +65,7 @@ export async function DELETE() {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (me?.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ admin mới có thể xoá logo' }, { status: 403 })
     }
@@ -74,6 +76,7 @@ export async function DELETE() {
       .update({ logo_url: '', updated_at: new Date().toISOString() })
       .eq('id', 1)
 
+    void logAudit(supabase, { user_id: user.id, user_name: me?.full_name ?? '', action: 'logo_deleted', entity: 'company_settings', detail: 'Xoá logo công ty' })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('DELETE /api/admin/settings/logo:', err)

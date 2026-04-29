@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── GET /api/admin/task-definitions?stage= ──────────────────────────────────
 // stage: optional — nếu có thì filter theo stage_code
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || me.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ Admin mới được thêm task' }, { status: 403 })
     }
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
       throw error
     }
 
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'settings_updated', entity: 'system_config', detail: `Tạo task "${task_key}" (${stage_code})` })
     return NextResponse.json({ task: data }, { status: 201 })
   } catch (err) {
     console.error('POST /api/admin/task-definitions:', err)
@@ -102,7 +104,7 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || me.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ Admin mới được chỉnh task' }, { status: 403 })
     }
@@ -135,6 +137,7 @@ export async function PATCH(req: NextRequest) {
       .single()
 
     if (error) throw error
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'settings_updated', entity: 'system_config', detail: `Sửa task #${id}: ${Object.keys(patch).join(', ')}` })
     return NextResponse.json({ task: data })
   } catch (err) {
     console.error('PATCH /api/admin/task-definitions:', err)
@@ -151,7 +154,7 @@ export async function DELETE(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || me.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ Admin mới được xóa task' }, { status: 403 })
     }
@@ -167,6 +170,7 @@ export async function DELETE(req: NextRequest) {
       .eq('id', Number(id))
 
     if (error) throw error
+    void logAudit(supabase, { user_id: user.id, user_name: me.full_name ?? '', action: 'settings_updated', entity: 'system_config', detail: `Vô hiệu hoá task #${id}` })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('DELETE /api/admin/task-definitions:', err)

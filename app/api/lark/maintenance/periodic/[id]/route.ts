@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mappers } from '../../_mappers'
+import { logAudit } from '@/lib/audit'
 
 const SELECT = `
   *,
@@ -46,7 +47,7 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     const ALLOWED_ROLES = ['tech', 'admin', 'ceo', 'director']
     if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
       return NextResponse.json({ error: 'Không có quyền cập nhật bảo trì' }, { status: 403 })
@@ -73,6 +74,7 @@ export async function PATCH(
     ).single()
     if (error) throw error
 
+    void logAudit(supabase, { user_id: user.id, user_name: profile?.full_name ?? '', action: 'task_updated', entity: 'maintenance', detail: `Bảo dưỡng #${id}: ${Object.keys(updates).join(', ')}` })
     return NextResponse.json({ data: mappers.periodic(data) })
   } catch (err) {
     console.error('PATCH /api/lark/maintenance/periodic/[id]:', err)

@@ -104,12 +104,17 @@ export async function PATCH(req: NextRequest) {
     const { data: target } = await service
       .from('profiles').select('full_name, role').eq('id', userId).single()
 
+    const enabled  = updates.filter(u => u.is_enabled).map(u => u.permission_key)
+    const disabled = updates.filter(u => !u.is_enabled).map(u => u.permission_key)
+    const parts = []
+    if (enabled.length)  parts.push(`bật: ${enabled.join(', ')}`)
+    if (disabled.length) parts.push(`tắt: ${disabled.join(', ')}`)
     await logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
       action:    'permissions_updated',
       entity:    'user',
-      detail:    `${target?.full_name ?? userId}: ${updates.length} quyền thay đổi`,
+      detail:    `${target?.full_name ?? userId}: ${parts.join(' | ')}`,
     })
 
     return NextResponse.json({ success: true, updated: updates.length })

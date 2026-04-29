@@ -33,8 +33,14 @@ export type AuditAction =
   | 'task_reset'
   | 'order_updated'
   | 'order_created'
+  | 'product_created'
+  | 'product_updated'
+  | 'product_deleted'
+  | 'asset_created'
+  | 'asset_updated'
+  | 'customer_reassigned'
 
-export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task' | 'order'
+export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task' | 'order' | 'product' | 'asset' | 'maintenance'
 
 export async function logAudit(
   _supabase: SupabaseClient,

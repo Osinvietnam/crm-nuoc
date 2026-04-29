@@ -106,8 +106,8 @@ export async function PATCH(
     const numericId = /^\d+$/.test(id) ? parseInt(id) : null
     const [{ data: current }, { data: profile }] = await Promise.all([
       numericId
-        ? supabase.from('customers').select('id, pipeline').eq('id', numericId).single()
-        : supabase.from('customers').select('id, pipeline').eq('lark_record_id', id).single(),
+        ? supabase.from('customers').select('id, pipeline, nguoi_phu_trach').eq('id', numericId).single()
+        : supabase.from('customers').select('id, pipeline, nguoi_phu_trach').eq('lark_record_id', id).single(),
       supabase.from('profiles').select('role, full_name').eq('id', user.id).single(),
     ])
 
@@ -130,6 +130,17 @@ export async function PATCH(
       entity:    'customer',
       detail:    `KH #${numericId ?? id}: ${Object.keys(updates).join(', ')}`,
     })
+
+    // LOG-A11: Log riêng khi nguoi_phu_trach thay đổi
+    if ('nguoi_phu_trach' in updates && updates.nguoi_phu_trach !== current?.nguoi_phu_trach) {
+      void logAudit(supabase, {
+        user_id:   user.id,
+        user_name: profile?.full_name ?? '',
+        action:    'customer_reassigned',
+        entity:    'customer',
+        detail:    `KH #${numericId ?? id}: chuyển từ ${current?.nguoi_phu_trach ?? 'chưa có'} → ${updates.nguoi_phu_trach}`,
+      })
+    }
 
     // PRD-02: Warn if san_pham_quan_tam contains unknown product names
     if (Array.isArray(updates.san_pham_quan_tam) && (updates.san_pham_quan_tam as string[]).length > 0) {

@@ -712,30 +712,42 @@ interface AuditLog {
 }
 
 const ACTION_LABEL: Record<string, string> = {
-  // User management
-  role_changed:         'Đổi vai trò',
-  user_created:         'Tạo tài khoản',
-  user_deactivated:     'Khoá tài khoản',
-  user_reactivated:     'Mở khoá tài khoản',
-  profile_updated:      'Cập nhật hồ sơ',
-  // Settings
-  settings_updated:     'Cập nhật cài đặt',
-  logo_updated:         'Cập nhật logo',
-  logo_deleted:         'Xoá logo',
-  // Sales
-  quote_status_changed: 'Đổi trạng thái BG',
-  order_created:        'Tạo đơn hàng',
-  order_updated:        'Cập nhật đơn hàng',
-  // Tasks
-  task_completed:       'Hoàn thành task',
-  task_updated:         'Cập nhật task',
-  // Payments
-  payment_updated:      'Cập nhật thanh toán',
-  // Warranty
-  warranty_created:     'Tạo phiếu bảo hành',
-  // Permissions
-  permissions_updated:  'Cập nhật quyền',
-  permissions_reset:    'Reset quyền về mặc định',
+  role_changed:          'Đổi vai trò',
+  user_created:          'Tạo tài khoản',
+  user_deactivated:      'Khoá tài khoản',
+  user_reactivated:      'Mở khoá tài khoản',
+  profile_updated:       'Cập nhật hồ sơ',
+  password_reset:        'Đổi mật khẩu',
+  settings_updated:      'Cập nhật cài đặt',
+  logo_updated:          'Cập nhật logo',
+  logo_deleted:          'Xoá logo',
+  quote_created:         'Tạo báo giá',
+  quote_status_changed:  'Đổi trạng thái BG',
+  quote_duplicated:      'Nhân bản báo giá',
+  order_created:         'Tạo đơn hàng',
+  order_updated:         'Cập nhật đơn hàng',
+  task_started:          'Bắt đầu task',
+  task_updated:          'Cập nhật task',
+  task_reset:            'Đặt lại task',
+  customer_created:      'Tạo khách hàng',
+  customer_updated:      'Cập nhật KH',
+  customer_reassigned:   'Chuyển phụ trách KH',
+  payment_created:       'Ghi thu',
+  payment_updated:       'Cập nhật thanh toán',
+  payment_deleted:       'Xoá thanh toán',
+  expense_created:       'Tạo chi phí',
+  expense_updated:       'Cập nhật chi phí',
+  expense_deleted:       'Xoá chi phí',
+  commission_paid:       'Đánh dấu trả HH',
+  commission_unpaid:     'Huỷ trả HH',
+  product_created:       'Tạo sản phẩm',
+  product_updated:       'Cập nhật SP',
+  product_deleted:       'Xoá sản phẩm',
+  asset_created:         'Thêm tài sản',
+  asset_updated:         'Cập nhật tài sản',
+  kpi_target_set:        'Đặt KPI',
+  permissions_updated:   'Cập nhật quyền',
+  permissions_reset:     'Reset quyền về mặc định',
 }
 
 const ACTION_COLOR: Record<string, string> = {
@@ -744,31 +756,66 @@ const ACTION_COLOR: Record<string, string> = {
   user_deactivated:     'bg-red-100 text-red-700',
   user_reactivated:     'bg-green-100 text-green-700',
   profile_updated:      'bg-sky-100 text-sky-700',
+  password_reset:       'bg-sky-100 text-sky-700',
   settings_updated:     'bg-purple-100 text-purple-700',
   logo_updated:         'bg-orange-100 text-orange-700',
   logo_deleted:         'bg-gray-100 text-gray-600',
+  quote_created:        'bg-amber-100 text-amber-700',
   quote_status_changed: 'bg-amber-100 text-amber-700',
+  quote_duplicated:     'bg-amber-100 text-amber-700',
   order_created:        'bg-indigo-100 text-indigo-700',
   order_updated:        'bg-indigo-100 text-indigo-700',
-  task_completed:       'bg-teal-100 text-teal-700',
+  task_started:         'bg-teal-100 text-teal-700',
   task_updated:         'bg-teal-100 text-teal-700',
+  task_reset:           'bg-red-100 text-red-700',
+  customer_created:     'bg-green-100 text-green-700',
+  customer_updated:     'bg-green-100 text-green-700',
+  customer_reassigned:  'bg-blue-100 text-blue-700',
+  payment_created:      'bg-lime-100 text-lime-700',
   payment_updated:      'bg-lime-100 text-lime-700',
-  warranty_created:     'bg-rose-100 text-rose-700',
+  payment_deleted:      'bg-red-100 text-red-700',
+  expense_created:      'bg-orange-100 text-orange-700',
+  expense_updated:      'bg-orange-100 text-orange-700',
+  expense_deleted:      'bg-red-100 text-red-700',
+  commission_paid:      'bg-green-100 text-green-700',
+  commission_unpaid:    'bg-gray-100 text-gray-600',
+  product_created:      'bg-cyan-100 text-cyan-700',
+  product_updated:      'bg-cyan-100 text-cyan-700',
+  product_deleted:      'bg-red-100 text-red-700',
+  asset_created:        'bg-violet-100 text-violet-700',
+  asset_updated:        'bg-violet-100 text-violet-700',
+  kpi_target_set:       'bg-purple-100 text-purple-700',
   permissions_updated:  'bg-violet-100 text-violet-700',
   permissions_reset:    'bg-orange-100 text-orange-700',
 }
 
 function AuditLogTab() {
-  const [logs,    setLogs]    = useState<AuditLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [total,   setTotal]   = useState(0)
-  const [offset,  setOffset]  = useState(0)
+  const [logs,      setLogs]      = useState<AuditLog[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [total,     setTotal]     = useState(0)
+  const [offset,    setOffset]    = useState(0)
+  const [fAction,   setFAction]   = useState('')
+  const [fUser,     setFUser]     = useState('')
+  const [fEntity,   setFEntity]   = useState('')
+  const [fFrom,     setFFrom]     = useState('')
+  const [fTo,       setFTo]       = useState('')
+  const [showFilter, setShowFilter] = useState(false)
   const LIMIT = 20
+
+  const buildQuery = (off = 0) => {
+    const p = new URLSearchParams({ limit: String(LIMIT), offset: String(off) })
+    if (fAction) p.set('action', fAction)
+    if (fUser)   p.set('user_name', fUser)
+    if (fEntity) p.set('entity', fEntity)
+    if (fFrom)   p.set('from', fFrom)
+    if (fTo)     p.set('to', fTo + 'T23:59:59')
+    return `/api/admin/audit?${p}`
+  }
 
   const load = async (off = 0) => {
     setLoading(true)
     try {
-      const res  = await fetch(`/api/admin/audit?limit=${LIMIT}&offset=${off}`)
+      const res  = await fetch(buildQuery(off))
       const data = await res.json()
       setLogs(data.data ?? [])
       setTotal(data.total ?? 0)
@@ -777,28 +824,89 @@ function AuditLogTab() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load(0) }, [])
-
-  const fmtTime = (iso: string) => {
-    const d = new Date(iso)
-    return d.toLocaleString('vi-VN', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
+  const exportCSV = async () => {
+    const res  = await fetch(buildQuery(0).replace(`limit=${LIMIT}`, 'limit=2000'))
+    const json = await res.json()
+    const rows: AuditLog[] = json.data ?? []
+    const header = 'Thời gian,Người dùng,Hành động,Đối tượng,Chi tiết'
+    const lines  = rows.map(r =>
+      [fmtTime(r.created_at), r.user_name, ACTION_LABEL[r.action] ?? r.action, r.entity, `"${r.detail.replace(/"/g, '""')}"`].join(',')
+    )
+    const blob = new Blob(['﻿' + [header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `audit_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
   }
+
+  useEffect(() => { load(0) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fmtTime = (iso: string) => new Date(iso).toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+
+  const hasFilter = fAction || fUser || fEntity || fFrom || fTo
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">{total} hoạt động được ghi nhận</p>
-        <button onClick={() => load(0)} className="text-xs text-blue-500 font-medium">Làm mới</button>
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-gray-500 flex-1">{total} hoạt động</p>
+        <button onClick={exportCSV} className="text-xs text-green-600 font-medium bg-green-50 px-3 py-1.5 rounded-lg">
+          ↓ CSV
+        </button>
+        <button
+          onClick={() => setShowFilter(v => !v)}
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg ${hasFilter ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+        >
+          🔍 Lọc{hasFilter ? ' ●' : ''}
+        </button>
+        <button onClick={() => load(0)} className="text-xs text-blue-500 font-medium">↺</button>
       </div>
+
+      {/* Filter bar */}
+      {showFilter && (
+        <div className="bg-gray-50 rounded-2xl p-3 space-y-2 border border-gray-200">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={fUser} onChange={e => setFUser(e.target.value)} placeholder="Tên người dùng"
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white" />
+            <select value={fAction} onChange={e => setFAction(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+              <option value="">— Hành động —</option>
+              {Object.entries(ACTION_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <select value={fEntity} onChange={e => setFEntity(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+              <option value="">— Đối tượng —</option>
+              {['user','customer','order','quote','payment','expense','product','asset','task','maintenance','company_settings','system_config','commission','kpi'].map(e =>
+                <option key={e} value={e}>{e}</option>
+              )}
+            </select>
+            <div className="flex gap-1 items-center">
+              <input type="date" value={fFrom} onChange={e => setFFrom(e.target.value)}
+                className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white flex-1" />
+              <span className="text-gray-400 text-xs">→</span>
+              <input type="date" value={fTo} onChange={e => setFTo(e.target.value)}
+                className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white flex-1" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => load(0)} className="flex-1 bg-blue-600 text-white text-xs font-semibold py-1.5 rounded-lg">
+              Áp dụng
+            </button>
+            <button onClick={() => { setFAction(''); setFUser(''); setFEntity(''); setFFrom(''); setFTo(''); }}
+              className="text-xs text-gray-500 px-3 py-1.5 rounded-lg bg-white border border-gray-200">
+              Xoá bộ lọc
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-10 text-gray-400 text-sm"><span className="crm-spinner" /><span>Đang tải...</span></div>
       ) : logs.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 px-4 py-8 text-center">
-          <p className="text-sm text-gray-400">Chưa có hoạt động nào được ghi nhận</p>
+          <p className="text-sm text-gray-400">Không có hoạt động nào</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -811,6 +919,7 @@ function AuditLogTab() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ACTION_COLOR[log.action] ?? 'bg-gray-100 text-gray-600'}`}>
                       {ACTION_LABEL[log.action] ?? log.action}
                     </span>
+                    <span className="text-[10px] text-gray-400">{log.entity}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1 leading-relaxed">{log.detail}</p>
                 </div>
@@ -821,24 +930,17 @@ function AuditLogTab() {
         </div>
       )}
 
-      {/* Phân trang */}
       {total > LIMIT && (
         <div className="flex gap-2">
-          <button
-            onClick={() => load(Math.max(0, offset - LIMIT))}
-            disabled={offset === 0}
-            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40"
-          >
+          <button onClick={() => load(Math.max(0, offset - LIMIT))} disabled={offset === 0}
+            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40">
             ← Trước
           </button>
           <span className="flex items-center text-xs text-gray-400 px-2">
             {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
           </span>
-          <button
-            onClick={() => load(offset + LIMIT)}
-            disabled={offset + LIMIT >= total}
-            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40"
-          >
+          <button onClick={() => load(offset + LIMIT)} disabled={offset + LIMIT >= total}
+            className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-3 rounded-xl disabled:opacity-40">
             Sau →
           </button>
         </div>
