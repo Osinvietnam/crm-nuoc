@@ -141,16 +141,19 @@ function parseItem(sp: string): { name: string; qty: number } {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CompanyInfo {
-  name:            string
-  address:         string
-  phone:           string
-  email:           string
-  tax:             string
-  website:         string
-  logo_url:        string
-  bank_name?:      string
-  account_number?: string
-  account_holder?: string
+  name:                    string
+  address:                 string
+  phone:                   string
+  email:                   string
+  tax:                     string
+  website:                 string
+  logo_url:                string
+  bank_name?:              string
+  account_number?:         string
+  account_holder?:         string
+  quote_terms?:            string
+  contract_payment_terms?: string
+  contract_terms?:         string
 }
 
 const COMPANY_FALLBACK: CompanyInfo = {
@@ -330,12 +333,19 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
         {/* ── Điều khoản ── */}
         <View style={{ marginBottom: 8 }}>
           <Text style={[s.noteTitle, { marginBottom: 4 }]}>Điều khoản & điều kiện</Text>
-          <Text style={s.noteText}>• {quote.ngay_het_han
-            ? `Báo giá có hiệu lực đến ngày ${fmtDate(quote.ngay_het_han)}.`
-            : 'Báo giá có hiệu lực trong vòng 14 ngày kể từ ngày lập.'
-          }</Text>
-          <Text style={s.noteText}>• Giá chưa bao gồm VAT (nếu có).</Text>
-          <Text style={s.noteText}>• Thời gian giao hàng và điều kiện thanh toán theo thỏa thuận.</Text>
+          {company.quote_terms
+            ? company.quote_terms.split('\n').filter(Boolean).map((line, i) => (
+                <Text key={i} style={s.noteText}>{line}</Text>
+              ))
+            : <>
+                <Text style={s.noteText}>• {quote.ngay_het_han
+                  ? `Báo giá có hiệu lực đến ngày ${fmtDate(quote.ngay_het_han)}.`
+                  : 'Báo giá có hiệu lực trong vòng 14 ngày kể từ ngày lập.'
+                }</Text>
+                <Text style={s.noteText}>• Giá chưa bao gồm VAT (nếu có).</Text>
+                <Text style={s.noteText}>• Thời gian giao hàng và điều kiện thanh toán theo thỏa thuận.</Text>
+              </>
+          }
         </View>
 
         {/* ── Chữ ký ── */}

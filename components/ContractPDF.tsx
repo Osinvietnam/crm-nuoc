@@ -86,9 +86,12 @@ const s = StyleSheet.create({
 
   colStt:       { width: 24 },
   colName:      { flex: 1 },
-  colQty:       { width: 40, textAlign: 'center' },
+  colQty:       { width: 36, textAlign: 'center' },
+  colDonGia:    { width: 76, textAlign: 'right' },
+  colThanhTien: { width: 84, textAlign: 'right' },
 
   cellText:     { fontSize: 8.5, color: C.dark },
+  cellTextMid:  { fontSize: 8, color: C.mid },
 
   // Summary
   summaryBox:   { alignItems: 'flex-end', marginBottom: 14 },
@@ -231,6 +234,8 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
             <Text style={[s.tableHeadTxt, s.colStt]}>STT</Text>
             <Text style={[s.tableHeadTxt, s.colName]}>Tên sản phẩm</Text>
             <Text style={[s.tableHeadTxt, s.colQty]}>SL</Text>
+            <Text style={[s.tableHeadTxt, s.colDonGia]}>Đơn giá</Text>
+            <Text style={[s.tableHeadTxt, s.colThanhTien]}>Thành tiền</Text>
           </View>
 
           {/* Rows */}
@@ -239,6 +244,8 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
               <Text style={[s.cellText, s.colStt]}>{i + 1}</Text>
               <Text style={[s.cellText, s.colName]}>{item.name}</Text>
               <Text style={[s.cellText, s.colQty]}>{item.qty}</Text>
+              <Text style={[s.cellTextMid, s.colDonGia]}>—</Text>
+              <Text style={[s.cellTextMid, s.colThanhTien]}>—</Text>
             </View>
           ))}
         </View>
@@ -266,9 +273,16 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
         {/* ── Điều khoản thanh toán ── */}
         <View style={s.termsSection}>
           <Text style={s.termsTitle}>Điều khoản thanh toán</Text>
-          <Text style={s.termsText}>• Đợt 1 (60%): Thanh toán khi ký hợp đồng</Text>
-          <Text style={s.termsText}>• Đợt 2 (35%): Thanh toán khi nghiệm thu bàn giao</Text>
-          <Text style={s.termsText}>• Đợt 3 (5%): Thanh toán sau bảo hành 12 tháng</Text>
+          {company.contract_payment_terms
+            ? company.contract_payment_terms.split('\n').filter(Boolean).map((line, i) => (
+                <Text key={i} style={s.termsText}>{line}</Text>
+              ))
+            : <>
+                <Text style={s.termsText}>• Đợt 1 (60%): Thanh toán khi ký hợp đồng</Text>
+                <Text style={s.termsText}>• Đợt 2 (35%): Thanh toán khi nghiệm thu bàn giao</Text>
+                <Text style={s.termsText}>• Đợt 3 (5%): Thanh toán sau bảo hành 12 tháng</Text>
+              </>
+          }
           {(company.bank_name || company.account_number) && (
             <>
               <Text style={[s.termsText, { marginTop: 6, fontWeight: 700 }]}>Thông tin chuyển khoản:</Text>
@@ -286,6 +300,19 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
             <View style={s.noteSection}>
               <Text style={s.noteTitle}>Ghi chú</Text>
               <Text style={s.noteText}>{contract.ghi_chu}</Text>
+            </View>
+          </>
+        ) : null}
+
+        {/* ── Điều khoản hợp đồng (DOC-12) ── */}
+        {company.contract_terms ? (
+          <>
+            <View style={s.dividerLight} />
+            <View style={s.noteSection}>
+              <Text style={s.noteTitle}>Điều khoản hợp đồng</Text>
+              {company.contract_terms.split('\n').filter(Boolean).map((line, i) => (
+                <Text key={i} style={s.noteText}>{line}</Text>
+              ))}
             </View>
           </>
         ) : null}

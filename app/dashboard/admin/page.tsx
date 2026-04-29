@@ -528,7 +528,7 @@ function ChangeRoleSheet({
 // ─── Company Settings Tab ─────────────────────────────────────────────────────
 
 function CompanySettingsTab() {
-  const [form,         setForm]         = useState<CompanySettings>({ name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '', bank_name: '', account_number: '', account_holder: '', quote_expiry_days: 14 })
+  const [form,         setForm]         = useState<CompanySettings>({ name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '', bank_name: '', account_number: '', account_holder: '', quote_expiry_days: 14, quote_terms: '', contract_payment_terms: '', contract_terms: '' })
   const [loading,      setLoading]      = useState(true)
   const [saving,       setSaving]       = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -684,6 +684,44 @@ function CompanySettingsTab() {
           className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="text-xs text-gray-400 mt-1.5">Số ngày báo giá có hiệu lực kể từ ngày tạo. Hiển thị trên PDF báo giá.</p>
+      </div>
+
+      {/* Điều khoản PDF */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+          Điều khoản sẽ xuất hiện trên PDF. Mỗi dòng = 1 mục. Để trống = dùng mặc định.
+        </p>
+        <div>
+          <label className="text-sm font-semibold text-gray-600 mb-1 block">ĐIỀU KHOẢN BÁO GIÁ</label>
+          <textarea
+            rows={4}
+            value={form.quote_terms}
+            onChange={e => setForm(f => ({ ...f, quote_terms: e.target.value }))}
+            placeholder={'• Báo giá có hiệu lực trong vòng 14 ngày kể từ ngày lập.\n• Giá chưa bao gồm VAT (nếu có).\n• Thời gian giao hàng và điều kiện thanh toán theo thỏa thuận.'}
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold text-gray-600 mb-1 block">ĐIỀU KHOẢN THANH TOÁN HỢP ĐỒNG</label>
+          <textarea
+            rows={4}
+            value={form.contract_payment_terms}
+            onChange={e => setForm(f => ({ ...f, contract_payment_terms: e.target.value }))}
+            placeholder={'• Đợt 1 (60%): Thanh toán khi ký hợp đồng\n• Đợt 2 (35%): Thanh toán khi nghiệm thu bàn giao\n• Đợt 3 (5%): Thanh toán sau bảo hành 12 tháng'}
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold text-gray-600 mb-1 block">ĐIỀU KHOẢN HỢP ĐỒNG ĐẦY ĐỦ</label>
+          <textarea
+            rows={6}
+            value={form.contract_terms}
+            onChange={e => setForm(f => ({ ...f, contract_terms: e.target.value }))}
+            placeholder={'Điền điều khoản hợp đồng đầy đủ ở đây...\nMỗi dòng sẽ hiển thị thành 1 dòng trong PDF hợp đồng.'}
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+          <p className="text-xs text-gray-400 mt-1.5">Phần này chỉ hiển thị nếu bạn đã điền nội dung.</p>
+        </div>
       </div>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}

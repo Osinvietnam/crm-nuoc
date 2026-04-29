@@ -3,17 +3,20 @@ import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 
 export interface CompanySettings {
-  name:              string
-  address:           string
-  phone:             string
-  email:             string
-  tax:               string
-  website:           string
-  logo_url:          string
-  bank_name:         string
-  account_number:    string
-  account_holder:    string
-  quote_expiry_days: number
+  name:                    string
+  address:                 string
+  phone:                   string
+  email:                   string
+  tax:                     string
+  website:                 string
+  logo_url:                string
+  bank_name:               string
+  account_number:          string
+  account_holder:          string
+  quote_expiry_days:       number
+  quote_terms:             string
+  contract_payment_terms:  string
+  contract_terms:          string
 }
 
 // ─── GET /api/admin/settings ──────────────────────────────────────────────────
@@ -26,7 +29,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('company_settings')
-      .select('name, address, phone, email, tax, website, logo_url, bank_name, account_number, account_holder, quote_expiry_days')
+      .select('name, address, phone, email, tax, website, logo_url, bank_name, account_number, account_holder, quote_expiry_days, quote_terms, contract_payment_terms, contract_terms')
       .eq('id', 1)
       .single()
 
@@ -58,7 +61,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body: Partial<CompanySettings> = await req.json()
-    const allowed: (keyof CompanySettings)[] = ['name', 'address', 'phone', 'email', 'tax', 'website', 'logo_url', 'bank_name', 'account_number', 'account_holder', 'quote_expiry_days']
+    const allowed: (keyof CompanySettings)[] = ['name', 'address', 'phone', 'email', 'tax', 'website', 'logo_url', 'bank_name', 'account_number', 'account_holder', 'quote_expiry_days', 'quote_terms', 'contract_payment_terms', 'contract_terms']
     const fields: Record<string, unknown> = {}
     for (const k of allowed) {
       if (body[k] !== undefined) fields[k] = body[k]

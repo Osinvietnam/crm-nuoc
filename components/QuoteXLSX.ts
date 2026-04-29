@@ -79,8 +79,12 @@ export function downloadQuoteXLSX(quote: Quote, company: CompanyInfo = COMPANY_F
 
   // Điều khoản
   rows.push(['Điều khoản:', '', '', ''])
-  rows.push(['• Báo giá có hiệu lực 14 ngày kể từ ngày lập.', '', '', ''])
-  rows.push(['• Giá chưa bao gồm VAT (nếu có).', '', '', ''])
+  if (company.quote_terms) {
+    company.quote_terms.split('\n').filter(Boolean).forEach(line => rows.push([line, '', '', '']))
+  } else {
+    rows.push(['• Báo giá có hiệu lực 14 ngày kể từ ngày lập.', '', '', ''])
+    rows.push(['• Giá chưa bao gồm VAT (nếu có).', '', '', ''])
+  }
   rows.push(['', '', '', ''])
 
   // Chữ ký
