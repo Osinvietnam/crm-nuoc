@@ -353,6 +353,19 @@ export default function CustomerDetailPage() {
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">THÔNG TIN KINH DOANH</p>
           <InfoRow label="Người phụ trách" value={customer.nguoi_phu_trach} />
+          {customer.loai_kh && (
+            <div className="flex items-start gap-3 py-2.5">
+              <span className="text-xs text-gray-400 w-32 flex-shrink-0 pt-0.5">Loại KH</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                customer.loai_kh === 'B2C'    ? 'bg-blue-50 text-blue-700' :
+                customer.loai_kh === 'Đại lý' ? 'bg-green-50 text-green-700' :
+                customer.loai_kh === 'Dự án'  ? 'bg-purple-50 text-purple-700' :
+                'bg-gray-100 text-gray-600'
+              }`}>
+                {customer.loai_kh === 'B2C' ? '🏠' : customer.loai_kh === 'Đại lý' ? '🏪' : '🏗️'} {customer.loai_kh}
+              </span>
+            </div>
+          )}
           <InfoRow label="Nguồn KH" value={customer.nguon_kh} />
           <InfoRow label="Đối tác giới thiệu" value={customer.doi_tac_gt} />
           <InfoRow label="Loại hình nhà" value={customer.loai_hinh_nha} />

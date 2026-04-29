@@ -77,6 +77,19 @@ function ConstructionCard({ c, onClick }: { c: Construction; onClick: () => void
       {c.san_pham && (
         <p className="text-xs text-gray-500 mt-2 truncate">📦 {c.san_pham}</p>
       )}
+      {c.dia_chi && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <p className="text-xs text-gray-400 truncate flex-1">📍 {c.dia_chi}</p>
+          <a
+            href={`https://maps.google.com/?q=${encodeURIComponent(c.dia_chi)}`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="text-xs text-blue-500 font-medium flex-shrink-0 bg-blue-50 px-2 py-0.5 rounded-lg"
+          >
+            Bản đồ
+          </a>
+        </div>
+      )}
     </button>
   )
 }
@@ -112,6 +125,19 @@ function PeriodicCard({ p, onClick }: { p: PeriodicService; onClick: () => void 
         <p className="text-xs text-gray-500 mt-2 truncate">📦 {p.san_pham_da_lap.join(', ')}</p>
       )}
 
+      {p.dia_chi && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <p className="text-xs text-gray-400 truncate flex-1">📍 {p.dia_chi}</p>
+          <a
+            href={`https://maps.google.com/?q=${encodeURIComponent(p.dia_chi)}`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="text-xs text-blue-500 font-medium flex-shrink-0 bg-blue-50 px-2 py-0.5 rounded-lg"
+          >
+            Bản đồ
+          </a>
+        </div>
+      )}
       <div className="flex items-center gap-2 mt-2">
         <span className="text-xs text-gray-500">Chu kỳ: {p.chu_ky} tháng</span>
         {p.sdt && (

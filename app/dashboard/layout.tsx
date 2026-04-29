@@ -76,7 +76,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
       { href: '/dashboard/orders', label: 'Đơn hàng', icon: '📦' },
-      { href: '/dashboard/finance', label: 'Tài chính', icon: '💰' },
       { href: '/dashboard/products', label: 'Sản phẩm', icon: '🗂️' },
     ],
     tech: [

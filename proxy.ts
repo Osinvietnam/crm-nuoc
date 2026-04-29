@@ -86,8 +86,8 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
-// Note: export name stays "config" in v16 — only the file name and function changed.
-export const config = {
+// Next.js 16+: file = proxy.ts, function = proxy(), config = proxyConfig
+export const proxyConfig = {
   // Exclude static assets and API routes (API routes protect themselves via getUser())
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|fonts/|icons/|images/|api).*)'],
 }

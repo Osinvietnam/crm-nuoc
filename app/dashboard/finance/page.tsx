@@ -147,8 +147,6 @@ export default function FinancePage() {
 
   const fetchReceivables = useCallback(async () => {
     if (!isManager) return
-    const res = await fetch('/api/payments?customer_record_id=ALL')
-    // fallback: query direct
     const supa = createClient()
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supa.from('payment_records' as never)
@@ -256,7 +254,7 @@ export default function FinancePage() {
     { id: 'assets',       label: 'Tài sản',  adminOnly: true },
   ]
   const visibleTabs = tabs.filter(t => {
-    if (t.adminOnly)   return ['admin', 'ceo'].includes(role)
+    if (t.adminOnly)   return ['admin', 'ceo', 'accountant'].includes(role)
     if (t.managerOnly) return isManager
     return true
   })

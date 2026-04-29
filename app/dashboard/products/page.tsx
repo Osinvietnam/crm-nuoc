@@ -349,7 +349,7 @@ function ProductThumb({ recordId, size = 64 }: { recordId: string; size?: number
 
 // ─── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ p, onClick, isAdmin }: { p: Product; onClick: () => void; isAdmin: boolean }) {
+function ProductCard({ p, onClick, isAdmin, onDelete }: { p: Product; onClick: () => void; isAdmin: boolean; onDelete?: () => void }) {
   return (
     <button onClick={onClick} className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform">
       <div className="flex items-start gap-3">
@@ -391,6 +391,14 @@ function ProductCard({ p, onClick, isAdmin }: { p: Product; onClick: () => void;
           {p.hh_kd > 0 && (
             <p className="text-xs text-gray-500 mt-1.5">HH KD: <span className="text-gray-600 font-medium">{p.hh_kd}%</span></p>
           )}
+          {isAdmin && onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              className="mt-2 text-xs text-red-500 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50"
+            >
+              Xóa
+            </button>
+          )}
         </div>
       </div>
     </button>
@@ -427,7 +435,7 @@ export default function ProductsPage() {
     load()
     // Check role
     fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (d?.role === 'admin' || d?.role === 'manager') setIsAdmin(true)
+      if (['admin', 'ceo', 'director'].includes(d?.role)) setIsAdmin(true)
     }).catch(() => {})
   }, [load])
 
@@ -522,6 +530,12 @@ export default function ProductsPage() {
             p={p}
             isAdmin={isAdmin}
             onClick={() => router.push(`/dashboard/products/${p.record_id}`)}
+            onDelete={isAdmin ? async () => {
+              if (!confirm(`Xóa sản phẩm "${p.ten_sp}"? Hành động này không thể hoàn tác.`)) return
+              const res = await fetch(`/api/lark/products/${p.record_id}`, { method: 'DELETE' })
+              if (res.ok) setProducts(prev => prev.filter(x => x.record_id !== p.record_id))
+              else alert('Xóa thất bại, thử lại sau.')
+            } : undefined}
           />
         ))}
       </div>

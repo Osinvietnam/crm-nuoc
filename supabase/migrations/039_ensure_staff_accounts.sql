@@ -7,7 +7,29 @@
 --   - Mật khẩu tạm: GWS@2026 (các user phải đổi lần đầu đăng nhập)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- BƯỚC 0: Chạy query kiểm tra trước (uncomment để xem ai đã có, ai chưa có)
+-- ─── BƯỚC 0A: DROP constraint cũ trước (để UPDATE không bị chặn) ─────────────
+
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+
+-- ─── BƯỚC 0B: Dọn dẹp role cũ/không hợp lệ ──────────────────────────────────
+-- tech_lead → director, các role lạ khác → sales (fallback an toàn)
+
+UPDATE profiles SET role = 'director'
+WHERE role = 'tech_lead';
+
+UPDATE profiles SET role = 'sales'
+WHERE role NOT IN ('admin', 'ceo', 'director', 'accountant', 'sales', 'tech', 'logistics', 'partner');
+
+-- ─── BƯỚC 0C: ADD lại constraint với danh sách đầy đủ ────────────────────────
+
+ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
+  CHECK (role IN ('admin', 'ceo', 'director', 'accountant', 'sales', 'tech', 'logistics', 'partner'));
+
+-- ─── BƯỚC 0D: Đảm bảo role admin cho ngvuquan01@gmail.com ────────────────────
+
+UPDATE profiles SET role = 'admin' WHERE LOWER(email) = 'ngvuquan01@gmail.com' AND role != 'admin';
+
+-- BƯỚC 0C: Chạy query kiểm tra trước (uncomment để xem ai đã có, ai chưa có)
 /*
 SELECT
   p.email,

@@ -36,7 +36,13 @@ const STATUS_COLOR: Record<string, string> = {
   'Nghỉ việc': 'bg-red-100 text-red-600',
 }
 
-const KHU_VUC_OPTIONS  = ['Miền Nam', 'Miền Bắc', 'Miền Trung']
+const KHU_VUC_OPTIONS = [
+  { value: 'CN', label: 'Cả nước'   },
+  { value: 'MN', label: 'Miền Nam'  },
+  { value: 'MB', label: 'Miền Bắc'  },
+  { value: 'MT', label: 'Miền Trung' },
+]
+const KHU_VUC_LABEL: Record<string, string> = Object.fromEntries(KHU_VUC_OPTIONS.map(k => [k.value, k.label]))
 const HN_OPTIONS       = ['Độc thân', 'Đã kết hôn', 'Ly hôn']
 const NH_OPTIONS       = ['Vietcombank','MB Bank','Techcombank','VietinBank','BIDV','VPBank','ACB','TPBank','Sacombank','HDBank','Khác']
 
@@ -340,7 +346,7 @@ export default function StaffPage() {
             {[
               { value: filterRole, set: setFilterRole, options: ROLE_OPTIONS.map(r => ({ value: r.value, label: r.label })), placeholder: 'Vai trò' },
               { value: filterStatus, set: setFilterStatus, options: STATUS_OPTIONS.map(s => ({ value: s, label: s })), placeholder: 'Trạng thái' },
-              { value: filterKV, set: setFilterKV, options: KHU_VUC_OPTIONS.map(k => ({ value: k, label: k })), placeholder: 'Khu vực' },
+              { value: filterKV, set: setFilterKV, options: KHU_VUC_OPTIONS, placeholder: 'Khu vực' },
             ].map((f, i) => (
               <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
                 className="shrink-0 px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -419,7 +425,7 @@ export default function StaffPage() {
                   <InfoGrid items={[
                     { label: 'SĐT',       value: s.phone },
                     { label: 'Chức vụ',   value: s.chuc_vu },
-                    { label: 'Khu vực',   value: s.khu_vuc },
+                    { label: 'Khu vực',   value: s.khu_vuc ? (KHU_VUC_LABEL[s.khu_vuc] ?? s.khu_vuc) : null },
                   ]} />
 
                   {/* Manager-only info */}
@@ -651,7 +657,7 @@ export default function StaffPage() {
                 <select value={createForm.khu_vuc} onChange={e => setCreateForm(f => ({ ...f, khu_vuc: e.target.value }))}
                   className="w-full px-3 py-3 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">-- Chọn khu vực --</option>
-                  {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                  {KHU_VUC_OPTIONS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
                 </select>
               </div>
 
@@ -829,7 +835,7 @@ function EditForm({ form, setForm, isAdmin, onSave, onCancel, saving }: {
           <select value={form.khu_vuc ?? ''} onChange={e => set('khu_vuc')(e.target.value)}
             className="w-full px-2 py-2 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none">
             <option value="">--</option>
-            {KHU_VUC_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+            {KHU_VUC_OPTIONS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
           </select>
         </div>
       </div>

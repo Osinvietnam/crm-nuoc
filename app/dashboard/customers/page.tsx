@@ -36,6 +36,7 @@ const EXCEL_COLS: Record<string, string> = {
   'Báo giá (VNĐ)':    'bao_gia',
   'Nội dung':         'noi_dung',
   'Người phụ trách':  'nguoi_phu_trach',
+  'Loại KH':          'loai_kh',
 }
 
 const TEMPLATE_HEADERS = Object.keys(EXCEL_COLS)
@@ -432,7 +433,7 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
     ho_ten: '', sdt: '', email: '', dia_chi_hd: '',
     pipeline: 'Lead mới', nguon_kh: '', loai_hinh_nha: '',
     muc_uu_tien: 'Trung bình', bao_gia: '', noi_dung: '', nhom_dv: '',
-    khu_vuc: '',
+    khu_vuc: '', loai_kh: 'B2C',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -534,6 +535,33 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
               <option value="">— Chọn nguồn —</option>
               {NGUON_KH_OPTIONS.map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-gray-600 mb-1 block">LOẠI KHÁCH HÀNG</label>
+            <div className="flex gap-2">
+              {([
+                { value: 'B2C',    label: '🏠 B2C',    sub: 'Dân dụng / cá nhân' },
+                { value: 'Đại lý', label: '🏪 Đại lý', sub: 'Phân phối / bán lại' },
+                { value: 'Dự án', label: '🏗️ Dự án',  sub: 'Công trình / quy mô lớn' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('loai_kh', opt.value)}
+                  className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-semibold border transition-all text-center ${
+                    form.loai_kh === opt.value
+                      ? 'bg-blue-600 text-white border-transparent'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  <div>{opt.label}</div>
+                  <div className={`text-[10px] mt-0.5 font-normal ${form.loai_kh === opt.value ? 'text-blue-100' : 'text-gray-400'}`}>
+                    {opt.sub}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -781,6 +809,9 @@ export default function CustomersPage() {
   const [error, setError]               = useState('')
   const [quoteFor, setQuoteFor]         = useState<Customer | null>(null)
 
+  // Loại KH filter
+  const [loaiKh, setLoaiKh] = useState('Tất cả')
+
   // Time filter
   const { y: cY, m: cM } = currentYM()
   const [timePreset, setTimePreset]   = useState<TimePreset>('all') // set after role loads
@@ -820,6 +851,7 @@ export default function CustomersPage() {
 
   const filtered = customers.filter(c => {
     const matchStage  = stage === 'Tất cả' || c.pipeline === stage
+    const matchLoai   = loaiKh === 'Tất cả' || (c.loai_kh || 'B2C') === loaiKh
     const q = search.toLowerCase()
     const matchSearch = !q || [c.ho_ten, c.sdt, c.email, c.dia_chi_ct, c.nguoi_phu_trach]
       .some(v => v?.toLowerCase().includes(q))
@@ -828,7 +860,7 @@ export default function CustomersPage() {
       c.ngay_lien_he_dau >= timeRange[0] &&
       c.ngay_lien_he_dau <= timeRange[1]
     )
-    return matchStage && matchSearch && matchTime
+    return matchStage && matchLoai && matchSearch && matchTime
   })
 
   const handleCreated = (c: Customer) => {
@@ -848,7 +880,7 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {['admin', 'manager'].includes(role) && (
+            {['admin', 'ceo', 'director'].includes(role) && (
               <button
                 onClick={() => setShowImport(true)}
                 className="border border-gray-200 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl flex items-center gap-1.5"
@@ -940,32 +972,60 @@ export default function CustomersPage() {
           </div>
         )}
 
+        {/* Loại KH filter */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-none">
+          {([
+            { value: 'Tất cả', icon: '👥' },
+            { value: 'B2C',    icon: '🏠' },
+            { value: 'Đại lý', icon: '🏪' },
+            { value: 'Dự án',  icon: '🏗️' },
+          ]).map(opt => {
+            const active = loaiKh === opt.value
+            const count = opt.value === 'Tất cả'
+              ? customers.length
+              : customers.filter(c => (c.loai_kh || 'B2C') === opt.value).length
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setLoaiKh(opt.value)}
+                className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+                  active
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                <span>{opt.icon}</span>
+                <span>{opt.value}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  active ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
+                }`}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+
         {/* Pipeline stage filter chips */}
-        <div className="relative -mx-4">
-          <div className="flex gap-2 overflow-x-auto pb-1 px-4 scrollbar-none">
-            {(['Tất cả', ...PIPELINE_STAGES] as const).map(s => {
-              const active = stage === s
-              const pc = s !== 'Tất cả' ? PIPELINE_COLORS[s] : null
-              const count = s === 'Tất cả' ? customers.length : customers.filter(c => c.pipeline === s).length
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStage(s)}
-                  className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
-                    active
-                      ? pc
-                        ? `${pc.bg} ${pc.text} border-transparent`
-                        : 'bg-blue-600 text-white border-transparent'
-                      : 'bg-white text-gray-500 border-gray-200'
-                  }`}
-                >
-                  {s} <span className="opacity-60">{count}</span>
-                </button>
-              )
-            })}
-          </div>
-          {/* Fade gợi ý scroll phải */}
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 to-transparent" />
+        <div className="flex flex-wrap gap-2">
+          {(['Tất cả', ...PIPELINE_STAGES] as const).map(s => {
+            const active = stage === s
+            const pc = s !== 'Tất cả' ? PIPELINE_COLORS[s] : null
+            const count = s === 'Tất cả' ? customers.length : customers.filter(c => c.pipeline === s).length
+            return (
+              <button
+                key={s}
+                onClick={() => setStage(s)}
+                className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  active
+                    ? pc
+                      ? `${pc.bg} ${pc.text} border-transparent`
+                      : 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                {s} <span className="opacity-60">{count}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 

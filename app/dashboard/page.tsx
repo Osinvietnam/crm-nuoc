@@ -11,7 +11,7 @@ import type { DashboardStats, MonthRevenue } from '@/app/api/dashboard/stats/rou
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  tech_lead:  'Trưởng phòng KT',
+  director:   'Phó Giám đốc',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật',
@@ -163,7 +163,7 @@ function QuickActions({ role }: { role: string }) {
   const actionsByRole: Record<string, { label: string; icon: string; href: string }[]> = {
     admin:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     ceo:        [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
-    tech_lead:  [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }],
+    director:   [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }],
     accountant: [],
     sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     tech:       [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
@@ -238,7 +238,7 @@ function PipelineSection({ pipeline }: { pipeline: Record<string, number> }) {
 // ─── Build cards per role ─────────────────────────────────────────────────────
 
 function buildCards(role: string, s: DashboardStats, target: number | null): KPICard[] {
-  const isManagerGroup = ['admin', 'ceo', 'tech_lead'].includes(role)
+  const isManagerGroup = ['admin', 'ceo', 'director'].includes(role)
 
   if (isManagerGroup) return [
     { label: 'Khách hàng', value: s.total_customers,  sub: `+${s.new_customers_month} tháng này`, color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
@@ -292,7 +292,7 @@ function buildAlerts(role: string, s: DashboardStats) {
     { label: `${s.kh_no_contact_30d} KH chưa liên hệ > 30 ngày`,  count: s.kh_no_contact_30d, href: '/dashboard/customers', color: 'bg-amber-50 text-amber-700 border border-amber-200' },
   ]
 
-  if (['admin', 'ceo', 'tech_lead', 'tech'].includes(role)) {
+  if (['admin', 'ceo', 'director', 'tech'].includes(role)) {
     base.push({ label: `${s.maintenance_overdue} bảo trì định kỳ quá hạn`, count: s.maintenance_overdue, href: '/dashboard/maintenance', color: 'bg-red-50 text-red-700 border border-red-200' })
   }
   if (role === 'accountant') {
@@ -343,8 +343,8 @@ export default function DashboardPage() {
   const role    = profile?.role ?? 'sales'
   const cards   = stats ? buildCards(role, stats, profile?.target_thang ?? null) : []
   const alerts  = stats ? buildAlerts(role, stats) : []
-  const showRevChart   = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
-  const showPipeline   = ['admin', 'ceo', 'tech_lead', 'accountant', 'sales', 'partner'].includes(role)
+  const showRevChart   = ['admin', 'ceo', 'director', 'accountant'].includes(role)
+  const showPipeline   = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)
 
   // Target progress bar cho sales
   const targetPct = profile?.target_thang && stats?.revenue_month

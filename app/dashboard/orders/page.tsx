@@ -644,6 +644,9 @@ function ContractCard({ c, onClick }: { c: Contract; onClick: () => void }) {
         <span className="text-xs text-gray-300 ml-auto">Ký: {fmtDate(c.ngay_ky)}</span>
       </div>
       {c.dia_chi_ct && <p className="text-xs text-gray-400 mt-1.5 truncate">📍 {c.dia_chi_ct}</p>}
+      {c.ngay_giao_dk && (
+        <p className="text-xs text-orange-500 mt-1">📦 Giao dự kiến: {fmtDate(c.ngay_giao_dk)}</p>
+      )}
     </button>
   )
 }
@@ -1068,6 +1071,15 @@ export default function OrdersPage() {
   const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [role, setRole]         = useState<string>('')
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      const r = d?.role ?? ''
+      setRole(r)
+      if (r === 'logistics') setTab('b2c')
+    }).catch(() => {})
+  }, [])
 
   // C3: Nếu navigate từ BG detail → tự mở form tạo HĐ B2C
   useEffect(() => {
@@ -1104,12 +1116,13 @@ export default function OrdersPage() {
 
   const followUpCount = quotesHook.data.filter(isDueForFollowUp).length
 
-  const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'quotes',     label: 'Báo giá', icon: '📋' },
+  const allTabs: { key: Tab; label: string; icon: string; roles?: string[] }[] = [
+    { key: 'quotes',     label: 'Báo giá', icon: '📋', roles: ['admin','ceo','director','sales','accountant'] },
     { key: 'b2c',        label: 'B2C',     icon: '🏠' },
-    { key: 'commercial', label: 'Đại lý',  icon: '🏪' },
-    { key: 'projects',   label: 'Dự án',   icon: '🏗️' },
+    { key: 'commercial', label: 'Đại lý',  icon: '🏪', roles: ['admin','ceo','director','sales','accountant'] },
+    { key: 'projects',   label: 'Dự án',   icon: '🏗️', roles: ['admin','ceo','director','sales','accountant'] },
   ]
+  const tabs = role ? allTabs.filter(t => !t.roles || t.roles.includes(role)) : allTabs
 
   const handleCreated = (item: Quote | Contract | CommercialOrder | Project) => {
     if (tab === 'quotes') {

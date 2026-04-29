@@ -218,6 +218,229 @@ function DeactivateModal({
   )
 }
 
+// ─── Create User Sheet ────────────────────────────────────────────────────────
+
+function CreateUserSheet({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void
+  onDone: (msg: string, tempPwd: string, email: string) => void
+}) {
+  const [form, setForm] = useState({
+    full_name: '', email: '', role: 'sales', khu_vuc: 'MN', chuc_vu: '',
+  })
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState('')
+
+  const f = (k: keyof typeof form) => (v: string) => setForm(p => ({ ...p, [k]: v }))
+
+  const handleCreate = async () => {
+    if (!form.full_name.trim() || !form.email.trim()) {
+      setError('Họ tên và email là bắt buộc'); return
+    }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Lỗi tạo tài khoản'); return }
+      onDone(`Đã tạo tài khoản ${form.full_name}`, data.temp_password, form.email)
+    } catch {
+      setError('Lỗi kết nối')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-center -mt-2 mb-1">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-blue-600 text-lg">👤</span>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-800">Thêm nhân viên mới</h2>
+            <p className="text-xs text-gray-500">Mật khẩu tạm <strong>GWS@2026</strong> — nhân viên đổi lần đầu đăng nhập</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">HỌ TÊN <span className="text-red-400">*</span></label>
+            <input
+              value={form.full_name} onChange={e => f('full_name')(e.target.value)}
+              placeholder="Nguyễn Văn A"
+              className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">EMAIL <span className="text-red-400">*</span></label>
+            <input
+              type="email" value={form.email} onChange={e => f('email')(e.target.value)}
+              placeholder="email@gmail.com"
+              className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">CHỨC VỤ</label>
+            <input
+              value={form.chuc_vu} onChange={e => f('chuc_vu')(e.target.value)}
+              placeholder="Nhân viên Kinh doanh"
+              className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">VAI TRÒ</label>
+              <select
+                value={form.role} onChange={e => f('role')(e.target.value)}
+                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                {ROLE_OPTIONS.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">KHU VỰC</label>
+              <select
+                value={form.khu_vuc} onChange={e => f('khu_vuc')(e.target.value)}
+                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="CN">Cả nước</option>
+                <option value="MN">Miền Nam</option>
+                <option value="MB">Miền Bắc</option>
+                <option value="MT">Miền Trung</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose}
+            className="flex-1 border border-gray-200 text-gray-600 font-medium py-3 rounded-xl text-sm">
+            Huỷ
+          </button>
+          <button
+            onClick={handleCreate} disabled={saving}
+            className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white font-medium py-3 rounded-xl text-sm"
+          >
+            {saving ? 'Đang tạo...' : '✅ Tạo tài khoản'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Temp Password Toast ──────────────────────────────────────────────────────
+
+function TempPasswordToast({
+  email,
+  tempPwd,
+  onClose,
+}: {
+  email: string
+  tempPwd: string
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl">
+        <div className="text-center">
+          <div className="text-4xl mb-2">✅</div>
+          <h2 className="text-base font-bold text-gray-800">Tạo tài khoản thành công</h2>
+          <p className="text-xs text-gray-500 mt-1">Thông báo cho nhân viên qua Zalo/điện thoại</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Email</span>
+            <span className="font-medium text-gray-800">{email}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Mật khẩu tạm</span>
+            <span className="font-mono font-bold text-blue-700 text-base">{tempPwd}</span>
+          </div>
+        </div>
+        <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-xl">
+          ⚠️ Nhân viên cần đổi mật khẩu ngay lần đầu đăng nhập
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full bg-blue-600 text-white font-medium py-3 rounded-xl text-sm"
+        >
+          Đã hiểu
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Unlock Confirm Modal ─────────────────────────────────────────────────────
+
+function UnlockConfirmModal({
+  target,
+  onClose,
+  onConfirm,
+  confirming,
+}: {
+  target: StaffUser
+  onClose: () => void
+  onConfirm: () => void
+  confirming: boolean
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-3xl p-5 space-y-4">
+        <div className="flex justify-center -mt-2 mb-1">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-green-600 text-lg">🔓</span>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-800">Mở khoá tài khoản</h2>
+            <p className="text-xs text-gray-500">{target.full_name} — {ROLE_LABEL[target.role]}</p>
+          </div>
+        </div>
+        <div className="bg-green-50 rounded-xl px-4 py-3 text-xs text-green-700">
+          Tài khoản sẽ được kích hoạt lại. Nhân viên có thể đăng nhập ngay sau khi mở khoá.
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose}
+            className="flex-1 border border-gray-200 text-gray-600 font-medium py-3 rounded-xl text-sm">
+            Huỷ
+          </button>
+          <button
+            onClick={onConfirm} disabled={confirming}
+            className="flex-1 bg-green-600 disabled:bg-green-400 text-white font-medium py-3 rounded-xl text-sm"
+          >
+            {confirming ? 'Đang xử lý...' : '🔓 Xác nhận mở khoá'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Change Role Sheet ────────────────────────────────────────────────────────
 
 function ChangeRoleSheet({
@@ -305,7 +528,7 @@ function ChangeRoleSheet({
 // ─── Company Settings Tab ─────────────────────────────────────────────────────
 
 function CompanySettingsTab() {
-  const [form,         setForm]         = useState<CompanySettings>({ name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '' })
+  const [form,         setForm]         = useState<CompanySettings>({ name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '', bank_name: '', account_number: '', account_holder: '', quote_expiry_days: 14 })
   const [loading,      setLoading]      = useState(true)
   const [saving,       setSaving]       = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -368,13 +591,16 @@ function CompanySettingsTab() {
     finally { setUploadingLogo(false) }
   }
 
-  const textFields: { key: keyof CompanySettings; label: string; placeholder: string; type?: string }[] = [
-    { key: 'name',    label: 'TÊN CÔNG TY *',   placeholder: 'Công ty TNHH GWS Việt Nam' },
-    { key: 'address', label: 'ĐỊA CHỈ',          placeholder: '123 Nguyễn Văn Linh, Q7, TP.HCM' },
-    { key: 'phone',   label: 'SỐ ĐIỆN THOẠI',    placeholder: '028 1234 5678' },
-    { key: 'email',   label: 'EMAIL',             placeholder: 'info@gws.com.vn', type: 'email' },
-    { key: 'tax',     label: 'MÃ SỐ THUẾ',       placeholder: '0312345678' },
-    { key: 'website', label: 'WEBSITE',           placeholder: 'https://gws.com.vn' },
+  const textFields: { key: keyof CompanySettings; label: string; placeholder: string; type?: string; section?: string }[] = [
+    { key: 'name',           label: 'TÊN CÔNG TY *',     placeholder: 'Công ty TNHH GWS Việt Nam' },
+    { key: 'address',        label: 'ĐỊA CHỈ',            placeholder: '123 Nguyễn Văn Linh, Q7, TP.HCM' },
+    { key: 'phone',          label: 'SỐ ĐIỆN THOẠI',      placeholder: '028 1234 5678' },
+    { key: 'email',          label: 'EMAIL',               placeholder: 'info@gws.com.vn', type: 'email' },
+    { key: 'tax',            label: 'MÃ SỐ THUẾ',         placeholder: '0312345678' },
+    { key: 'website',        label: 'WEBSITE',             placeholder: 'https://gws.com.vn' },
+    { key: 'bank_name',      label: 'NGÂN HÀNG',          placeholder: 'Vietcombank - CN TP.HCM', section: 'bank' },
+    { key: 'account_number', label: 'SỐ TÀI KHOẢN',      placeholder: '0123456789', section: 'bank' },
+    { key: 'account_holder', label: 'CHỦ TÀI KHOẢN',     placeholder: 'CÔNG TY TNHH GWS VIỆT NAM', section: 'bank' },
   ]
 
   return (
@@ -413,9 +639,9 @@ function CompanySettingsTab() {
         </div>
       </div>
 
-      {/* Text fields */}
+      {/* Thông tin công ty */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-        {textFields.map(f => (
+        {textFields.filter(f => !f.section).map(f => (
           <div key={f.key}>
             <label className="text-sm font-semibold text-gray-600 mb-1 block">{f.label}</label>
             <input
@@ -427,6 +653,37 @@ function CompanySettingsTab() {
             />
           </div>
         ))}
+      </div>
+
+      {/* Thông tin ngân hàng */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <div className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Thông tin ngân hàng sẽ hiển thị trên PDF hợp đồng để khách hàng chuyển khoản.
+        </div>
+        {textFields.filter(f => f.section === 'bank').map(f => (
+          <div key={f.key}>
+            <label className="text-sm font-semibold text-gray-600 mb-1 block">{f.label}</label>
+            <input
+              type={f.type ?? 'text'}
+              value={form[f.key] as string}
+              onChange={e => set(f.key, e.target.value)}
+              placeholder={f.placeholder}
+              className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Cấu hình báo giá */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <label className="text-sm font-semibold text-gray-600 mb-1 block">HIỆU LỰC BÁO GIÁ (ngày)</label>
+        <input
+          type="number" min={1} max={365}
+          value={form.quote_expiry_days}
+          onChange={e => setForm(f => ({ ...f, quote_expiry_days: Number(e.target.value) }))}
+          className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="text-xs text-gray-400 mt-1.5">Số ngày báo giá có hiệu lực kể từ ngày tạo. Hiển thị trên PDF báo giá.</p>
       </div>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
@@ -476,6 +733,9 @@ const ACTION_LABEL: Record<string, string> = {
   payment_updated:      'Cập nhật thanh toán',
   // Warranty
   warranty_created:     'Tạo phiếu bảo hành',
+  // Permissions
+  permissions_updated:  'Cập nhật quyền',
+  permissions_reset:    'Reset quyền về mặc định',
 }
 
 const ACTION_COLOR: Record<string, string> = {
@@ -494,6 +754,8 @@ const ACTION_COLOR: Record<string, string> = {
   task_updated:         'bg-teal-100 text-teal-700',
   payment_updated:      'bg-lime-100 text-lime-700',
   warranty_created:     'bg-rose-100 text-rose-700',
+  permissions_updated:  'bg-violet-100 text-violet-700',
+  permissions_reset:    'bg-orange-100 text-orange-700',
 }
 
 function AuditLogTab() {
@@ -851,51 +1113,344 @@ interface RoleRow {
   permissions: Record<string, boolean>
 }
 
+// Nhãn ngắn tiếng Anh cho cột header — đồng bộ với roles.code trong DB
+const ROLE_SHORT: Record<string, string> = {
+  admin:      'Admin',
+  ceo:        'CEO',
+  director:   'Dir.',
+  accountant: 'Acct.',
+  sales:      'Sales',
+  tech:       'Tech',
+  logistics:  'Logi.',
+}
+
+// Keys phải khớp với permission_key trong bảng role_permissions (DB)
 const PERM_GROUPS = [
   {
     label: 'Khách hàng',
     perms: [
-      { key: 'VIEW_CUSTOMERS',    label: 'Xem KH'       },
-      { key: 'EDIT_CUSTOMERS',    label: 'Sửa KH'       },
-      { key: 'DELETE_CUSTOMERS',  label: 'Xóa KH'       },
+      { key: 'VIEW_ALL_CUSTOMERS',    label: 'Xem tất cả KH'    },
+      { key: 'VIEW_OWN_CUSTOMERS',    label: 'Xem KH của mình'  },
+      { key: 'CREATE_CUSTOMER',       label: 'Tạo KH mới'       },
+      { key: 'MANAGE_CUSTOMER',       label: 'Sửa / Xóa KH'     },
     ],
   },
   {
-    label: 'Đơn hàng / Báo giá',
+    label: 'Báo giá / Hợp đồng',
     perms: [
-      { key: 'VIEW_ORDERS',       label: 'Xem đơn'      },
-      { key: 'CREATE_ORDER',      label: 'Tạo đơn'      },
-      { key: 'APPROVE_ORDER',     label: 'Duyệt đơn'    },
+      { key: 'CREATE_QUOTE',          label: 'Tạo báo giá'        },
+      { key: 'APPROVE_QUOTE',         label: 'Duyệt báo giá'      },
+      { key: 'CREATE_CONTRACT',       label: 'Tạo hợp đồng'       },
+      { key: 'APPROVE_CONTRACT',      label: 'Duyệt hợp đồng'     },
+      { key: 'APPROVE_DISCOUNT',      label: 'Duyệt chiết khấu'   },
     ],
   },
   {
     label: 'Tasks',
     perms: [
-      { key: 'UPDATE_OWN_TASK',   label: 'Cập nhật task' },
-      { key: 'APPROVE_OTHERS_TASK',label: 'Duyệt task'  },
+      { key: 'START_TASK',            label: 'Bắt đầu task'        },
+      { key: 'COMPLETE_OWN_TASK',     label: 'Hoàn thành task'     },
+      { key: 'APPROVE_OTHERS_TASK',   label: 'Duyệt task người khác'},
+      { key: 'MANAGE_BLOCKED_TASK',   label: 'Xử lý task blocked'  },
     ],
   },
   {
     label: 'Tài chính',
     perms: [
-      { key: 'VIEW_PAYMENTS',     label: 'Xem TT'       },
-      { key: 'MANAGE_PAYMENTS',   label: 'Quản lý TT'   },
+      { key: 'VIEW_FINANCIAL_DATA',   label: 'Xem tài chính'       },
+      { key: 'COLLECT_PAYMENT',       label: 'Thu / nhập thanh toán'},
+      { key: 'VIEW_ALL_KPI',          label: 'Xem KPI toàn đội'    },
     ],
   },
   {
     label: 'Quản trị',
     perms: [
-      { key: 'MANAGE_USERS',      label: 'Quản lý user' },
-      { key: 'MANAGE_ROLES',      label: 'Phân quyền'   },
-      { key: 'VIEW_AUDIT_LOG',    label: 'Xem nhật ký'  },
-      { key: 'MANAGE_PIPELINE',   label: 'Cấu hình pipeline' },
-      { key: 'MANAGE_TASKS',      label: 'Cấu hình task'},
-      { key: 'MANAGE_SETTINGS',   label: 'Cài đặt hệ thống' },
+      { key: 'MANAGE_USERS',          label: 'Quản lý nhân viên'   },
+      { key: 'EDIT_SYSTEM_SETTINGS',  label: 'Cài đặt hệ thống'    },
+      { key: 'EDIT_TASK_DEFINITIONS', label: 'Cấu hình task'       },
     ],
   },
 ]
 
+// ─── UserPermsPanel — quản lý quyền riêng cho 1 nhân viên ────────────────────
+
+interface StaffBrief { id: string; full_name: string; role: string }
+
+function UserPermsPanel() {
+  const [staffList,     setStaffList]     = useState<StaffBrief[]>([])
+  const [selectedId,    setSelectedId]    = useState('')
+  const [userPerms,     setUserPerms]     = useState<Record<string, boolean>>({})
+  const [roleDefaults,  setRoleDefaults]  = useState<Record<string, boolean>>({})
+  const [profile,       setProfile]       = useState<{ full_name: string; role: string } | null>(null)
+  const [pending,       setPending]       = useState<{ permission_key: string; is_enabled: boolean }[]>([])
+  const [loadingList,   setLoadingList]   = useState(true)
+  const [loadingUser,   setLoadingUser]   = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [resetting,     setResetting]     = useState(false)
+  const [success,       setSuccess]       = useState('')
+  const [error,         setError]         = useState('')
+  const [expanded,      setExpanded]      = useState<string>('Khách hàng')
+
+  // Tải danh sách nhân viên (active only)
+  useEffect(() => {
+    fetch('/api/admin/users')
+      .then(r => r.json())
+      .then(d => {
+        const list: StaffBrief[] = (d.data ?? [])
+          .filter((u: StaffUser) => u.is_active)
+          .map((u: StaffUser) => ({ id: u.id, full_name: u.full_name, role: u.role }))
+        setStaffList(list)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingList(false))
+  }, [])
+
+  // Tải quyền của user được chọn
+  const loadUserPerms = useCallback(async (userId: string) => {
+    if (!userId) return
+    setLoadingUser(true); setPending([]); setError(''); setSuccess('')
+    try {
+      const res  = await fetch(`/api/admin/permissions?userId=${userId}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Lỗi tải quyền'); return }
+      setUserPerms(data.permissions ?? {})
+      setRoleDefaults(data.role_defaults ?? {})
+      setProfile(data.profile ?? null)
+    } catch { setError('Lỗi kết nối') }
+    finally { setLoadingUser(false) }
+  }, [])
+
+  useEffect(() => {
+    if (selectedId) loadUserPerms(selectedId)
+  }, [selectedId, loadUserPerms])
+
+  const togglePerm = (permKey: string, current: boolean) => {
+    const next = !current
+    setUserPerms(prev => ({ ...prev, [permKey]: next }))
+    setPending(prev => {
+      const filtered = prev.filter(p => p.permission_key !== permKey)
+      return [...filtered, { permission_key: permKey, is_enabled: next }]
+    })
+  }
+
+  const saveAll = async () => {
+    if (!pending.length || !selectedId) return
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      const res = await fetch('/api/admin/permissions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: selectedId, updates: pending }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || 'Lỗi lưu'); return }
+      setPending([])
+      setSuccess(`Đã lưu ${d.updated} quyền cho ${profile?.full_name}`)
+      setTimeout(() => setSuccess(''), 3000)
+      // Tải lại để đồng bộ
+      loadUserPerms(selectedId)
+    } catch { setError('Lỗi kết nối') }
+    finally { setSaving(false) }
+  }
+
+  const resetToDefault = async () => {
+    if (!selectedId) return
+    setResetting(true); setError(''); setSuccess('')
+    try {
+      const res = await fetch(`/api/admin/permissions?userId=${selectedId}`, { method: 'DELETE' })
+      const d   = await res.json()
+      if (!res.ok) { setError(d.error || 'Lỗi reset'); return }
+      setSuccess(`Đã reset quyền ${profile?.full_name} về mặc định role`)
+      setTimeout(() => setSuccess(''), 3000)
+      setPending([])
+      loadUserPerms(selectedId)
+    } catch { setError('Lỗi kết nối') }
+    finally { setResetting(false) }
+  }
+
+  if (loadingList) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+
+      {/* Staff picker */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2">
+        <label className="text-xs font-semibold text-gray-500">CHỌN NHÂN VIÊN</label>
+        <select
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        >
+          <option value="">— Chọn nhân viên —</option>
+          {staffList.map(s => (
+            <option key={s.id} value={s.id}>
+              {s.full_name} ({ROLE_LABEL[s.role] ?? s.role})
+            </option>
+          ))}
+        </select>
+        {profile && (
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                {profile.full_name.charAt(0)}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{profile.full_name}</p>
+                <p className="text-xs text-gray-400">
+                  {ROLE_LABEL[profile.role] ?? profile.role}
+                  {pending.length > 0 && (
+                    <span className="ml-2 text-amber-600">· {pending.length} thay đổi chưa lưu</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={resetToDefault}
+              disabled={resetting || !selectedId}
+              className="text-xs border border-orange-200 text-orange-600 px-3 py-1.5 rounded-lg hover:bg-orange-50 disabled:opacity-50"
+            >
+              {resetting ? '...' : '↺ Mặc định role'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Chú giải */}
+      {selectedId && !loadingUser && (
+        <div className="flex items-center gap-4 text-[11px] text-gray-500 px-1">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded bg-blue-500 inline-block" /> Có quyền
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded border-2 border-gray-300 inline-block" /> Không có
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded bg-amber-400 inline-block" /> Đã chỉnh sửa
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" /> Khác role mặc định
+          </span>
+        </div>
+      )}
+
+      {/* Permission groups */}
+      {selectedId && loadingUser ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400 text-sm">
+          <span className="crm-spinner" /><span>Đang tải quyền...</span>
+        </div>
+      ) : selectedId ? (
+        <>
+          {PERM_GROUPS.map(group => {
+            const isOpen = expanded === group.label
+            return (
+              <div key={group.label} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <button
+                  onClick={() => setExpanded(isOpen ? '' : group.label)}
+                  className="w-full px-4 py-3.5 flex items-center justify-between"
+                >
+                  <span className="text-sm font-semibold text-gray-800">{group.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">
+                      {group.perms.filter(p => userPerms[p.key]).length}/{group.perms.length}
+                    </span>
+                    <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-gray-50">
+                    {group.perms.map(perm => {
+                      const enabled      = userPerms[perm.key] ?? false
+                      const roleDefault  = roleDefaults[perm.key] ?? false
+                      const differsRole  = enabled !== roleDefault
+                      const isPending    = pending.some(p => p.permission_key === perm.key)
+
+                      return (
+                        <div
+                          key={perm.key}
+                          className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0 ${
+                            isPending ? 'bg-amber-50/50' : ''
+                          }`}
+                        >
+                          <button
+                            onClick={() => togglePerm(perm.key, enabled)}
+                            className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                              enabled
+                                ? isPending
+                                  ? 'bg-amber-400 border-amber-400'
+                                  : 'bg-blue-500 border-blue-500'
+                                : isPending
+                                  ? 'bg-amber-50 border-amber-300'
+                                  : 'border-gray-300 bg-white'
+                            }`}
+                          >
+                            {enabled && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-700">{perm.label}</p>
+                            <p className="text-[10px] font-mono text-gray-400">{perm.key}</p>
+                          </div>
+
+                          {/* Indicator: differs from role default */}
+                          {differsRole && !isPending && (
+                            <span
+                              title={`Khác mặc định role (${roleDefault ? 'role: ✓' : 'role: ✗'})`}
+                              className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0"
+                            />
+                          )}
+
+                          {/* Role default badge */}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                            roleDefault
+                              ? 'bg-blue-50 text-blue-500'
+                              : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {roleDefault ? 'Role: ✓' : 'Role: ✗'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {pending.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+              ⚠️ Có {pending.length} thay đổi chưa lưu
+            </div>
+          )}
+          {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+          {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
+
+          <button
+            onClick={saveAll}
+            disabled={saving || !pending.length}
+            className="w-full bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium py-3 rounded-xl text-sm"
+          >
+            {saving ? 'Đang lưu...' : pending.length ? `Lưu ${pending.length} thay đổi` : 'Chưa có thay đổi'}
+          </button>
+        </>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 px-4 py-10 text-center">
+          <p className="text-2xl mb-2">👆</p>
+          <p className="text-sm text-gray-400">Chọn nhân viên để quản lý quyền cá nhân</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── RolesTab — wrapper with mode toggle ──────────────────────────────────────
+
 function RolesTab() {
+  const [mode,       setMode]       = useState<'role' | 'user'>('role')
   const [roles,      setRoles]      = useState<RoleRow[]>([])
   const [loading,    setLoading]    = useState(true)
   const [pending,    setPending]    = useState<{ role_id: number; permission_key: string; is_enabled: boolean }[]>([])
@@ -916,12 +1471,10 @@ function RolesTab() {
   useEffect(() => { load() }, [load])
 
   const toggle = (roleId: number, permKey: string, currentEnabled: boolean) => {
-    // Update UI optimistically
     setRoles(prev => prev.map(r => {
       if (r.id !== roleId) return r
       return { ...r, permissions: { ...r.permissions, [permKey]: !currentEnabled } }
     }))
-    // Queue update
     setPending(prev => {
       const filtered = prev.filter(p => !(p.role_id === roleId && p.permission_key === permKey))
       return [...filtered, { role_id: roleId, permission_key: permKey, is_enabled: !currentEnabled }]
@@ -946,92 +1499,126 @@ function RolesTab() {
     finally { setSaving(false) }
   }
 
-  // Only show roles that users can actually see (not partner/system roles in a simple view)
   const visibleRoles = roles.filter(r => ['admin','ceo','director','accountant','sales','tech','logistics'].includes(r.code))
-
-  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-500">Tích để cấp quyền. Thay đổi chưa lưu hiển thị màu vàng.</p>
 
-      {PERM_GROUPS.map(group => {
-        const isOpen = expanded === group.label
-        return (
-          <div key={group.label} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <button
-              onClick={() => setExpanded(isOpen ? '' : group.label)}
-              className="w-full px-4 py-3.5 flex items-center justify-between"
-            >
-              <span className="text-sm font-semibold text-gray-800">{group.label}</span>
-              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
-            </button>
+      {/* Mode toggle */}
+      <div className="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-xl">
+        <button
+          onClick={() => setMode('role')}
+          className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+            mode === 'role' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
+          }`}
+        >
+          🔑 Vai trò mặc định
+        </button>
+        <button
+          onClick={() => setMode('user')}
+          className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+            mode === 'user' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
+          }`}
+        >
+          👤 Cá nhân
+        </button>
+      </div>
 
-            {isOpen && (
-              <div className="border-t border-gray-50 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-gray-50">
-                      <th className="text-left px-4 py-2 text-gray-400 font-medium w-32">Quyền</th>
-                      {visibleRoles.map(r => (
-                        <th key={r.id} className="px-2 py-2 text-center text-gray-500 font-medium min-w-[48px]">
-                          {r.display_name.split(' ').pop()}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.perms.map(perm => (
-                      <tr key={perm.key} className="border-b border-gray-50 last:border-0">
-                        <td className="px-4 py-2.5 text-gray-600">{perm.label}</td>
-                        {visibleRoles.map(role => {
-                          const enabled    = role.permissions[perm.key] ?? false
-                          const isPending  = pending.some(p => p.role_id === role.id && p.permission_key === perm.key)
-                          return (
-                            <td key={role.id} className="px-2 py-2.5 text-center">
-                              <button
-                                onClick={() => toggle(role.id, perm.key, enabled)}
-                                className={`w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-all ${
-                                  enabled
-                                    ? isPending
-                                      ? 'bg-amber-400 border-amber-400'
-                                      : 'bg-blue-500 border-blue-500'
-                                    : isPending
-                                      ? 'bg-amber-50 border-amber-300'
-                                      : 'border-gray-300 bg-white'
-                                }`}
-                              >
-                                {enabled && (
-                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </button>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {/* User mode */}
+      {mode === 'user' && <UserPermsPanel />}
 
-      {pending.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-          ⚠️ Có {pending.length} thay đổi chưa lưu
-        </div>
+      {/* Role matrix mode */}
+      {mode === 'role' && (
+        <>
+          <p className="text-xs text-gray-500">
+            Quyền mặc định cho từng vai trò. Tích để cấp, thay đổi chưa lưu hiển thị màu vàng.
+          </p>
+
+          {loading ? (
+            <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+          ) : (
+            <>
+              {PERM_GROUPS.map(group => {
+                const isOpen = expanded === group.label
+                return (
+                  <div key={group.label} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                    <button
+                      onClick={() => setExpanded(isOpen ? '' : group.label)}
+                      className="w-full px-4 py-3.5 flex items-center justify-between"
+                    >
+                      <span className="text-sm font-semibold text-gray-800">{group.label}</span>
+                      <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-gray-50 overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-50">
+                              <th className="text-left px-4 py-2 text-gray-400 font-medium w-32">Quyền</th>
+                              {visibleRoles.map(r => (
+                                <th key={r.id} className="px-2 py-2 text-center text-gray-500 font-medium min-w-[48px]">
+                                  {ROLE_SHORT[r.code] ?? r.code}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.perms.map(perm => (
+                              <tr key={perm.key} className="border-b border-gray-50 last:border-0">
+                                <td className="px-4 py-2.5 text-gray-600">{perm.label}</td>
+                                {visibleRoles.map(role => {
+                                  const enabled   = role.permissions[perm.key] ?? false
+                                  const isPending = pending.some(p => p.role_id === role.id && p.permission_key === perm.key)
+                                  return (
+                                    <td key={role.id} className="px-2 py-2.5 text-center">
+                                      <button
+                                        onClick={() => toggle(role.id, perm.key, enabled)}
+                                        className={`w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-all ${
+                                          enabled
+                                            ? isPending
+                                              ? 'bg-amber-400 border-amber-400'
+                                              : 'bg-blue-500 border-blue-500'
+                                            : isPending
+                                              ? 'bg-amber-50 border-amber-300'
+                                              : 'border-gray-300 bg-white'
+                                        }`}
+                                      >
+                                        {enabled && (
+                                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                        )}
+                                      </button>
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {pending.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+                  ⚠️ Có {pending.length} thay đổi chưa lưu
+                </div>
+              )}
+              {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
+              {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
+
+              <button onClick={saveAll} disabled={saving || !pending.length}
+                className="w-full bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium py-3 rounded-xl text-sm">
+                {saving ? 'Đang lưu...' : pending.length ? `Lưu ${pending.length} thay đổi` : 'Chưa có thay đổi'}
+              </button>
+            </>
+          )}
+        </>
       )}
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
-      {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
-
-      <button onClick={saveAll} disabled={saving || !pending.length}
-        className="w-full bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium py-3 rounded-xl text-sm">
-        {saving ? 'Đang lưu...' : pending.length ? `Lưu ${pending.length} thay đổi` : 'Chưa có thay đổi'}
-      </button>
     </div>
   )
 }
@@ -1044,12 +1631,22 @@ interface TaskDef {
   sort_order: number; is_active: boolean; roles_can_update: string[]; roles_can_approve: string[]
 }
 
+const ROLES_ALL = ['admin','ceo','director','sales','tech','logistics','accountant','partner']
+const BO_PHAN_OPTIONS = ['KD','KT','KTO','BLD']
+
 function TasksTab() {
   const [tasks,   setTasks]   = useState<TaskDef[]>([])
   const [loading, setLoading] = useState(true)
   const [toggling,setToggling]= useState<Set<number>>(new Set())
   const [success, setSuccess] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addSaving,   setAddSaving]   = useState(false)
+  const [addErr,      setAddErr]      = useState('')
+  const [newTask, setNewTask] = useState({
+    stage_code: '', stage_label: '', task_key: '', label: '', bo_phan: 'KD',
+    roles_can_update: ['tech','sales'], roles_can_approve: ['admin','ceo'],
+  })
 
   const load = useCallback(() => {
     setLoading(true)
@@ -1079,6 +1676,38 @@ function TasksTab() {
     finally { setToggling(prev => { const s = new Set(prev); s.delete(task.id); return s }) }
   }
 
+  const handleAddTask = async () => {
+    if (!newTask.stage_code || !newTask.task_key || !newTask.label) {
+      setAddErr('Cần nhập: Mã stage, Mã task, Tên task'); return
+    }
+    setAddSaving(true); setAddErr('')
+    try {
+      const res = await fetch('/api/admin/task-definitions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newTask,
+          stage_label: newTask.stage_label || newTask.stage_code,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAddErr(data.error || 'Lỗi tạo task'); return }
+      setTasks(prev => [...prev, data.task])
+      setSuccess(`Đã thêm task: ${newTask.label}`)
+      setTimeout(() => setSuccess(''), 2500)
+      setShowAddForm(false)
+      setNewTask({ stage_code: '', stage_label: '', task_key: '', label: '', bo_phan: 'KD', roles_can_update: ['tech','sales'], roles_can_approve: ['admin','ceo'] })
+    } catch { setAddErr('Lỗi kết nối') }
+    finally { setAddSaving(false) }
+  }
+
+  const toggleRole = (field: 'roles_can_update' | 'roles_can_approve', role: string) => {
+    setNewTask(t => {
+      const arr = t[field]
+      return { ...t, [field]: arr.includes(role) ? arr.filter(r => r !== role) : [...arr, role] }
+    })
+  }
+
   const displayed = showAll ? tasks : tasks.filter(t => t.is_active)
   const grouped   = displayed.reduce<Record<string, TaskDef[]>>((acc, t) => {
     if (!acc[t.stage_code]) acc[t.stage_code] = []
@@ -1099,11 +1728,84 @@ function TasksTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">{tasks.filter(t => t.is_active).length}/{tasks.length} task đang bật</p>
-        <button onClick={() => setShowAll(p => !p)}
-          className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
-          {showAll ? 'Chỉ hiện đang bật' : 'Hiện tất cả'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAddForm(p => !p)}
+            className="text-xs text-green-600 font-semibold bg-green-50 px-3 py-1.5 rounded-lg">
+            {showAddForm ? 'Đóng' : '+ Thêm task'}
+          </button>
+          <button onClick={() => setShowAll(p => !p)}
+            className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+            {showAll ? 'Chỉ hiện đang bật' : 'Hiện tất cả'}
+          </button>
+        </div>
       </div>
+
+      {/* Form thêm task mới */}
+      {showAddForm && (
+        <div className="bg-white rounded-2xl border border-green-100 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">Thêm task định nghĩa mới</p>
+          {addErr && <p className="text-xs text-red-500">{addErr}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">MÃ STAGE *</label>
+              <input value={newTask.stage_code} onChange={e => setNewTask(t => ({ ...t, stage_code: e.target.value.toUpperCase() }))}
+                placeholder="C1, B2, D3..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">TÊN STAGE</label>
+              <input value={newTask.stage_label} onChange={e => setNewTask(t => ({ ...t, stage_label: e.target.value }))}
+                placeholder="Tiếp cận KH..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">TÊN TASK *</label>
+            <input value={newTask.label} onChange={e => setNewTask(t => ({ ...t, label: e.target.value }))}
+              placeholder="Gửi báo giá cho khách hàng" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">MÃ TASK * (duy nhất)</label>
+              <input value={newTask.task_key} onChange={e => setNewTask(t => ({ ...t, task_key: e.target.value.toUpperCase().replace(/\s/g, '_') }))}
+                placeholder="KD_C1_GUI_BG" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">BỘ PHẬN *</label>
+              <select value={newTask.bo_phan} onChange={e => setNewTask(t => ({ ...t, bo_phan: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                {BO_PHAN_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">ROLES THỰC HIỆN</label>
+            <div className="flex flex-wrap gap-2">
+              {ROLES_ALL.map(r => (
+                <button key={r} type="button"
+                  onClick={() => toggleRole('roles_can_update', r)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${newTask.roles_can_update.includes(r) ? 'bg-blue-100 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-500'}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">ROLES PHÊ DUYỆT</label>
+            <div className="flex flex-wrap gap-2">
+              {ROLES_ALL.map(r => (
+                <button key={r} type="button"
+                  onClick={() => toggleRole('roles_can_approve', r)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${newTask.roles_can_approve.includes(r) ? 'bg-purple-100 border-purple-300 text-purple-700' : 'border-gray-200 text-gray-500'}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={handleAddTask} disabled={addSaving}
+            className="w-full bg-green-600 disabled:bg-green-300 text-white font-medium py-2.5 rounded-xl text-sm">
+            {addSaving ? 'Đang lưu...' : 'Tạo task'}
+          </button>
+        </div>
+      )}
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
 
@@ -1278,7 +1980,11 @@ export default function AdminPage() {
   const [errorMsg,     setErrorMsg]     = useState('')
   const [roleTarget,   setRoleTarget]   = useState<StaffUser | null>(null)
   const [deactTarget,  setDeactTarget]  = useState<StaffUser | null>(null)
-  const [filter,       setFilter]       = useState<'all' | 'active' | 'inactive'>('all')
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [tempPwdInfo,  setTempPwdInfo]  = useState<{ email: string; pwd: string } | null>(null)
+  const [unlockTarget, setUnlockTarget] = useState<StaffUser | null>(null)
+  const [unlocking,    setUnlocking]    = useState(false)
+  const [statusFilter, setStatusFilter]  = useState<string[]>(['Đang làm'])
   const supabase = createClient()
 
   const notify = (msg: string, isError = false) => {
@@ -1307,14 +2013,17 @@ export default function AdminPage() {
   // Danh sách có thể nhận bàn giao khi khoá tài khoản
   const managers = users.filter(u => ['admin', 'ceo', 'director'].includes(u.role))
 
+  const STATUS_LIST = ['Đang làm', 'Thử việc', 'Tạm nghỉ', 'Nghỉ việc']
+  const isAll = statusFilter.length === STATUS_LIST.length
+
   const displayed = users.filter(u =>
-    filter === 'all'      ? true :
-    filter === 'active'   ? u.is_active :
-    !u.is_active
+    isAll ? true : statusFilter.includes(u.trang_thai_nv ?? 'Đang làm')
   )
 
-  const activeCount   = users.filter(u => u.is_active).length
-  const inactiveCount = users.filter(u => !u.is_active).length
+  const statusCounts = STATUS_LIST.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = users.filter(u => (u.trang_thai_nv ?? 'Đang làm') === s).length
+    return acc
+  }, {})
 
   return (
     <div className="p-4 space-y-4">
@@ -1323,7 +2032,7 @@ export default function AdminPage() {
       <div>
         <h1 className="text-lg font-bold text-gray-800">Quản trị hệ thống</h1>
         <p className="text-xs text-gray-500">
-          {users.length} tài khoản · {activeCount} đang hoạt động · {inactiveCount} đã khoá
+          {users.length} tài khoản · {statusCounts['Đang làm'] ?? 0} đang làm · {statusCounts['Nghỉ việc'] ?? 0} đã nghỉ
         </p>
       </div>
 
@@ -1362,6 +2071,14 @@ export default function AdminPage() {
       {/* Users tab content */}
       {tab === 'users' && <>
 
+      {/* Nút thêm nhân viên */}
+      <button
+        onClick={() => setShowCreate(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-semibold rounded-xl text-sm hover:bg-blue-700 transition-colors"
+      >
+        <span className="text-lg leading-none">＋</span> Thêm nhân viên mới
+      </button>
+
       {/* Thông báo */}
       {successMsg && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">
@@ -1374,25 +2091,53 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex gap-2">
+      {/* Filter theo trạng thái nhân viên */}
+      <div className="flex flex-wrap gap-2">
+        {/* Nút Tất cả */}
+        <button
+          onClick={() => setStatusFilter([...STATUS_LIST])}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            isAll ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          Tất cả ({users.length})
+        </button>
+
+        {/* Nút từng trạng thái */}
         {([
-          { key: 'all',      label: `Tất cả (${users.length})`     },
-          { key: 'active',   label: `Đang dùng (${activeCount})`   },
-          { key: 'inactive', label: `Đã khoá (${inactiveCount})`   },
-        ] as const).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              filter === tab.key
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-500'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { key: 'Đang làm',  color: 'bg-green-500',  active: 'bg-green-500 text-white',  inactive: 'bg-green-50 text-green-700'  },
+          { key: 'Thử việc',  color: 'bg-blue-500',   active: 'bg-blue-500 text-white',   inactive: 'bg-blue-50 text-blue-700'    },
+          { key: 'Tạm nghỉ',  color: 'bg-yellow-500', active: 'bg-yellow-500 text-white', inactive: 'bg-yellow-50 text-yellow-700'},
+          { key: 'Nghỉ việc', color: 'bg-red-500',    active: 'bg-red-500 text-white',    inactive: 'bg-red-50 text-red-600'      },
+        ]).map(s => {
+          const selected = !isAll && statusFilter.includes(s.key)
+          const count = statusCounts[s.key] ?? 0
+          return (
+            <button
+              key={s.key}
+              onClick={() => {
+                if (isAll) {
+                  // Bỏ "Tất cả", chỉ chọn cái này
+                  setStatusFilter([s.key])
+                } else if (selected) {
+                  // Bỏ chọn — nhưng không cho bỏ hết
+                  const next = statusFilter.filter(x => x !== s.key)
+                  setStatusFilter(next.length ? next : [s.key])
+                } else {
+                  setStatusFilter([...statusFilter, s.key])
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                selected ? s.active : s.inactive
+              }`}
+            >
+              {s.key}
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                selected ? 'bg-white/30' : 'bg-white/60'
+              }`}>{count}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Chú thích quyền */}
@@ -1496,17 +2241,7 @@ export default function AdminPage() {
                   <div className="flex gap-2 pt-1 border-t border-gray-50">
                     <p className="flex-1 text-xs text-gray-400 self-center">Tài khoản đã khoá</p>
                     <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/admin/users', {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: u.id, trang_thai_nv: 'Đang làm' }),
-                          })
-                          if (res.ok) { notify(`Đã mở khoá ${u.full_name}`); loadUsers() }
-                          else { const d = await res.json(); notify(d.error || 'Lỗi mở khoá', true) }
-                        } catch { notify('Lỗi kết nối', true) }
-                      }}
+                      onClick={() => setUnlockTarget(u)}
                       className="border border-green-200 text-green-600 text-xs font-semibold px-3 py-2 rounded-xl hover:bg-green-50"
                     >
                       🔓 Mở khoá
@@ -1534,6 +2269,55 @@ export default function AdminPage() {
           managers={managers}
           onClose={() => setDeactTarget(null)}
           onDone={msg => { setDeactTarget(null); notify(msg); loadUsers() }}
+        />
+      )}
+
+      {showCreate && (
+        <CreateUserSheet
+          onClose={() => setShowCreate(false)}
+          onDone={(_, tempPwd, email) => {
+            setShowCreate(false)
+            setTempPwdInfo({ email, pwd: tempPwd })
+            loadUsers()
+          }}
+        />
+      )}
+
+      {tempPwdInfo && (
+        <TempPasswordToast
+          email={tempPwdInfo.email}
+          tempPwd={tempPwdInfo.pwd}
+          onClose={() => setTempPwdInfo(null)}
+        />
+      )}
+
+      {unlockTarget && (
+        <UnlockConfirmModal
+          target={unlockTarget}
+          confirming={unlocking}
+          onClose={() => setUnlockTarget(null)}
+          onConfirm={async () => {
+            setUnlocking(true)
+            try {
+              const res = await fetch('/api/admin/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: unlockTarget.id, trang_thai_nv: 'Đang làm' }),
+              })
+              if (res.ok) {
+                setUnlockTarget(null)
+                notify(`Đã mở khoá ${unlockTarget.full_name}`)
+                loadUsers()
+              } else {
+                const d = await res.json()
+                notify(d.error || 'Lỗi mở khoá', true)
+              }
+            } catch {
+              notify('Lỗi kết nối', true)
+            } finally {
+              setUnlocking(false)
+            }
+          }}
         />
       )}
 

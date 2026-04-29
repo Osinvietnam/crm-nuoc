@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.2.8",
+    "@fontsource/noto-sans": "^5.2.10",
+    "@fontsource/roboto": "^5.2.10",
     "@react-pdf/renderer": "^4.4.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
