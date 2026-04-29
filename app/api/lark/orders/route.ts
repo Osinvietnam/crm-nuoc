@@ -14,7 +14,7 @@ const B2C_SELECT = `
 const COMMERCIAL_SELECT = `
   *,
   staff:nguoi_phu_trach(id, full_name),
-  customers!customer_id(id, ho_ten, sdt)
+  customers!customer_id(id, ho_ten, sdt, dia_chi_ct)
 `
 const PROJECT_SELECT = `
   *,
@@ -164,6 +164,34 @@ export async function POST(req: NextRequest) {
           .update({ pipeline: 'Chốt HĐ' })
           .in('pipeline', ['Tiềm năng', 'Báo giá', 'Đàm phán'])
           .eq('id', data.customer_id)
+      }
+
+      // CJ-07: Auto-tạo 3 đợt thanh toán (60/35/5%) khi ký HĐ
+      if (data.gia_tri_hd > 0 && data.customer_id) {
+        void (async () => {
+          const installments = [
+            { installment: 1, percent: 60 },
+            { installment: 2, percent: 35 },
+            { installment: 3, percent: 5  },
+          ]
+          const records = installments.map(inst => ({
+            customer_record_id: String(data.customer_id),
+            customer_id:        data.customer_id,
+            customer_name:      data.customers?.ho_ten ?? null,
+            nguoi_phu_trach:    profile.full_name,
+            nguoi_phu_trach_id: profile.id,
+            contract_record_id: String(data.id),
+            installment:        inst.installment,
+            percent:            inst.percent,
+            amount:             Math.round(data.gia_tri_hd * inst.percent / 100),
+            is_paid:            false,
+            updated_at:         new Date().toISOString(),
+          }))
+          const { error: pmErr } = await supabase
+            .from('payment_records')
+            .upsert(records, { onConflict: 'customer_record_id,installment', ignoreDuplicates: true })
+          if (pmErr) console.error('Auto payment_records:', pmErr.message)
+        })()
       }
 
       // C3: Ghi mã HĐ + tự động chấp nhận BG (câu hỏi 3 xác nhận)

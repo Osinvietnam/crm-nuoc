@@ -110,6 +110,20 @@ export async function PATCH(
       updates.gia_tri_sau_ck = Math.round(tong * (1 - ck / 100))
     }
 
+    // SAL-04: Sales vượt chiết khấu tối đa → auto chuyển sang 'Chờ duyệt' thay vì block
+    if (profile.role === 'sales' && 'chiet_khau' in updates) {
+      const { data: rules } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'sales_max_discount_pct')
+        .maybeSingle()
+      const maxDiscount = Number(rules?.value ?? 5)
+      const ck = Number(updates.chiet_khau) || 0
+      if (ck > maxDiscount && updates.trang_thai !== 'Chờ duyệt' && current.trang_thai !== 'Chờ duyệt') {
+        updates.trang_thai = 'Chờ duyệt'
+      }
+    }
+
     // M4: Tự set ngay_gui_kh khi chuyển "Đã gửi"
     if (body.trang_thai === 'Đã gửi' && !current.ngay_gui_kh && !body.ngay_gui_kh) {
       updates.ngay_gui_kh = new Date().toISOString().split('T')[0]

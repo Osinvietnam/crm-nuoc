@@ -45,6 +45,7 @@ export interface CommercialOrder {
   trang_thai:      string
   nguoi_phu_trach: string
   ghi_chu:         string
+  dia_chi:         string
   customer_id:     number | null
 }
 
@@ -110,9 +111,10 @@ export function mapCommercial(r: any): CommercialOrder {
     ngay_giao_dk:    toMs(r.ngay_giao_dk),
     ngay_giao_thuc:  toMs(r.ngay_giao_thuc),
     trang_thai:      r.trang_thai        ?? '',
-    nguoi_phu_trach: r.staff?.full_name  ?? '',
-    ghi_chu:         r.ghi_chu           ?? '',
-    customer_id:     r.customer_id       ?? null,
+    nguoi_phu_trach: r.staff?.full_name              ?? '',
+    ghi_chu:         r.ghi_chu                        ?? '',
+    dia_chi:         r.customers?.dia_chi_ct          ?? '',
+    customer_id:     r.customer_id                    ?? null,
   }
 }
 

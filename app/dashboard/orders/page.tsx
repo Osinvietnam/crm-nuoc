@@ -679,9 +679,10 @@ function CommercialCard({ c, onClick }: { c: CommercialOrder; onClick: () => voi
         </div>
         <StatusBadge label={c.trang_thai} colors={COMMERCIAL_STATUS_COLORS} />
       </div>
-      <div className="flex items-center gap-3 mt-3 flex-wrap">
+      {c.dia_chi && <p className="text-xs text-gray-400 mt-1 truncate">📍 {c.dia_chi}</p>}
+      <div className="flex items-center gap-3 mt-2 flex-wrap">
         <span className="text-sm font-bold text-green-600">{fmtMoney(c.tong_tien)}</span>
-        {c.tinh_thanh && <span className="text-xs text-gray-400">📍 {c.tinh_thanh}</span>}
+        {c.tinh_thanh && <span className="text-xs text-gray-400">{c.tinh_thanh}</span>}
         <span className="text-xs text-gray-300 ml-auto">{fmtDateStr(c.ngay_dat)}</span>
       </div>
     </button>
@@ -786,12 +787,14 @@ function QuoteCard({ q, onClick }: { q: Quote; onClick: () => void }) {
   const now = Date.now()
   const isExpired = q.ngay_het_han && now > q.ngay_het_han && q.trang_thai !== 'Chấp nhận' && q.trang_thai !== 'Từ chối'
   const displayStatus = isExpired ? 'Hết hạn' : q.trang_thai
+  const isPending = q.trang_thai === 'Chờ duyệt'
   return (
-    <button onClick={onClick} className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform">
+    <button onClick={onClick} className={`w-full bg-white rounded-2xl shadow-sm border p-4 text-left active:scale-[0.98] transition-transform ${isPending ? 'border-amber-300 bg-amber-50' : 'border-gray-100'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-800 text-sm truncate">{q.khach_hang}</p>
           <p className="text-xs text-gray-400 mt-0.5">{q.ma_bao_gia} · v{q.phien_ban}</p>
+          {isPending && <p className="text-xs text-amber-700 font-semibold mt-0.5">⏳ Chờ CEO/Manager duyệt</p>}
           {q.san_pham.length > 0 && (
             <p className="text-xs text-gray-500 mt-1 truncate">{q.san_pham.join(', ')}</p>
           )}

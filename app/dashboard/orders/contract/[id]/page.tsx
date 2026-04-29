@@ -52,6 +52,7 @@ export default function ContractDetailPage() {
   const [deliveryNotes, setDeliveryNotes] = useState('')
   const [uploadingDelivery, setUploadingDelivery] = useState(false)
   const [showDeliveryForm, setShowDeliveryForm] = useState(false)
+  const [myRole, setMyRole] = useState('')
   const deliveryFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function ContractDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
   }, [id])
 
   const confirmDelivery = async (file?: File) => {
@@ -110,7 +112,18 @@ export default function ContractDetailPage() {
     </div>
   )
 
-  const sc = CONTRACT_STATUS_COLORS[contract.trang_thai] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+  const isLogistics = myRole === 'logistics'
+  const DELIVERY_STATUSES = ['Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Đã giao', 'Đã thanh toán']
+  const DELIVERY_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+    'Chờ xác nhận':  { bg: 'bg-gray-100',   text: 'text-gray-600' },
+    'Đang chuẩn bị': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+    'Đang giao':     { bg: 'bg-blue-100',   text: 'text-blue-700' },
+    'Đã giao':       { bg: 'bg-green-100',  text: 'text-green-700' },
+    'Đã thanh toán': { bg: 'bg-green-200',  text: 'text-green-800' },
+  }
+  const statusMap = isLogistics ? DELIVERY_STATUS_COLORS : CONTRACT_STATUS_COLORS
+  const statusList = isLogistics ? DELIVERY_STATUSES : CONTRACT_STATUSES
+  const sc = statusMap[contract.trang_thai] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -130,7 +143,7 @@ export default function ContractDetailPage() {
       <div className="p-4 space-y-4">
         {/* Status */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 mb-3">TRẠNG THÁI HỢP ĐỒNG</p>
+          <p className="text-xs font-semibold text-gray-400 mb-3">{isLogistics ? 'TRẠNG THÁI GIAO HÀNG' : 'TRẠNG THÁI HỢP ĐỒNG'}</p>
           <div className="flex items-center justify-between">
             <span className={`text-sm font-semibold px-3 py-1.5 rounded-xl ${sc.bg} ${sc.text}`}>
               {contract.trang_thai || '—'}
@@ -269,8 +282,8 @@ export default function ContractDetailPage() {
               <h2 className="text-base font-bold text-gray-800">Cập nhật trạng thái</h2>
             </div>
             <div className="p-4 space-y-2 pb-8">
-              {CONTRACT_STATUSES.map(s => {
-                const c = CONTRACT_STATUS_COLORS[s] ?? { bg: 'bg-gray-50', text: 'text-gray-600' }
+              {statusList.map(s => {
+                const c = statusMap[s] ?? { bg: 'bg-gray-50', text: 'text-gray-600' }
                 return (
                   <button key={s} onClick={() => { updateStatus(s); setShowStatus(false) }}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left ${

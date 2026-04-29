@@ -880,7 +880,7 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {['admin', 'ceo', 'director'].includes(role) && (
+            {['admin', 'ceo', 'director', 'sales'].includes(role) && (
               <button
                 onClick={() => setShowImport(true)}
                 className="border border-gray-200 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl flex items-center gap-1.5"
@@ -888,12 +888,14 @@ export default function CustomersPage() {
                 Import
               </button>
             )}
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
-            >
-              <span className="text-base leading-none">+</span> Thêm mới
-            </button>
+            {role !== 'accountant' && (
+              <button
+                onClick={() => setShowForm(true)}
+                className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
+              >
+                <span className="text-base leading-none">+</span> Thêm mới
+              </button>
+            )}
           </div>
         </div>
 

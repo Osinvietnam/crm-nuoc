@@ -152,6 +152,7 @@ export const QUOTE_STATUS_COLORS: Record<string, { bg: string; text: string }> =
   'Nháp':       { bg: 'bg-gray-100',   text: 'text-gray-600' },
   'Đã gửi':     { bg: 'bg-blue-100',   text: 'text-blue-700' },
   'Đàm phán':   { bg: 'bg-orange-100', text: 'text-orange-700' },
+  'Chờ duyệt':  { bg: 'bg-amber-100',  text: 'text-amber-700' },
   'Chấp nhận':  { bg: 'bg-green-100',  text: 'text-green-700' },
   'Từ chối':    { bg: 'bg-red-100',    text: 'text-red-700' },
   'Hết hạn':    { bg: 'bg-gray-100',   text: 'text-gray-400' },
