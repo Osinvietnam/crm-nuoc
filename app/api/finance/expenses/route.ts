@@ -152,12 +152,22 @@ export async function DELETE(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO mới xóa được' }, { status: 403 })
+    if (!me || !['admin', 'ceo', 'accountant'].includes(me.role)) {
+      return NextResponse.json({ error: 'Không có quyền xóa' }, { status: 403 })
     }
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
+
+    // FIN-05: accountant chỉ xóa được expense của chính mình
+    if (me.role === 'accountant') {
+      const service = createServiceClient()
+      const { data: exp } = await service.from('expenses').select('created_by').eq('id', id).maybeSingle()
+      if (!exp) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 })
+      if (exp.created_by !== user.id) {
+        return NextResponse.json({ error: 'Chỉ xóa được chi phí do chính mình tạo' }, { status: 403 })
+      }
+    }
 
     const service = createServiceClient()
     const { error } = await service.from('expenses').delete().eq('id', id)

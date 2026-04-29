@@ -353,17 +353,19 @@ function TempPasswordToast({
   email,
   tempPwd,
   onClose,
+  title = 'Tạo tài khoản thành công',
 }: {
   email: string
   tempPwd: string
   onClose: () => void
+  title?: string
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl">
         <div className="text-center">
           <div className="text-4xl mb-2">✅</div>
-          <h2 className="text-base font-bold text-gray-800">Tạo tài khoản thành công</h2>
+          <h2 className="text-base font-bold text-gray-800">{title}</h2>
           <p className="text-xs text-gray-500 mt-1">Thông báo cho nhân viên qua Zalo/điện thoại</p>
         </div>
         <div className="bg-gray-50 rounded-xl p-4 space-y-2">
@@ -385,6 +387,64 @@ function TempPasswordToast({
         >
           Đã hiểu
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Reset Password Modal ─────────────────────────────────────────────────────
+
+function ResetPasswordModal({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: StaffUser
+  onClose: () => void
+  onDone: (email: string, pwd: string) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState('')
+
+  const handleReset = async () => {
+    setSaving(true)
+    setErr('')
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!'
+    const tempPwd = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    try {
+      const res = await fetch(`/api/admin/users/${target.id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: tempPwd }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErr(data.error ?? `Lỗi ${res.status}`); return }
+      onDone(target.email, tempPwd)
+    } catch {
+      setErr('Lỗi kết nối')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl">
+        <h2 className="text-base font-bold text-gray-800">Đặt lại mật khẩu</h2>
+        <p className="text-sm text-gray-600">
+          Đặt lại mật khẩu cho <strong>{target.full_name}</strong>?
+          Hệ thống sẽ tạo mật khẩu tạm ngẫu nhiên.
+        </p>
+        {err && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-xl">{err}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-300 text-sm text-gray-600">
+            Hủy
+          </button>
+          <button onClick={handleReset} disabled={saving}
+            className="flex-1 py-3 rounded-xl bg-amber-500 text-white text-sm font-medium disabled:opacity-50">
+            {saving ? 'Đang xử lý...' : 'Đặt lại MK'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -2120,8 +2180,9 @@ export default function AdminPage() {
   const [errorMsg,     setErrorMsg]     = useState('')
   const [roleTarget,   setRoleTarget]   = useState<StaffUser | null>(null)
   const [deactTarget,  setDeactTarget]  = useState<StaffUser | null>(null)
+  const [resetPwdTarget, setResetPwdTarget] = useState<StaffUser | null>(null)
   const [showCreate,   setShowCreate]   = useState(false)
-  const [tempPwdInfo,  setTempPwdInfo]  = useState<{ email: string; pwd: string } | null>(null)
+  const [tempPwdInfo,  setTempPwdInfo]  = useState<{ email: string; pwd: string; title?: string } | null>(null)
   const [unlockTarget, setUnlockTarget] = useState<StaffUser | null>(null)
   const [unlocking,    setUnlocking]    = useState(false)
   const [statusFilter, setStatusFilter]  = useState<string[]>(['Đang làm'])
@@ -2360,7 +2421,7 @@ export default function AdminPage() {
 
                 {/* Actions — chỉ hiện nếu không phải chính mình */}
                 {!isMe && u.is_active && (
-                  <div className="flex gap-2 pt-1 border-t border-gray-50">
+                  <div className="flex gap-2 pt-1 border-t border-gray-50 flex-wrap">
                     <button
                       onClick={() => setRoleTarget(u)}
                       className="flex-1 border border-blue-200 text-blue-600 text-xs font-semibold py-2 rounded-xl hover:bg-blue-50"
@@ -2368,8 +2429,14 @@ export default function AdminPage() {
                       ✏️ Đổi vai trò
                     </button>
                     <button
+                      onClick={() => setResetPwdTarget(u)}
+                      className="flex-1 border border-amber-200 text-amber-600 text-xs font-semibold py-2 rounded-xl hover:bg-amber-50"
+                    >
+                      🔑 Đặt lại MK
+                    </button>
+                    <button
                       onClick={() => setDeactTarget(u)}
-                      className="flex-1 border border-red-200 text-red-500 text-xs font-semibold py-2 rounded-xl hover:bg-red-50"
+                      className="w-full border border-red-200 text-red-500 text-xs font-semibold py-2 rounded-xl hover:bg-red-50"
                     >
                       🔒 Khoá tài khoản
                     </button>
@@ -2412,6 +2479,17 @@ export default function AdminPage() {
         />
       )}
 
+      {resetPwdTarget && (
+        <ResetPasswordModal
+          target={resetPwdTarget}
+          onClose={() => setResetPwdTarget(null)}
+          onDone={(email, pwd) => {
+            setResetPwdTarget(null)
+            setTempPwdInfo({ email, pwd, title: 'Đặt lại mật khẩu thành công' })
+          }}
+        />
+      )}
+
       {showCreate && (
         <CreateUserSheet
           onClose={() => setShowCreate(false)}
@@ -2427,6 +2505,7 @@ export default function AdminPage() {
         <TempPasswordToast
           email={tempPwdInfo.email}
           tempPwd={tempPwdInfo.pwd}
+          title={tempPwdInfo.title}
           onClose={() => setTempPwdInfo(null)}
         />
       )}

@@ -164,7 +164,7 @@ function QuickActions({ role }: { role: string }) {
     admin:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     ceo:        [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     director:   [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }],
-    accountant: [],
+    accountant: [{ label: 'Ghi thu', icon: '💵', href: '/dashboard/finance' }, { label: 'Xem công nợ', icon: '📊', href: '/dashboard/finance' }],
     sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     tech:       [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],

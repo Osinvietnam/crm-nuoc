@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       .from('payment_records')
       .select('*')
       .eq('customer_record_id', customer_record_id)
+      .is('deleted_at', null)
       .order('installment', { ascending: true })
 
     if (error) throw error
@@ -78,6 +79,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'installment phải là 1, 2 hoặc 3' }, { status: 400 })
     }
 
+    // FIN-02: idempotency — reject nếu cùng (customer_record_id, installment) được upsert trong 30s
+    const thirtySecsAgo = new Date(Date.now() - 30_000).toISOString()
+    const { data: recent } = await supabase
+      .from('payment_records')
+      .select('updated_at')
+      .eq('customer_record_id', customer_record_id)
+      .eq('installment', Number(installment))
+      .is('deleted_at', null)
+      .gt('updated_at', thirtySecsAgo)
+      .maybeSingle()
+    if (recent) {
+      return NextResponse.json({ error: 'Yêu cầu vừa được xử lý, vui lòng đợi 30 giây' }, { status: 429 })
+    }
+
     // Lookup customer: lấy id + nguoi_phu_trach (UUID của sales phụ trách)
     const { data: cust } = await supabase
       .from('customers').select('id, nguoi_phu_trach').eq('id', Number(customer_record_id)).maybeSingle()
@@ -99,6 +114,7 @@ export async function POST(req: NextRequest) {
         due_date:           due_date ?? null,
         is_paid:            false,
         notes:              notes ?? null,
+        created_by:         user.id,
         updated_at:         new Date().toISOString(),
       }, { onConflict: 'customer_record_id,installment' })
       .select()
@@ -173,7 +189,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// ─── DELETE /api/payments?id= — Xóa đợt thanh toán (admin/CEO only) ─────────
+// ─── DELETE /api/payments?id= — Xóa đợt thanh toán (soft-delete) ────────────
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -183,14 +199,38 @@ export async function DELETE(req: NextRequest) {
 
     const { data: me } = await supabase
       .from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO/giám đốc mới xóa được' }, { status: 403 })
-    }
+    if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
-    const { error } = await supabase.from('payment_records').delete().eq('id', id)
+    const isManager = ['admin', 'ceo', 'director'].includes(me.role)
+
+    if (!isManager) {
+      // ACC-07: accountant xóa được nếu is_paid=false VÀ created_by=me.id
+      if (me.role !== 'accountant') {
+        return NextResponse.json({ error: 'Không có quyền xóa' }, { status: 403 })
+      }
+      const { data: rec } = await supabase
+        .from('payment_records')
+        .select('is_paid, created_by')
+        .eq('id', id)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (!rec) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 })
+      if (rec.is_paid) {
+        return NextResponse.json({ error: 'Không thể xóa đợt đã thu tiền' }, { status: 403 })
+      }
+      if (rec.created_by !== user.id) {
+        return NextResponse.json({ error: 'Chỉ xóa được đợt do chính mình tạo' }, { status: 403 })
+      }
+    }
+
+    // FIN-03: soft-delete
+    const { error } = await supabase
+      .from('payment_records')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id)
     if (error) throw error
 
     void logAudit(supabase, {
