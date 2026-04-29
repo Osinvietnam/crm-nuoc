@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useToast } from '@/components/Toast'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import {
   CONTRACT_STATUS_COLORS,
@@ -627,27 +628,43 @@ function AddProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
-function ContractCard({ c, onClick }: { c: Contract; onClick: () => void }) {
+const B2C_DELIVERY_STATUSES = ['Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Đã giao', 'Đã thanh toán']
+
+function ContractCard({ c, onClick, onStatusClick }: {
+  c: Contract
+  onClick: () => void
+  onStatusClick?: (id: string, current: string) => void
+}) {
   return (
-    <button onClick={onClick} className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 text-sm">{c.khach_hang}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{c.ma_hd} · {c.sdt}</p>
-          {c.san_pham.length > 0 && <p className="text-xs text-gray-500 mt-1 truncate">{c.san_pham.join(', ')}</p>}
+    <div className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left">
+      <button onClick={onClick} className="w-full text-left active:opacity-80">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-800 text-sm">{c.khach_hang}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{c.ma_hd} · {c.sdt}</p>
+            {c.san_pham.length > 0 && <p className="text-xs text-gray-500 mt-1 truncate">{c.san_pham.join(', ')}</p>}
+          </div>
+          <StatusBadge label={c.trang_thai} colors={CONTRACT_STATUS_COLORS} />
         </div>
-        <StatusBadge label={c.trang_thai} colors={CONTRACT_STATUS_COLORS} />
-      </div>
-      <div className="flex items-center gap-3 mt-3 flex-wrap">
-        <span className="text-sm font-bold text-green-600">{fmtMoney(c.gia_tri_hd)}</span>
-        {c.nguoi_phu_trach && <span className="text-xs text-gray-400">👤 {c.nguoi_phu_trach}</span>}
-        <span className="text-xs text-gray-300 ml-auto">Ký: {fmtDate(c.ngay_ky)}</span>
-      </div>
-      {c.dia_chi_ct && <p className="text-xs text-gray-400 mt-1.5 truncate">📍 {c.dia_chi_ct}</p>}
-      {c.ngay_giao_dk && (
-        <p className="text-xs text-orange-500 mt-1">📦 Giao dự kiến: {fmtDate(c.ngay_giao_dk)}</p>
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
+          <span className="text-sm font-bold text-green-600">{fmtMoney(c.gia_tri_hd)}</span>
+          {c.nguoi_phu_trach && <span className="text-xs text-gray-400">👤 {c.nguoi_phu_trach}</span>}
+          <span className="text-xs text-gray-300 ml-auto">Ký: {fmtDate(c.ngay_ky)}</span>
+        </div>
+        {c.dia_chi_ct && <p className="text-xs text-gray-400 mt-1.5 truncate">📍 {c.dia_chi_ct}</p>}
+        {c.ngay_giao_dk && (
+          <p className="text-xs text-orange-500 mt-1">📦 Giao dự kiến: {fmtDate(c.ngay_giao_dk)}</p>
+        )}
+      </button>
+      {onStatusClick && (
+        <button
+          onClick={e => { e.stopPropagation(); onStatusClick(c.record_id, c.trang_thai) }}
+          className="mt-3 w-full text-xs font-semibold text-blue-600 bg-blue-50 py-2 rounded-xl border border-blue-100"
+        >
+          Cập nhật trạng thái giao
+        </button>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -1070,8 +1087,13 @@ export default function OrdersPage() {
   const [tab, setTab]           = useState<Tab>('quotes')
   const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter]   = useState<string>('all')
+  const [deliveryFilter, setDeliveryFilter] = useState<string>('all')
   const [role, setRole]         = useState<string>('')
+  const [quickStatusId, setQuickStatusId]     = useState<string | null>(null)
+  const [quickStatusCurrent, setQuickStatusCurrent] = useState<string>('')
+  const [quickStatusSaving, setQuickStatusSaving]   = useState(false)
+  const toast = useToast()
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -1102,7 +1124,6 @@ export default function OrdersPage() {
   const filtered = data.filter(item => {
     const q = search.toLowerCase()
     const textMatch = !q || JSON.stringify(item).toLowerCase().includes(q)
-    // M7: Filter status cho tab quotes
     if (tab === 'quotes' && statusFilter !== 'all') {
       const quote = item as Quote
       const now = Date.now()
@@ -1110,6 +1131,9 @@ export default function OrdersPage() {
         && !['Chấp nhận', 'Từ chối'].includes(quote.trang_thai)
       const displayStatus = isExpired ? 'Hết hạn' : quote.trang_thai
       if (displayStatus !== statusFilter) return false
+    }
+    if (tab === 'b2c' && deliveryFilter !== 'all') {
+      if ((item as Contract).trang_thai !== deliveryFilter) return false
     }
     return textMatch
   })
@@ -1137,6 +1161,28 @@ export default function OrdersPage() {
     if (tab === 'b2c')        return `/dashboard/orders/contract/${item.record_id}`
     if (tab === 'commercial') return `/dashboard/orders/commercial/${item.record_id}`
     return `/dashboard/orders/project/${item.record_id}`
+  }
+
+  const handleQuickStatus = async (status: string) => {
+    if (!quickStatusId) return
+    setQuickStatusSaving(true)
+    try {
+      const res = await fetch(`/api/lark/orders/contract/${quickStatusId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trang_thai: status }),
+      })
+      if (!res.ok) throw new Error()
+      orderHook.setData(prev => prev.map(o =>
+        o.record_id === quickStatusId ? { ...o, trang_thai: status } as typeof o : o
+      ))
+      toast('Đã cập nhật trạng thái giao')
+      setQuickStatusId(null)
+    } catch {
+      toast('Lỗi cập nhật trạng thái', true)
+    } finally {
+      setQuickStatusSaving(false)
+    }
   }
 
   const searchPlaceholder =
@@ -1169,7 +1215,7 @@ export default function OrdersPage() {
           {tabs.map(t => (
             <button
               key={t.key}
-              onClick={() => { setTab(t.key); setSearch(''); setStatusFilter('all') }}
+              onClick={() => { setTab(t.key); setSearch(''); setStatusFilter('all'); setDeliveryFilter('all') }}
               className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all relative ${
                 tab === t.key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
               }`}
@@ -1199,7 +1245,7 @@ export default function OrdersPage() {
           )}
         </div>
 
-        {/* M7: Status filter — chỉ hiện ở tab Báo giá */}
+        {/* Status filter — tab Báo giá */}
         {tab === 'quotes' && (
           <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
             {['all', 'Chờ duyệt', 'Nháp', 'Đã gửi', 'Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'].map(s => (
@@ -1208,6 +1254,25 @@ export default function OrdersPage() {
                 onClick={() => setStatusFilter(s)}
                 className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
                   statusFilter === s
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                {s === 'all' ? 'Tất cả' : s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* UX-23: Delivery filter — tab B2C cho logistics */}
+        {tab === 'b2c' && role === 'logistics' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+            {['all', ...B2C_DELIVERY_STATUSES].map(s => (
+              <button
+                key={s}
+                onClick={() => setDeliveryFilter(s)}
+                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                  deliveryFilter === s
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-gray-500 border-gray-200'
                 }`}
@@ -1275,7 +1340,12 @@ export default function OrdersPage() {
           </>
         ) : tab === 'b2c' ? (
           (filtered as Contract[]).map(c => (
-            <ContractCard key={c.record_id} c={c} onClick={() => router.push(getOrderDetailPath(c))} />
+            <ContractCard
+              key={c.record_id}
+              c={c}
+              onClick={() => router.push(getOrderDetailPath(c))}
+              onStatusClick={role === 'logistics' ? (id, current) => { setQuickStatusId(id); setQuickStatusCurrent(current) } : undefined}
+            />
           ))
         ) : tab === 'commercial' ? (
           (filtered as CommercialOrder[]).map(c => (
@@ -1309,6 +1379,31 @@ export default function OrdersPage() {
       )}
       {showForm && tab === 'projects' && (
         <AddProjectForm onClose={() => setShowForm(false)} onCreated={item => handleCreated(item as Project)} />
+      )}
+
+      {/* UX-25: Quick delivery status bottom sheet */}
+      {quickStatusId && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+          onClick={e => e.target === e.currentTarget && setQuickStatusId(null)}>
+          <div className="bg-white rounded-t-3xl">
+            <div className="flex justify-center pt-3 pb-1"><div className="w-12 h-1.5 bg-gray-300 rounded-full" /></div>
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-800">Trạng thái giao hàng</h2>
+              <button onClick={() => setQuickStatusId(null)} className="text-gray-400 text-lg p-1">✕</button>
+            </div>
+            <div className="p-4 space-y-2 pb-8">
+              {B2C_DELIVERY_STATUSES.map(s => (
+                <button key={s} onClick={() => handleQuickStatus(s)} disabled={quickStatusSaving}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left disabled:opacity-50 ${
+                    quickStatusCurrent === s ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50 text-gray-700'
+                  }`}>
+                  <span className="text-sm font-medium">{s}</span>
+                  {quickStatusCurrent === s && <span className="text-xs">✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

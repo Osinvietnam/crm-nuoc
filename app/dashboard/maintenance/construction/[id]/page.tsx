@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import type { Construction } from '@/app/api/lark/maintenance/_mappers'
+import { TaskChecklist } from '@/components/TaskChecklist'
 
 const fmtDate = (ms: number | null) => ms
   ? new Date(ms).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -41,6 +42,7 @@ export default function ConstructionDetailPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [photos, setPhotos]     = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
+  const [me, setMe]             = useState({ role: '', fullName: '' })
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function ConstructionDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMe({ role: d?.role ?? '', fullName: d?.full_name ?? '' })).catch(() => {})
   }, [id])
 
   const uploadPhoto = async (file: File) => {
@@ -250,6 +253,19 @@ export default function ConstructionDetailPage() {
             ))}
           </div>
         </div>
+        {/* Task checklist */}
+        {item.customer_id && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <p className="text-xs font-semibold text-gray-400 px-4 pt-4 pb-2">CHECKLIST CÔNG VIỆC</p>
+            <TaskChecklist
+              customerId={item.customer_id.toString()}
+              orderId={item.order_id ?? undefined}
+              stage="Đang thi công"
+              userRole={me.role}
+              userFullName={me.fullName}
+            />
+          </div>
+        )}
       </div>
 
       {/* Status picker bottom sheet */}

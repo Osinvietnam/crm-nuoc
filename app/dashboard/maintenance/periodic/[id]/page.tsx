@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import type { PeriodicService } from '@/app/api/lark/maintenance/_mappers'
+import { TaskChecklist } from '@/components/TaskChecklist'
 
 const fmtDate = (ms: number | null) => ms
   ? new Date(ms).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -32,6 +33,7 @@ export default function PeriodicDetailPage() {
   const [markingDone, setMarkingDone] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [successMsg, setSuccessMsg]   = useState('')
+  const [me, setMe]               = useState({ role: '', fullName: '' })
 
   useEffect(() => {
     fetch(`/api/lark/maintenance/periodic/${id}`)
@@ -39,6 +41,7 @@ export default function PeriodicDetailPage() {
       .then(d => setItem(d.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMe({ role: d?.role ?? '', fullName: d?.full_name ?? '' })).catch(() => {})
   }, [id])
 
   const markDone = async () => {
@@ -194,6 +197,20 @@ export default function PeriodicDetailPage() {
           <InfoRow label="Trạng thái" value={item.trang_thai} />
           {item.ghi_chu && <InfoRow label="Ghi chú" value={item.ghi_chu} />}
         </div>
+
+        {/* Task checklist */}
+        {item.customer_id && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <p className="text-xs font-semibold text-gray-400 px-4 pt-4 pb-2">CHECKLIST CÔNG VIỆC</p>
+            <TaskChecklist
+              customerId={item.customer_id.toString()}
+              orderId={item.order_id ?? undefined}
+              stage="Bảo hành"
+              userRole={me.role}
+              userFullName={me.fullName}
+            />
+          </div>
+        )}
       </div>
 
       {/* Confirm mark done */}

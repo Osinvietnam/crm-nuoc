@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { ToastProvider } from '@/components/Toast'
 
 interface Profile {
   full_name: string
@@ -122,6 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const initials = profile?.full_name?.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase() ?? 'U'
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-gray-50 flex">
 
       {/* ── Desktop Sidebar (lg+) ─────────────────────────────────────── */}
@@ -229,5 +231,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       </div>
     </div>
+    </ToastProvider>
   )
 }
