@@ -148,6 +148,7 @@ export default function CustomerDetailPage() {
           kenh_tiep_nhan:     qKenhTiepNhan  || undefined,
           ngay_gui_kh:        qNgayGuiKH ? new Date(qNgayGuiKH).getTime() : undefined,
           customer_record_id: customer.record_id,
+          items: qItems.map(i => ({ ten_sp: i.ten_sp, don_gia: i.don_gia, so_luong: i.so_luong, product_id: i.product_id ?? null })),
         }),
       })
       const data = await res.json()
@@ -484,7 +485,7 @@ export default function CustomerDetailPage() {
               <div className="flex-1 overflow-y-auto">
                 {qProducts.map(p => (
                   <button key={p.record_id}
-                    onClick={() => { qAddItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0 }); setQShowPicker(false) }}
+                    onClick={() => { qAddItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null }); setQShowPicker(false) }}
                     className="w-full px-4 py-3.5 border-b border-gray-50 text-left flex items-center gap-3 active:bg-blue-50">
                     <ProductThumb p={p} />
                     <div className="flex-1 min-w-0">

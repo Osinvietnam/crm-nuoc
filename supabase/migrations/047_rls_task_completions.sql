@@ -1,7 +1,11 @@
 -- 047: Siết RLS task_completions — chỉ role trong roles_can_update mới INSERT/UPDATE được
 
--- Xóa policy cũ quá rộng (mọi authenticated user đều manage được)
+-- Xóa tất cả policy cũ (idempotent)
 DROP POLICY IF EXISTS "authenticated users can manage task completions" ON task_completions;
+DROP POLICY IF EXISTS "task_completions_select" ON task_completions;
+DROP POLICY IF EXISTS "task_completions_insert" ON task_completions;
+DROP POLICY IF EXISTS "task_completions_update" ON task_completions;
+DROP POLICY IF EXISTS "task_completions_delete" ON task_completions;
 
 -- ─── SELECT: mọi user xác thực đọc được ─────────────────────────────────────
 CREATE POLICY "task_completions_select"

@@ -858,7 +858,7 @@ function AddQuoteForm({ onClose, onCreated, prefilledCustomer }: {
   }
 
   const handleSelectProduct = (p: Product) => {
-    addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0 })
+    addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null })
     setShowProductPicker(false)
   }
 
@@ -883,6 +883,7 @@ function AddQuoteForm({ onClose, onCreated, prefilledCustomer }: {
           san_pham,
           tong_gia_tri:       total,
           customer_record_id: customerRecordId || undefined,
+          items: items.map(i => ({ ten_sp: i.ten_sp, don_gia: i.don_gia, so_luong: i.so_luong, product_id: i.product_id ?? null })),
         }),
       })
       const data = await res.json()

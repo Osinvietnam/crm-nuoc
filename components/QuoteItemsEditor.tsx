@@ -5,10 +5,11 @@ import { useState, useEffect, useCallback } from 'react'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface QuoteItem {
-  id:       string   // local id (không gửi lên Lark)
-  ten_sp:   string
-  so_luong: number
-  don_gia:  number
+  id:         string   // local id (không gửi lên Lark)
+  ten_sp:     string
+  so_luong:   number
+  don_gia:    number
+  product_id: number | null  // FK → products.id; null nếu nhập tay
 }
 
 export function itemsToLarkFields(items: QuoteItem[]): { san_pham: string; tong_gia_tri: number } {
@@ -120,18 +121,17 @@ export function QuoteItemsEditor({ draftKey, onAddFromPicker, pendingProduct, on
   useEffect(() => {
     if (!pendingProduct) return
     setItems(prev => {
-      // Nếu sản phẩm đã có → tăng số lượng
       const existing = prev.find(i => i.ten_sp === pendingProduct.ten_sp)
       if (existing) {
         return prev.map(i => i.id === existing.id ? { ...i, so_luong: i.so_luong + 1 } : i)
       }
-      return [...prev, { id: uid(), ten_sp: pendingProduct.ten_sp, so_luong: 1, don_gia: pendingProduct.don_gia }]
+      return [...prev, { id: uid(), ten_sp: pendingProduct.ten_sp, so_luong: 1, don_gia: pendingProduct.don_gia, product_id: (pendingProduct as any).product_id ?? null }]
     })
     onPendingConsumed?.()
   }, [pendingProduct, onPendingConsumed])
 
   const addBlankItem = () =>
-    setItems(prev => [...prev, { id: uid(), ten_sp: '', so_luong: 1, don_gia: 0 }])
+    setItems(prev => [...prev, { id: uid(), ten_sp: '', so_luong: 1, don_gia: 0, product_id: null }])
 
   const removeItem = useCallback((id: string) =>
     setItems(prev => prev.filter(i => i.id !== id)), [])
@@ -189,16 +189,16 @@ export function useQuoteItems(draftKey: string) {
   const [items, setItems] = useState<QuoteItem[]>(() => loadDraft(draftKey))
   useEffect(() => { saveDraft(draftKey, items) }, [draftKey, items])
 
-  const addItem = useCallback((product: { ten_sp: string; don_gia: number }) => {
+  const addItem = useCallback((product: { ten_sp: string; don_gia: number; product_id?: number | null }) => {
     setItems(prev => {
       const existing = prev.find(i => i.ten_sp === product.ten_sp)
       if (existing) return prev.map(i => i.id === existing.id ? { ...i, so_luong: i.so_luong + 1 } : i)
-      return [...prev, { id: uid(), ten_sp: product.ten_sp, so_luong: 1, don_gia: product.don_gia }]
+      return [...prev, { id: uid(), ten_sp: product.ten_sp, so_luong: 1, don_gia: product.don_gia, product_id: product.product_id ?? null }]
     })
   }, [])
 
   const addBlank = useCallback(() =>
-    setItems(prev => [...prev, { id: uid(), ten_sp: '', so_luong: 1, don_gia: 0 }]), [])
+    setItems(prev => [...prev, { id: uid(), ten_sp: '', so_luong: 1, don_gia: 0, product_id: null }]), [])
 
   const removeItem = useCallback((id: string) =>
     setItems(prev => prev.filter(i => i.id !== id)), [])

@@ -145,7 +145,8 @@ export async function POST(req: NextRequest) {
 
     // H1: Insert quote_items nếu có items structured
     if (Array.isArray(body.items) && body.items.length > 0 && data.id) {
-      const itemsToInsert = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }) => ({
+      type InsertItem = { quote_id: number; product_id: number | null; ten_sp: string; don_gia: number; so_luong: number; sort_order: number }
+      const itemsToInsert: InsertItem[] = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }) => ({
         quote_id:   data.id,
         product_id: item.product_id ?? null,
         ten_sp:     item.ten_sp,
@@ -153,6 +154,18 @@ export async function POST(req: NextRequest) {
         so_luong:   Number(item.so_luong) || 1,
         sort_order: 0,
       }))
+
+      // PRD-01: Fallback lookup product_id by ten_sp for items missing it
+      const needLookup = itemsToInsert.filter((i: InsertItem) => !i.product_id && i.ten_sp)
+      if (needLookup.length > 0) {
+        const { data: matched } = await supabase
+          .from('products').select('id, ten_sp').in('ten_sp', needLookup.map((i: InsertItem) => i.ten_sp))
+        if (matched) {
+          const byName: Record<string, number> = Object.fromEntries(matched.map((p: { id: number; ten_sp: string }) => [p.ten_sp, p.id]))
+          itemsToInsert.forEach((i: InsertItem) => { if (!i.product_id && byName[i.ten_sp]) i.product_id = byName[i.ten_sp] })
+        }
+      }
+
       const { error: itemsErr } = await supabase.from('quote_items').insert(itemsToInsert)
       if (itemsErr) console.error('Insert quote_items:', itemsErr.message)
     }

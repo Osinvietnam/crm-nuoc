@@ -131,6 +131,17 @@ export async function PATCH(
       detail:    `KH #${numericId ?? id}: ${Object.keys(updates).join(', ')}`,
     })
 
+    // PRD-02: Warn if san_pham_quan_tam contains unknown product names
+    if (Array.isArray(updates.san_pham_quan_tam) && (updates.san_pham_quan_tam as string[]).length > 0) {
+      const names = updates.san_pham_quan_tam as string[]
+      const { data: known } = await supabase.from('products').select('ten_sp').in('ten_sp', names)
+      const knownNames = new Set((known ?? []).map((p: { ten_sp: string }) => p.ten_sp))
+      const unknown = names.filter(n => !knownNames.has(n))
+      if (unknown.length > 0) {
+        console.warn(`PRD-02: san_pham_quan_tam chứa sản phẩm không có trong danh mục: ${unknown.join(', ')} (KH #${numericId ?? id})`)
+      }
+    }
+
     // ── Warning checks (H5 + H6) — non-blocking ──────────────────────────────
     const warnings: string[] = []
     const newPipeline = updates.pipeline as string | undefined
