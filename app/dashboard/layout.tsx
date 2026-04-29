@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ToastProvider } from '@/components/Toast'
+import { NotificationPanel } from '@/components/NotificationPanel'
 
 interface Profile {
   full_name: string
@@ -12,9 +13,11 @@ interface Profile {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  const [profile,      setProfile]      = useState<Profile | null>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [unreadCount,  setUnreadCount]  = useState(0)
+  const [userId,       setUserId]       = useState<string | null>(null)
+  const router   = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
 
@@ -22,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const getProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
+      setUserId(user.id)
 
       const { data } = await supabase
         .from('profiles')
@@ -31,9 +35,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       setProfile(data)
       setLoading(false)
+
+      // Fetch initial unread count
+      const res  = await fetch('/api/notifications?limit=1')
+      const json = await res.json()
+      if (res.ok) setUnreadCount(json.unread_count ?? 0)
     }
     getProfile()
   }, [])
+
+  // Supabase Realtime — lắng nghe INSERT vào notifications cho user hiện tại
+  useEffect(() => {
+    if (!userId) return
+    const channel = supabase
+      .channel('notifications-inbox')
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => setUnreadCount(n => n + 1)
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [userId])
 
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: 'global' })
@@ -167,8 +195,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* Logout */}
-        <div className="p-2 border-t border-gray-100 shrink-0">
+        {/* Notification + Logout */}
+        <div className="p-2 border-t border-gray-100 shrink-0 space-y-0.5">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <NotificationPanel unreadCount={unreadCount} onCountChange={setUnreadCount} />
+            <span className="text-sm text-gray-600">Thông báo</span>
+          </div>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors text-left"
@@ -196,12 +228,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-xs text-blue-600 mt-0.5">{roleLabel[profile?.role ?? 'sales']}</p>
             </div>
           </button>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
-          >
-            Đăng xuất
-          </button>
+          <div className="flex items-center gap-1">
+            <NotificationPanel unreadCount={unreadCount} onCountChange={setUnreadCount} />
+            <button
+              onClick={handleLogout}
+              className="text-xs text-gray-500 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
+            >
+              Đăng xuất
+            </button>
+          </div>
         </header>
 
         {/* Content */}

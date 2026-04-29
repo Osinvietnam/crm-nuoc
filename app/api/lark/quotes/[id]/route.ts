@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapQuote } from '../_mappers'
 import { logAudit } from '@/lib/audit'
+import { notifyManagers } from '@/lib/notifications'
 
 const SELECT = `
   *,
@@ -175,6 +176,17 @@ export async function PATCH(
         action:    'quote_status_changed',
         entity:    'quote',
         detail:    `BG ${data.ma_bao_gia} → ${body.trang_thai}`,
+      })
+    }
+
+    // 9.4: Notify managers khi báo giá → 'Chờ duyệt'
+    const newStatus = updates.trang_thai ?? body.trang_thai
+    if (newStatus === 'Chờ duyệt' && current.trang_thai !== 'Chờ duyệt') {
+      void notifyManagers({
+        type:  'quote_pending_approval',
+        title: `Báo giá chờ duyệt`,
+        body:  `${data.ma_bao_gia} — ${data.khach_hang ?? 'KH không rõ'} (${profile.full_name})`,
+        link:  `/dashboard/orders/quote/${id}`,
       })
     }
 
