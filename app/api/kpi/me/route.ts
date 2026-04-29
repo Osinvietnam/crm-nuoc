@@ -54,28 +54,38 @@ export async function GET(req: NextRequest) {
       .from('payment_records')
       .select('amount')
       .eq('is_paid', true)
-      .eq('nguoi_phu_trach', fullName)
+      .eq('nguoi_phu_trach_id', userId)
       .gte('paid_date', monthStart)
       .lte('paid_date', monthEnd)
 
     const actualRevenue = (payments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0)
 
-    // ── Actual contracts: số KH có pipeline ≥ Chốt HĐ, phụ trách = fullName, cập nhật trong tháng ──
-    // Dùng LarkBase customers: đếm records có pipeline trong danh sách stages sau Chốt HĐ
-    // Để tránh gọi LarkBase nặng, dùng Supabase nếu có snapshot; nếu không thì trả null
-    // → Hiện tại chưa có bảng mirror customers trong Supabase nên trả null (sẽ cải thiện sau)
-    const actualContracts: number | null = null
+    // ── Actual contracts: số KH đã vào giai đoạn ≥ Chốt HĐ, phụ trách = userId, trong tháng ──
+    const CONTRACT_STAGES = ['Chốt HĐ', 'Đang thi công', 'Giao hàng', 'Nghiệm thu', 'Bảo hành']
+    const { count: contractCount } = await service
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .in('pipeline', CONTRACT_STAGES)
+      .eq('nguoi_phu_trach', userId)
+      .gte('updated_at', monthStart + 'T00:00:00Z')
+      .lte('updated_at', monthEnd   + 'T23:59:59Z')
+    const actualContracts = contractCount ?? 0
 
-    // ── Actual customers: số KH mới trong tháng, phụ trách = fullName ──
-    // Tương tự — cần mirror customers → trả null tạm thời
-    const actualCustomers: number | null = null
+    // ── Actual customers: số KH mới trong tháng, phụ trách = userId ──
+    const { count: customerCount } = await service
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('nguoi_phu_trach', userId)
+      .gte('ngay_lien_he_dau', monthStart)
+      .lte('ngay_lien_he_dau', monthEnd)
+    const actualCustomers = customerCount ?? 0
 
     // ── Performance % ──
     const target = targetRow ?? null
     const perf = {
-      revenue:   target?.target_revenue   ? Math.round((actualRevenue / target.target_revenue) * 100) : null,
-      contracts: null as number | null,
-      customers: null as number | null,
+      revenue:   target?.target_revenue   ? Math.round((actualRevenue    / target.target_revenue)   * 100) : null,
+      contracts: target?.target_contracts ? Math.round((actualContracts  / target.target_contracts) * 100) : null,
+      customers: target?.target_customers ? Math.round((actualCustomers  / target.target_customers) * 100) : null,
     }
 
     return NextResponse.json({

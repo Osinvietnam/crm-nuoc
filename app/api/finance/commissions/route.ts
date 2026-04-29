@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── GET /api/finance/commissions?is_paid=false&thang=&nam= ──────────────────
 
@@ -90,6 +91,14 @@ export async function PATCH(req: NextRequest) {
       .select('id, ma_hd, hh_kinh_doanh, hh_da_tra, hh_ngay_tra')
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    is_paid ? 'commission_paid' : 'commission_unpaid',
+      entity:    'commission',
+      detail:    `${order_ids.length} đơn — ngày: ${paid_date ?? 'n/a'}`,
+    })
 
     return NextResponse.json({
       success: true,

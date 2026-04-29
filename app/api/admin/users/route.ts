@@ -71,7 +71,9 @@ export async function GET() {
   }
 }
 
-// ─── POST /api/admin/users — Tạo user mới + gửi email mời ───────────────────
+// ─── POST /api/admin/users — Tạo user mới với mật khẩu tạm ──────────────────
+
+const TEMP_PASSWORD = 'GWS@2026'
 
 export async function POST(req: NextRequest) {
   try {
@@ -99,24 +101,25 @@ export async function POST(req: NextRequest) {
     }
 
     const service = createServiceClient()
-    const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm-nuoc.vercel.app'}/reset-password`
 
-    // Tạo user + gửi email mời đặt mật khẩu
-    const { data: invited, error: inviteErr } = await service.auth.admin.inviteUserByEmail(email, {
-      data:       { full_name },
-      redirectTo,
+    // Tạo user trực tiếp với mật khẩu tạm — không cần email mời
+    const { data: created, error: createErr } = await service.auth.admin.createUser({
+      email,
+      password:      TEMP_PASSWORD,
+      email_confirm: true,                    // bỏ qua bước xác nhận email
+      user_metadata: { full_name },
     })
-    if (inviteErr) {
-      return NextResponse.json({ error: inviteErr.message }, { status: 400 })
+    if (createErr) {
+      return NextResponse.json({ error: createErr.message }, { status: 400 })
     }
 
-    const newId = invited.user.id
+    const newId = created.user.id
 
     // Tạo profile
     const { error: profileErr } = await service.from('profiles').upsert({
       id:            newId,
       full_name,
-      email,
+      email:         email.toLowerCase(),
       role,
       phone:         phone        || null,
       chuc_vu:       chuc_vu      || null,
@@ -136,7 +139,8 @@ export async function POST(req: NextRequest) {
       detail:    `${full_name} (${email}) — ${role}`,
     })
 
-    return NextResponse.json({ success: true, id: newId })
+    // Trả về temp_password để UI hiển thị cho admin
+    return NextResponse.json({ success: true, id: newId, temp_password: TEMP_PASSWORD })
   } catch (err) {
     console.error('POST /api/admin/users:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })

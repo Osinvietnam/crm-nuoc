@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,15 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'task_started',
+      entity:    'task',
+      detail:    `${task_key} — ${order_id ? `đơn #${order_id}` : `KH ${customer_record_id}`}`,
+    })
+
     return NextResponse.json({ success: true, data }, { status: 201 })
   } catch (err) {
     console.error('POST /api/tasks:', err)
@@ -314,6 +324,15 @@ export async function PATCH(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'task_updated',
+      entity:    'task',
+      detail:    `${comp.task_key} → ${newStatus}`,
+    })
+
     return NextResponse.json({ success: true, data })
   } catch (err) {
     console.error('PATCH /api/tasks:', err)
@@ -330,7 +349,7 @@ export async function DELETE(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
     const id = req.nextUrl.searchParams.get('id')
@@ -348,6 +367,15 @@ export async function DELETE(req: NextRequest) {
       .eq('id', Number(id))
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'task_reset',
+      entity:    'task',
+      detail:    `Reset task completion #${id}`,
+    })
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('DELETE /api/tasks:', err)

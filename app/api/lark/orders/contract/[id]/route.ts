@@ -65,21 +65,35 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
+
+    const isManager = ['admin', 'ceo', 'director'].includes(profile.role)
+    const canEditFinance = ['admin', 'ceo', 'director', 'accountant'].includes(profile.role)
+
     const { id } = await params
     const body = await req.json()
+
+    // Chặn non-manager sửa trường tài chính/hoa hồng
+    if (!canEditFinance) {
+      for (const f of ['hh_da_tra', 'hh_ngay_tra', 'hh_phan_tram', 'gia_tri_hd', 'hh_kinh_doanh']) {
+        delete body[f]
+      }
+    }
 
     const updates: Record<string, unknown> = {}
     for (const key of ['trang_thai', 'ghi_chu', 'gia_tri_hd', 'gia_tri_gws', 'san_pham', 'dia_chi_ct', 'hh_phan_tram', 'hh_da_tra', 'hh_ngay_tra']) {
       if (key in body) updates[key] = body[key]
     }
-    // hh_phan_tram đổi → tự tính lại hh_kinh_doanh
+    // hh_phan_tram đổi → tự tính lại hh_kinh_doanh (FIN-07: không cho set trực tiếp nếu không phải manager)
     if ('hh_phan_tram' in body || 'gia_tri_hd' in body) {
       const pct = Number(body.hh_phan_tram ?? 0)
       const val = Number(body.gia_tri_hd   ?? 0)
       if (pct > 0 && val > 0) {
         updates.hh_kinh_doanh = Math.round(val * pct / 100)
       }
-    } else if ('hh_kinh_doanh' in body) {
+    } else if ('hh_kinh_doanh' in body && isManager) {
       updates.hh_kinh_doanh = body.hh_kinh_doanh
     }
     // Date fields: UI sends ms timestamp → convert to ISO date

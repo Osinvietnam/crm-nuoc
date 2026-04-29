@@ -87,7 +87,8 @@ const s = StyleSheet.create({
   colStt:       { width: 24 },
   colName:      { flex: 1 },
   colQty:       { width: 32, textAlign: 'center' },
-  colNote:      { width: 100 },
+  colDonGia:    { width: 80, textAlign: 'right' },
+  colThanhTien: { width: 90, textAlign: 'right' },
 
   cellText:     { fontSize: 8.5, color: C.dark },
   cellTextMid:  { fontSize: 8, color: C.mid },
@@ -117,6 +118,10 @@ const s = StyleSheet.create({
   // Footer
   footer:       { position: 'absolute', bottom: 24, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 6 },
   footerText:   { fontSize: 7, color: C.light },
+
+  // Watermark
+  watermark:    { position: 'absolute', top: 300, left: 60, right: 60, opacity: 0.08, transform: 'rotate(-35deg)' },
+  watermarkTxt: { fontSize: 90, fontWeight: 700, color: '#dc2626', textAlign: 'center', letterSpacing: 12 },
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,23 +141,30 @@ function parseItem(sp: string): { name: string; qty: number } {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CompanyInfo {
-  name:     string
-  address:  string
-  phone:    string
-  email:    string
-  tax:      string
-  website:  string
-  logo_url: string
+  name:            string
+  address:         string
+  phone:           string
+  email:           string
+  tax:             string
+  website:         string
+  logo_url:        string
+  bank_name?:      string
+  account_number?: string
+  account_holder?: string
 }
 
 const COMPANY_FALLBACK: CompanyInfo = {
   name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '',
+  bank_name: '', account_number: '', account_holder: '',
 }
 
 // ─── PDF Document ─────────────────────────────────────────────────────────────
 
 export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote: Quote; company?: CompanyInfo }) {
-  const items  = quote.san_pham.map(parseItem)
+  // Ưu tiên items structured (có đơn giá); fallback về san_pham text array
+  const items  = quote.items.length > 0
+    ? quote.items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    : quote.san_pham.map(sp => { const p = parseItem(sp); return { ten_sp: p.name, so_luong: p.qty, don_gia: 0, thanh_tien: 0, sort_order: 0, id: 0, product_id: null } })
   const ck     = quote.chiet_khau
   const tong   = quote.tong_gia_tri
   const final  = quote.gia_tri_sau_ck || tong
@@ -161,6 +173,13 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
   return (
     <Document title={`Báo giá ${quote.ma_bao_gia}`} author={company.name}>
       <Page size="A4" style={s.page}>
+
+        {/* ── Watermark BẢN NHÁP ── */}
+        {quote.trang_thai === 'Nháp' && (
+          <View style={s.watermark} fixed>
+            <Text style={s.watermarkTxt}>BẢN NHÁP</Text>
+          </View>
+        )}
 
         {/* ── Header ── */}
         <View style={s.header}>
@@ -194,6 +213,18 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
               <Text style={s.infoLabel}>Số điện thoại</Text>
               <Text style={s.infoValue}>{quote.sdt || '—'}</Text>
             </View>
+            {quote.email_kh ? (
+              <View style={s.infoLine}>
+                <Text style={s.infoLabel}>Email</Text>
+                <Text style={s.infoValue}>{quote.email_kh}</Text>
+              </View>
+            ) : null}
+            {quote.dia_chi_ct ? (
+              <View style={s.infoLine}>
+                <Text style={s.infoLabel}>Địa chỉ công trình</Text>
+                <Text style={s.infoValue}>{quote.dia_chi_ct}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Báo giá */}
@@ -215,6 +246,18 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
               <Text style={s.infoLabel}>Người phụ trách</Text>
               <Text style={s.infoValue}>{quote.nguoi_phu_trach || '—'}</Text>
             </View>
+            {company.phone ? (
+              <View style={s.infoLine}>
+                <Text style={s.infoLabel}>SĐT liên hệ</Text>
+                <Text style={s.infoValue}>{company.phone}</Text>
+              </View>
+            ) : null}
+            {company.email ? (
+              <View style={s.infoLine}>
+                <Text style={s.infoLabel}>Email liên hệ</Text>
+                <Text style={s.infoValue}>{company.email}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -227,16 +270,18 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
             <Text style={[s.tableHeadTxt, s.colStt]}>STT</Text>
             <Text style={[s.tableHeadTxt, s.colName]}>Sản phẩm</Text>
             <Text style={[s.tableHeadTxt, s.colQty]}>SL</Text>
-            <Text style={[s.tableHeadTxt, s.colNote]}>Ghi chú</Text>
+            <Text style={[s.tableHeadTxt, s.colDonGia]}>Đơn giá</Text>
+            <Text style={[s.tableHeadTxt, s.colThanhTien]}>Thành tiền</Text>
           </View>
 
           {/* Rows */}
           {items.map((item, i) => (
             <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
               <Text style={[s.cellText, s.colStt]}>{i + 1}</Text>
-              <Text style={[s.cellText, s.colName]}>{item.name}</Text>
-              <Text style={[s.cellText, s.colQty]}>{item.qty}</Text>
-              <Text style={[s.cellTextMid, s.colNote]}></Text>
+              <Text style={[s.cellText, s.colName]}>{item.ten_sp}</Text>
+              <Text style={[s.cellText, s.colQty]}>{item.so_luong}</Text>
+              <Text style={[s.cellTextMid, s.colDonGia]}>{item.don_gia ? item.don_gia.toLocaleString('vi-VN') : '—'}</Text>
+              <Text style={[s.cellText, s.colThanhTien]}>{item.thanh_tien ? item.thanh_tien.toLocaleString('vi-VN') : (item.don_gia && item.so_luong ? (item.don_gia * item.so_luong).toLocaleString('vi-VN') : '—')}</Text>
             </View>
           ))}
         </View>
@@ -285,7 +330,10 @@ export function QuotePDFDocument({ quote, company = COMPANY_FALLBACK }: { quote:
         {/* ── Điều khoản ── */}
         <View style={{ marginBottom: 8 }}>
           <Text style={[s.noteTitle, { marginBottom: 4 }]}>Điều khoản & điều kiện</Text>
-          <Text style={s.noteText}>• Báo giá có hiệu lực trong vòng 14 ngày kể từ ngày lập.</Text>
+          <Text style={s.noteText}>• {quote.ngay_het_han
+            ? `Báo giá có hiệu lực đến ngày ${fmtDate(quote.ngay_het_han)}.`
+            : 'Báo giá có hiệu lực trong vòng 14 ngày kể từ ngày lập.'
+          }</Text>
           <Text style={s.noteText}>• Giá chưa bao gồm VAT (nếu có).</Text>
           <Text style={s.noteText}>• Thời gian giao hàng và điều kiện thanh toán theo thỏa thuận.</Text>
         </View>

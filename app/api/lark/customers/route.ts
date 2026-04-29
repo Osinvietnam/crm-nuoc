@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export interface Customer {
   nguoi_phu_trach_id: string | null // UUID
   nguon_kh:           string
   doi_tac_gt:         string
+  doi_tac_id:         string | null  // UUID partner (thay thế doi_tac_gt text)
   loai_hinh_nha:      string
   nguon_nuoc:         string
   san_pham_quan_tam:  string[]
@@ -30,6 +32,7 @@ export interface Customer {
   nhom_dv:            string
   tien_do_ct:         string
   khu_vuc:            string
+  loai_kh:            string   // 'B2C' | 'Đại lý' | 'Dự án' | ''
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,6 +59,7 @@ function mapRow(c: any): Customer {
     nguoi_phu_trach_id: c.nguoi_phu_trach   ?? null,
     nguon_kh:           c.nguon_kh          ?? '',
     doi_tac_gt:         c.doi_tac_gt        ?? '',
+    doi_tac_id:         c.doi_tac_id        ?? null,
     loai_hinh_nha:      c.loai_hinh_nha     ?? '',
     nguon_nuoc:         c.nguon_nuoc        ?? '',
     san_pham_quan_tam:  c.san_pham_quan_tam ?? [],
@@ -68,6 +72,7 @@ function mapRow(c: any): Customer {
     nhom_dv:            c.nhom_dv           ?? '',
     tien_do_ct:         c.tien_do_ct        ?? '',
     khu_vuc:            c.khu_vuc           ?? '',
+    loai_kh:            c.loai_kh           ?? '',
   }
 }
 
@@ -94,7 +99,7 @@ export async function GET(_req: NextRequest) {
     // RLS enforces security; explicit filters improve query performance
     if (profile.role === 'sales' || profile.role === 'partner') {
       query = query.eq('nguoi_phu_trach', profile.id)
-    } else if (profile.role === 'tech' && profile.khu_vuc) {
+    } else if ((profile.role === 'tech' || profile.role === 'logistics') && profile.khu_vuc) {
       query = query.eq('khu_vuc', profile.khu_vuc)
     }
 
@@ -129,9 +134,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       ho_ten, sdt, sdt_khac, email, dia_chi_hd, dia_chi_ct,
-      pipeline, nguoi_phu_trach, nguon_kh, doi_tac_gt,
+      pipeline, nguoi_phu_trach, nguon_kh, doi_tac_gt, doi_tac_id,
       loai_hinh_nha, nguon_nuoc, san_pham_quan_tam,
-      bao_gia, muc_uu_tien, noi_dung, nhom_dv, khu_vuc,
+      bao_gia, muc_uu_tien, noi_dung, nhom_dv, khu_vuc, loai_kh,
     } = body
 
     if (!ho_ten || !sdt) {
@@ -142,6 +147,11 @@ export async function POST(req: NextRequest) {
     const assigneeId = (profile.role === 'sales' || profile.role === 'partner')
       ? profile.id
       : (nguoi_phu_trach || profile.id)
+
+    // Nếu partner tạo KH → tự set doi_tac_id = chính mình
+    const resolvedDoiTacId = profile.role === 'partner'
+      ? profile.id
+      : (doi_tac_id || null)
 
     const { data, error } = await supabase
       .from('customers')
@@ -156,6 +166,7 @@ export async function POST(req: NextRequest) {
         nguoi_phu_trach:   assigneeId,
         nguon_kh:          nguon_kh       || null,
         doi_tac_gt:        doi_tac_gt     || null,
+        doi_tac_id:        resolvedDoiTacId,
         loai_hinh_nha:     loai_hinh_nha  || null,
         nguon_nuoc:        nguon_nuoc     || null,
         san_pham_quan_tam: san_pham_quan_tam ?? [],
@@ -164,12 +175,22 @@ export async function POST(req: NextRequest) {
         noi_dung:          noi_dung       || null,
         nhom_dv:           nhom_dv        || null,
         khu_vuc:           khu_vuc        || null,
+        loai_kh:           loai_kh        || null,
         ngay_lien_he_dau:  new Date().toISOString().split('T')[0],
       })
       .select('*, profiles!nguoi_phu_trach(id, full_name)')
       .single()
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile.full_name ?? '',
+      action:    'customer_created',
+      entity:    'customer',
+      detail:    `${ho_ten} — ${sdt}`,
+    })
+
     return NextResponse.json({ customer: mapRow(data) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/lark/customers:', err)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { STAGE_TASKS } from '@/lib/tasks/checklist'
+import { logAudit } from '@/lib/audit'
 
 function toMs(d: string | null | undefined): number | null {
   if (!d) return null
@@ -107,7 +108,7 @@ export async function PATCH(
       numericId
         ? supabase.from('customers').select('id, pipeline').eq('id', numericId).single()
         : supabase.from('customers').select('id, pipeline').eq('lark_record_id', id).single(),
-      supabase.from('profiles').select('role').eq('id', user.id).single(),
+      supabase.from('profiles').select('role, full_name').eq('id', user.id).single(),
     ])
 
     const updateQuery = supabase
@@ -121,6 +122,14 @@ export async function PATCH(
     ).single()
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile?.full_name ?? '',
+      action:    'customer_updated',
+      entity:    'customer',
+      detail:    `KH #${numericId ?? id}: ${Object.keys(updates).join(', ')}`,
+    })
 
     // ── Warning checks (H5 + H6) — non-blocking ──────────────────────────────
     const warnings: string[] = []

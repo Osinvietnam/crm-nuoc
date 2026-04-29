@@ -71,14 +71,14 @@ export async function PATCH(
 
     // M6: State machine — block nhảy trạng thái không hợp lệ (trừ admin/ceo)
     if (body.trang_thai && body.trang_thai !== current.trang_thai) {
-      const isManager = ['admin', 'ceo'].includes(profile.role)
+      const isManager = ['admin', 'ceo', 'director'].includes(profile.role)
       if (!isManager) {
-        // Định nghĩa chuyển trạng thái hợp lệ
+        // Định nghĩa chuyển trạng thái hợp lệ — chỉ manager mới duyệt 'Chấp nhận'
         const ALLOWED_TRANSITIONS: Record<string, string[]> = {
           'Nháp':      ['Đã gửi', 'Hết hạn'],
-          'Đã gửi':   ['Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'],
-          'Đàm phán':  ['Chấp nhận', 'Từ chối', 'Hết hạn'],
-          'Chấp nhận': ['Từ chối'],            // Chỉ admin có thể reopen
+          'Đã gửi':   ['Đàm phán', 'Từ chối', 'Hết hạn'],
+          'Đàm phán':  ['Từ chối', 'Hết hạn'],
+          'Chấp nhận': [],                     // Terminal cho non-manager
           'Từ chối':   [],                     // Terminal (chỉ admin)
           'Hết hạn':   ['Nháp', 'Đã gửi'],    // Cho phép reopen manual
         }

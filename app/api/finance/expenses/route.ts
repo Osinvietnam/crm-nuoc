@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 const ALLOWED_CATEGORIES = ['luong', 'hang_hoa', 'van_chuyen', 'marketing', 'thue_van_phong', 'khac'] as const
 const CAN_WRITE = ['admin', 'ceo', 'accountant']
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || !CAN_WRITE.includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
     }
     if (!thang || !nam || amount == null) {
       return NextResponse.json({ error: 'Thiếu thang, nam hoặc amount' }, { status: 400 })
+    }
+    if (Number(amount) <= 0) {
+      return NextResponse.json({ error: 'Số tiền phải lớn hơn 0' }, { status: 400 })
     }
 
     const service = createServiceClient()
@@ -83,6 +87,15 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'expense_created',
+      entity:    'expense',
+      detail:    `${category} T${thang}/${nam}: ${Number(amount).toLocaleString('vi-VN')}đ`,
+    })
+
     return NextResponse.json({ data }, { status: 201 })
   } catch (err) {
     console.error('POST /api/finance/expenses:', err)
@@ -98,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || !CAN_WRITE.includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
@@ -114,6 +127,15 @@ export async function PATCH(req: NextRequest) {
     const service = createServiceClient()
     const { data, error } = await service.from('expenses').update(updates).eq('id', id).select().single()
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'expense_updated',
+      entity:    'expense',
+      detail:    `Chi phí #${id}: ${Object.keys(updates).filter(k => k !== 'updated_at').join(', ')}`,
+    })
+
     return NextResponse.json({ data })
   } catch (err) {
     console.error('PATCH /api/finance/expenses:', err)
@@ -129,7 +151,7 @@ export async function DELETE(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || !['admin', 'ceo'].includes(me.role)) {
       return NextResponse.json({ error: 'Chỉ admin/CEO mới xóa được' }, { status: 403 })
     }
@@ -140,6 +162,15 @@ export async function DELETE(req: NextRequest) {
     const service = createServiceClient()
     const { error } = await service.from('expenses').delete().eq('id', id)
     if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'expense_deleted',
+      entity:    'expense',
+      detail:    `Xóa chi phí #${id}`,
+    })
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('DELETE /api/finance/expenses:', err)

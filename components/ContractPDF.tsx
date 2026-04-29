@@ -120,6 +120,10 @@ const s = StyleSheet.create({
   // Footer
   footer:       { position: 'absolute', bottom: 24, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 6 },
   footerText:   { fontSize: 7, color: C.light },
+
+  // Watermark
+  watermark:    { position: 'absolute', top: 300, left: 60, right: 60, opacity: 0.08, transform: 'rotate(-35deg)' },
+  watermarkTxt: { fontSize: 90, fontWeight: 700, color: '#dc2626', textAlign: 'center', letterSpacing: 12 },
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,6 +142,7 @@ function parseItem(sp: string): { name: string; qty: number } {
 
 const COMPANY_FALLBACK: CompanyInfo = {
   name: '', address: '', phone: '', email: '', tax: '', website: '', logo_url: '',
+  bank_name: '', account_number: '', account_holder: '',
 }
 
 // ─── PDF Document ─────────────────────────────────────────────────────────────
@@ -149,6 +154,13 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
   return (
     <Document title={`Hợp đồng ${contract.ma_hd}`} author={company.name}>
       <Page size="A4" style={s.page}>
+
+        {/* ── Watermark BẢN NHÁP ── */}
+        {contract.trang_thai === 'Nháp' && (
+          <View style={s.watermark} fixed>
+            <Text style={s.watermarkTxt}>BẢN NHÁP</Text>
+          </View>
+        )}
 
         {/* ── Header ── */}
         <View style={s.header}>
@@ -257,6 +269,14 @@ export function ContractPDFDocument({ contract, company = COMPANY_FALLBACK }: { 
           <Text style={s.termsText}>• Đợt 1 (60%): Thanh toán khi ký hợp đồng</Text>
           <Text style={s.termsText}>• Đợt 2 (35%): Thanh toán khi nghiệm thu bàn giao</Text>
           <Text style={s.termsText}>• Đợt 3 (5%): Thanh toán sau bảo hành 12 tháng</Text>
+          {(company.bank_name || company.account_number) && (
+            <>
+              <Text style={[s.termsText, { marginTop: 6, fontWeight: 700 }]}>Thông tin chuyển khoản:</Text>
+              {company.bank_name      && <Text style={s.termsText}>  Ngân hàng: {company.bank_name}</Text>}
+              {company.account_number && <Text style={s.termsText}>  Số tài khoản: {company.account_number}</Text>}
+              {company.account_holder && <Text style={s.termsText}>  Chủ tài khoản: {company.account_holder}</Text>}
+            </>
+          )}
         </View>
 
         {/* ── Ghi chú ── */}

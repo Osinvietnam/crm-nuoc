@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { listAllRecords } from '@/lib/lark/client'
-import { TABLES } from '@/lib/lark/tables'
 
 export interface CalendarEvent {
-  id:       string
-  date:     number        // ms timestamp — dùng để nhóm theo ngày
-  type:     'quote' | 'construction' | 'periodic' | 'contract' | 'project'
-  color:    string        // tailwind bg class
-  title:    string        // tên KH / tên dự án
-  sub:      string        // mô tả ngắn
-  href:     string        // deep link
+  id:    string
+  date:  number        // ms timestamp — dùng để nhóm theo ngày
+  type:  'quote' | 'construction' | 'periodic' | 'contract' | 'project'
+  color: string        // tailwind bg class
+  title: string        // tên KH / tên dự án
+  sub:   string        // mô tả ngắn
+  href:  string        // deep link
 }
 
-function startOfDay(ms: number) {
+// ms → 'YYYY-MM-DD' cho Supabase DATE filter
+function toDateStr(ms: number): string {
+  return new Date(ms).toISOString().split('T')[0]
+}
+
+// 'YYYY-MM-DD' → ms (start of day UTC)
+function toMs(d: string | null): number | null {
+  if (!d) return null
+  const ms = new Date(d).getTime()
+  return isNaN(ms) ? null : ms
+}
+
+function startOfDay(ms: number): number {
   const d = new Date(ms)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }
@@ -28,9 +38,9 @@ export async function GET(req: NextRequest) {
       .from('profiles').select('full_name, role').eq('id', user.id).single()
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
-    const { role, full_name } = profile
+    const { role } = profile
 
-    // Parse month param: "2026-04"
+    // ── Parse tháng ─────────────────────────────────────────────────────────────
     const monthParam = req.nextUrl.searchParams.get('month')
     let rangeStart: number, rangeEnd: number
     if (monthParam) {
@@ -42,125 +52,148 @@ export async function GET(req: NextRequest) {
       rangeStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
       rangeEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime() - 1
     }
+    const dateFrom = toDateStr(rangeStart)
+    const dateTo   = toDateStr(rangeEnd)
 
     const events: CalendarEvent[] = []
 
-    const isAdmin    = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
-    const isTech     = role === 'tech'
-    const isSales    = role === 'sales' || role === 'logistics'
-    const isPartner  = role === 'partner'
-    const myFilter   = (field: string) =>
-      !isAdmin ? `CurrentValue.[${field}] = "${full_name}"` : undefined
+    const isAdmin   = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
+    const isTech    = role === 'tech'
+    const isSales   = ['sales', 'logistics', 'partner'].includes(role)
 
-    // ─── Báo giá — follow-up date ────────────────────────────────────────────
-    if (isAdmin || isSales || isPartner) {
-      const filter = myFilter('Người phụ trách')
-      const records = await listAllRecords(TABLES.QUOTES, filter)
-      for (const r of records) {
-        const f = r.fields
-        const fu = f['Ngày follow-up'] ? Number(f['Ngày follow-up']) : null
-        const status = String(f['Trạng thái BG'] ?? '')
-        if (!fu || fu < rangeStart || fu > rangeEnd) continue
-        if (!['Đã gửi', 'Đàm phán'].includes(status)) continue
+    // ── 1. Báo giá — ngày follow-up ────────────────────────────────────────────
+    if (isAdmin || isSales) {
+      let q = supabase
+        .from('quotes')
+        .select('id, trang_thai, ngay_follow_up, staff:nguoi_phu_trach(full_name), customers!customer_id(ho_ten)')
+        .in('trang_thai', ['Đã gửi', 'Đàm phán'])
+        .gte('ngay_follow_up', dateFrom)
+        .lte('ngay_follow_up', dateTo)
+
+      if (!isAdmin) q = q.eq('nguoi_phu_trach', user.id)
+
+      const { data: quotes } = await q
+      for (const r of (quotes ?? [])) {
+        const ms = toMs((r as any).ngay_follow_up)
+        if (!ms) continue
         events.push({
-          id:    r.record_id,
-          date:  startOfDay(fu),
+          id:    r.id.toString(),
+          date:  startOfDay(ms),
           type:  'quote',
           color: 'bg-blue-500',
-          title: String(f['Khách hàng'] ?? ''),
-          sub:   `Follow-up BG · ${status}`,
-          href:  `/dashboard/orders/quote/${r.record_id}`,
+          title: (r as any).customers?.ho_ten ?? '',
+          sub:   `Follow-up BG · ${r.trang_thai}`,
+          href:  `/dashboard/orders/quote/${r.id}`,
         })
       }
     }
 
-    // ─── Bảo trì công trình — ngày cần chăm sóc ──────────────────────────────
+    // ── 2. Bảo trì công trình — ngày cần chăm sóc (GENERATED column) ──────────
     if (isAdmin || isTech) {
-      const filter = isTech ? myFilter('KTV phụ trách') : undefined
-      const records = await listAllRecords(TABLES.CONSTRUCTION, filter)
-      for (const r of records) {
-        const f = r.fields
-        const gh = f['Ngày GH thực'] ? Number(f['Ngày GH thực']) : null
-        if (!gh) continue
-        const csDate = gh + 60 * 86400000   // +60 ngày
-        if (csDate < rangeStart || csDate > rangeEnd) continue
+      let q = supabase
+        .from('maintenance_construction')
+        .select('id, trang_thai, ngay_can_cs, ktv:ktv_phu_trach(full_name), customers!customer_id(ho_ten, dia_chi)')
+        .gte('ngay_can_cs', dateFrom)
+        .lte('ngay_can_cs', dateTo)
+
+      if (isTech) q = q.eq('ktv_phu_trach', user.id)
+
+      const { data: constructions } = await q
+      for (const r of (constructions ?? [])) {
+        const ms = toMs((r as any).ngay_can_cs)
+        if (!ms) continue
+        const ten = (r as any).customers?.ho_ten ?? (r as any).customers?.dia_chi ?? ''
         events.push({
-          id:    r.record_id,
-          date:  startOfDay(csDate),
+          id:    r.id.toString(),
+          date:  startOfDay(ms),
           type:  'construction',
           color: 'bg-orange-500',
-          title: String(f['Tên KH / Địa chỉ'] ?? String(f['Tên KH'] ?? '')),
+          title: ten,
           sub:   'Chăm sóc công trình',
-          href:  `/dashboard/maintenance/construction/${r.record_id}`,
+          href:  `/dashboard/maintenance/construction/${r.id}`,
         })
       }
     }
 
-    // ─── Bảo dưỡng định kỳ — lần bảo dưỡng tiếp theo ────────────────────────
+    // ── 3. Bảo dưỡng định kỳ — lần bảo dưỡng tiếp theo ──────────────────────
     if (isAdmin || isTech) {
-      const filter = isTech ? myFilter('NV phụ trách') : undefined
-      const records = await listAllRecords(TABLES.PERIODIC_SERVICE, filter)
-      for (const r of records) {
-        const f = r.fields
-        const next = f['Lần BD tiếp theo'] ? Number(f['Lần BD tiếp theo']) : null
-        if (!next || next < rangeStart || next > rangeEnd) continue
+      let q = supabase
+        .from('maintenance_periodic')
+        .select('id, trang_thai, lan_bd_tiep_theo, staff:nv_phu_trach(full_name), customers!customer_id(ho_ten)')
+        .gte('lan_bd_tiep_theo', dateFrom)
+        .lte('lan_bd_tiep_theo', dateTo)
+
+      if (isTech) q = q.eq('nv_phu_trach', user.id)
+
+      const { data: periodics } = await q
+      for (const r of (periodics ?? [])) {
+        const ms = toMs((r as any).lan_bd_tiep_theo)
+        if (!ms) continue
         events.push({
-          id:    r.record_id,
-          date:  startOfDay(next),
+          id:    r.id.toString(),
+          date:  startOfDay(ms),
           type:  'periodic',
           color: 'bg-purple-500',
-          title: String(f['Tên KH'] ?? ''),
+          title: (r as any).customers?.ho_ten ?? '',
           sub:   'Bảo dưỡng định kỳ',
-          href:  `/dashboard/maintenance/periodic/${r.record_id}`,
+          href:  `/dashboard/maintenance/periodic/${r.id}`,
         })
       }
     }
 
-    // ─── Hợp đồng — ngày giao hàng dự kiến ──────────────────────────────────
+    // ── 4. Hợp đồng B2C — ngày giao hàng dự kiến ─────────────────────────────
     if (isAdmin || isSales) {
-      const filter = myFilter('Người phụ trách')
-      const records = await listAllRecords(TABLES.CONTRACTS, filter)
-      for (const r of records) {
-        const f = r.fields
-        const ngay = f['Ngày giao hàng DK'] ? Number(f['Ngày giao hàng DK']) : null
-        if (!ngay || ngay < rangeStart || ngay > rangeEnd) continue
-        const status = String(f['Trạng thái HĐ'] ?? '')
-        if (['Hoàn thành', 'Hủy hợp đồng'].includes(status)) continue
+      let q = supabase
+        .from('orders')
+        .select('id, trang_thai, ngay_giao_dk, staff:nguoi_phu_trach(full_name), customers!customer_id(ho_ten)')
+        .eq('type', 'b2c')
+        .not('trang_thai', 'in', '("Hoàn thành","Hủy hợp đồng")')
+        .gte('ngay_giao_dk', dateFrom)
+        .lte('ngay_giao_dk', dateTo)
+
+      if (!isAdmin) q = q.eq('nguoi_phu_trach', user.id)
+
+      const { data: contracts } = await q
+      for (const r of (contracts ?? [])) {
+        const ms = toMs((r as any).ngay_giao_dk)
+        if (!ms) continue
         events.push({
-          id:    r.record_id,
-          date:  startOfDay(ngay),
+          id:    r.id.toString(),
+          date:  startOfDay(ms),
           type:  'contract',
           color: 'bg-green-500',
-          title: String(f['Khách hàng'] ?? ''),
-          sub:   `Giao hàng DK · ${status}`,
-          href:  `/dashboard/orders/contract/${r.record_id}`,
+          title: (r as any).customers?.ho_ten ?? '',
+          sub:   `Giao hàng DK · ${r.trang_thai}`,
+          href:  `/dashboard/orders/contract/${r.id}`,
         })
       }
     }
 
-    // ─── Dự án — deadline gần nhất ───────────────────────────────────────────
+    // ── 5. Dự án — ngày ký hợp đồng ──────────────────────────────────────────
     if (isAdmin) {
-      const records = await listAllRecords(TABLES.PROJECTS)
-      for (const r of records) {
-        const f = r.fields
-        // Dùng ngày ký HĐ hoặc deadline nếu có
-        const ngay = f['Ngày ký HĐ'] ? Number(f['Ngày ký HĐ']) : null
-        if (!ngay || ngay < rangeStart || ngay > rangeEnd) continue
-        const stage = String(f['Giai đoạn'] ?? '')
-        if (['Hoàn thành', 'Thua thầu'].includes(stage)) continue
+      const { data: projects } = await supabase
+        .from('orders')
+        .select('id, trang_thai, ngay_ky, ten_du_an')
+        .eq('type', 'project')
+        .not('trang_thai', 'in', '("Hoàn thành","Thua thầu")')
+        .gte('ngay_ky', dateFrom)
+        .lte('ngay_ky', dateTo)
+
+      for (const r of (projects ?? [])) {
+        const ms = toMs((r as any).ngay_ky)
+        if (!ms) continue
         events.push({
-          id:    r.record_id,
-          date:  startOfDay(ngay),
+          id:    r.id.toString(),
+          date:  startOfDay(ms),
           type:  'project',
           color: 'bg-teal-500',
-          title: String(f['Tên dự án'] ?? ''),
-          sub:   `Dự án · ${stage}`,
-          href:  `/dashboard/orders/project/${r.record_id}`,
+          title: (r as any).ten_du_an ?? '',
+          sub:   `Dự án · ${r.trang_thai}`,
+          href:  `/dashboard/orders/project/${r.id}`,
         })
       }
     }
 
-    // Sort by date
     events.sort((a, b) => a.date - b.date)
 
     return NextResponse.json({ events, role })

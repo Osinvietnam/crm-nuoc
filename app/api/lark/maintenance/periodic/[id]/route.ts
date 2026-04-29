@@ -45,6 +45,13 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single()
+    const ALLOWED_ROLES = ['tech', 'admin', 'ceo', 'director']
+    if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+      return NextResponse.json({ error: 'Không có quyền cập nhật bảo trì' }, { status: 403 })
+    }
+
     const { id } = await params
     const body = await req.json()
 

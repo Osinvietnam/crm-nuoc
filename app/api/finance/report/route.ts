@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       .from('profiles').select('id, full_name, role').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const isManager = ['admin', 'ceo', 'accountant'].includes(me.role)
+    const isManager = ['admin', 'ceo', 'director', 'accountant'].includes(me.role)
     const isSales   = me.role === 'sales'
     if (!isManager && !isSales) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
@@ -57,12 +57,12 @@ export async function GET(req: NextRequest) {
     // ── 1. Doanh thu từ payment_records ───────────────────────────────────────
     let revQuery = service
       .from('payment_records')
-      .select('amount, nguoi_phu_trach, contract_record_id')
+      .select('amount, nguoi_phu_trach_id, contract_record_id')
       .eq('is_paid', true)
       .gte('paid_date', from)
       .lte('paid_date', to)
 
-    if (isSales) revQuery = revQuery.eq('nguoi_phu_trach', me.full_name)
+    if (isSales) revQuery = revQuery.eq('nguoi_phu_trach_id', me.id)
 
     const { data: payments } = await revQuery
     const doanh_thu_tong = (payments ?? []).reduce((s, p) => s + (p.amount ?? 0), 0)
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         .from('payment_records')
         .select('amount, installment, due_date')
         .eq('is_paid', false)
-        .eq('nguoi_phu_trach', me.full_name)
+        .eq('nguoi_phu_trach_id', me.id)
 
       const { data: commOrders } = await service
         .from('orders')
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 6. Công nợ chưa thu (toàn bộ)
+    // 6. Công nợ chưa thu (toàn bộ — không filter theo tháng, phản ánh snapshot hiện tại)
     const { data: unpaid } = await service
       .from('payment_records')
       .select('amount, due_date, customer_name')
@@ -195,6 +195,7 @@ export async function GET(req: NextRequest) {
     const cong_no_qua_han = (unpaid ?? [])
       .filter(p => p.due_date && p.due_date < today)
       .reduce((s, p) => s + (p.amount ?? 0), 0)
+    const cong_no_scope = 'all_time'  // tổng mọi đợt chưa thu, không phân tháng
 
     // 7. P&L tổng hợp
     const chi_phi_tong = opex_tong + hoa_hong_da_tra + khau_hao_thang
@@ -221,6 +222,7 @@ export async function GET(req: NextRequest) {
       cong_no: {
         tong:     cong_no_tong,
         qua_han:  cong_no_qua_han,
+        scope:    cong_no_scope,
       },
       loi_nhuan,
       bien_loi_nhuan_pct,

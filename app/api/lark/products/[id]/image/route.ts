@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { updateRecord } from '@/lib/lark/client'
-import { TABLES } from '@/lib/lark/tables'
 
 const BUCKET = 'product-images'
+const ALLOWED_ROLES = ['admin', 'ceo']
 
 export async function POST(
   req: NextRequest,
@@ -16,7 +15,7 @@ export async function POST(
 
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin' && profile?.role !== 'manager') {
+    if (!ALLOWED_ROLES.includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -33,28 +32,24 @@ export async function POST(
       return NextResponse.json({ error: 'Ảnh tối đa 5MB' }, { status: 400 })
     }
 
+    // Upload lên Supabase Storage
     const bytes = await file.arrayBuffer()
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(id, bytes, {
-        contentType: file.type,
-        upsert: true,
-      })
+      .upload(id, bytes, { contentType: file.type, upsert: true })
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
-      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+      return NextResponse.json({ error: 'Upload thất bại' }, { status: 500 })
     }
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(id)
 
-    // Ghi URL ngược về LarkBase (không có cache-bust để URL cố định)
-    await updateRecord(TABLES.PRODUCTS, id, { 'Ảnh sản phẩm': publicUrl })
-      .catch(e => console.error('Sync anh_sp to Lark failed:', e))
+    // Lưu URL vào products.image_url
+    await supabase.from('products').update({ image_url: publicUrl }).eq('id', Number(id))
 
-    // Trả về URL có cache-bust cho UI
-    const url = `${publicUrl}?t=${Date.now()}`
-    return NextResponse.json({ url })
+    // Cache-bust URL cho UI
+    return NextResponse.json({ url: `${publicUrl}?t=${Date.now()}` })
   } catch (err) {
     console.error('POST /api/lark/products/[id]/image:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
@@ -72,14 +67,14 @@ export async function DELETE(
 
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin' && profile?.role !== 'manager') {
+    if (!ALLOWED_ROLES.includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { id } = await params
     await supabase.storage.from(BUCKET).remove([id])
-    await updateRecord(TABLES.PRODUCTS, id, { 'Ảnh sản phẩm': '' })
-      .catch(e => console.error('Clear anh_sp in Lark failed:', e))
+    await supabase.from('products').update({ image_url: null }).eq('id', Number(id))
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('DELETE /api/lark/products/[id]/image:', err)

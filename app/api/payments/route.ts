@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createRecord, updateRecord } from '@/lib/lark/client'
-import { TABLES } from '@/lib/lark/tables'
 import { logAudit } from '@/lib/audit'
 
 // ─── GET /api/payments?customer_record_id= ───────────────────────────────────
@@ -30,12 +28,8 @@ export async function GET(req: NextRequest) {
     if (error) throw error
 
     // Sales chỉ thấy trạng thái, không thấy số tiền
-    const isSales = me.role === 'sales'
-    const sanitized = isSales
-      ? (data ?? []).map(r => ({
-          ...r,
-          amount: null,
-        }))
+    const sanitized = me.role === 'sales'
+      ? (data ?? []).map(r => ({ ...r, amount: null }))
       : (data ?? [])
 
     return NextResponse.json({ data: sanitized })
@@ -57,8 +51,7 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
-    const canEdit = ['accountant', 'admin', 'ceo'].includes(me.role)
-    if (!canEdit) {
+    if (!['accountant', 'admin', 'ceo'].includes(me.role)) {
       return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO mới thêm được thanh toán' }, { status: 403 })
     }
 
@@ -82,20 +75,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'installment phải là 1, 2 hoặc 3' }, { status: 400 })
     }
 
-    // H8: Lookup Supabase customer.id từ customer_record_id (Lark record ID)
-    const { data: cust } = await supabase.from('customers')
-      .select('id').eq('lark_record_id', customer_record_id).maybeSingle()
-    const customerId = cust?.id ?? null
+    // Lookup customer: lấy id + nguoi_phu_trach (UUID của sales phụ trách)
+    const { data: cust } = await supabase
+      .from('customers').select('id, nguoi_phu_trach').eq('id', Number(customer_record_id)).maybeSingle()
+    const customerId         = cust?.id               ?? null
+    const nguoi_phu_trach_id = cust?.nguoi_phu_trach  ?? null  // UUID — dùng cho KPI queries
 
-    // Upsert vào Supabase
     const { data: record, error } = await supabase
       .from('payment_records')
       .upsert({
         customer_record_id,
-        customer_id:        customerId,
-        customer_name:      customer_name    ?? null,
-        nguoi_phu_trach:    nguoi_phu_trach  ?? null,
-        contract_record_id: contract_record_id ?? null,
+        customer_id:          customerId,
+        customer_name:        customer_name      ?? null,
+        nguoi_phu_trach:      nguoi_phu_trach    ?? null,
+        nguoi_phu_trach_id,
+        contract_record_id:   contract_record_id ?? null,
         installment:        Number(installment),
         percent:            percent != null ? Number(percent) : null,
         amount:             amount  != null ? Number(amount)  : null,
@@ -103,43 +97,13 @@ export async function POST(req: NextRequest) {
         is_paid:            false,
         notes:              notes ?? null,
         updated_at:         new Date().toISOString(),
-      }, {
-        onConflict: 'customer_record_id,installment',
-      })
+      }, { onConflict: 'customer_record_id,installment' })
       .select()
       .single()
 
     if (error) throw error
 
-    // Sync sang LarkBase PAYMENTS (nếu chưa có lark_record_id)
-    let larkRecordId = record.lark_record_id ?? null
-    if (!larkRecordId) {
-      try {
-        const larkRecord = await createRecord(TABLES.PAYMENTS, {
-          'Khách hàng':     customer_name     ?? '',
-          'Mã KH':          customer_record_id,
-          'Lần TT':         Number(installment),
-          'Tỷ lệ (%)':      percent != null ? Number(percent) : null,
-          'Số tiền (VNĐ)':  amount  != null ? Number(amount)  : null,
-          'Ngày dự kiến':   due_date ?? null,
-          'Trạng thái':     'Chờ TT',
-          'Người phụ trách': nguoi_phu_trach ?? '',
-          'Ghi chú':        notes ?? '',
-        })
-        larkRecordId = larkRecord.record_id
-
-        // Lưu lại lark_record_id vào Supabase
-        await supabase
-          .from('payment_records')
-          .update({ lark_record_id: larkRecordId })
-          .eq('id', record.id)
-      } catch (larkErr) {
-        // Không để lỗi LarkBase chặn response — ghi log thôi
-        console.warn('POST /api/payments: LarkBase sync failed:', larkErr)
-      }
-    }
-
-    await logAudit(supabase, {
+    void logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
       action:    'payment_created',
@@ -147,7 +111,7 @@ export async function POST(req: NextRequest) {
       detail:    `${customer_name ?? customer_record_id} — Đợt ${installment} (${percent ?? '?'}%): ${amount ?? 'chưa nhập'}đ`,
     })
 
-    return NextResponse.json({ success: true, data: { ...record, lark_record_id: larkRecordId } })
+    return NextResponse.json({ success: true, data: record })
   } catch (err) {
     console.error('POST /api/payments:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
@@ -166,8 +130,7 @@ export async function PATCH(req: NextRequest) {
       .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
-    const canEdit = ['accountant', 'admin', 'ceo'].includes(me.role)
-    if (!canEdit) {
+    if (!['accountant', 'admin', 'ceo'].includes(me.role)) {
       return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO mới sửa được thanh toán' }, { status: 403 })
     }
 
@@ -183,12 +146,6 @@ export async function PATCH(req: NextRequest) {
     if (percent   !== undefined) updates.percent    = percent != null ? Number(percent) : null
     if (notes     !== undefined) updates.notes      = notes
 
-    const { data: before } = await supabase
-      .from('payment_records')
-      .select('*')
-      .eq('id', id)
-      .single()
-
     const { data: record, error } = await supabase
       .from('payment_records')
       .update(updates)
@@ -198,25 +155,7 @@ export async function PATCH(req: NextRequest) {
 
     if (error) throw error
 
-    // Sync sang LarkBase nếu có lark_record_id
-    if (before?.lark_record_id) {
-      try {
-        const larkFields: Record<string, unknown> = {}
-        if (is_paid   !== undefined) larkFields['Trạng thái']   = is_paid ? 'Đã TT' : 'Chờ TT'
-        if (paid_date !== undefined) larkFields['Ngày thực tế'] = paid_date
-        if (amount    !== undefined) larkFields['Số tiền (VNĐ)'] = amount != null ? Number(amount) : null
-        if (due_date  !== undefined) larkFields['Ngày dự kiến'] = due_date
-        if (notes     !== undefined) larkFields['Ghi chú']      = notes
-
-        if (Object.keys(larkFields).length > 0) {
-          await updateRecord(TABLES.PAYMENTS, before.lark_record_id, larkFields)
-        }
-      } catch (larkErr) {
-        console.warn('PATCH /api/payments: LarkBase sync failed:', larkErr)
-      }
-    }
-
-    await logAudit(supabase, {
+    void logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
       action:    'payment_updated',
@@ -231,7 +170,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// ─── DELETE /api/payments?id= — Xóa đợt thanh toán (admin only) ─────────────
+// ─── DELETE /api/payments?id= — Xóa đợt thanh toán (admin/CEO only) ─────────
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -248,14 +187,10 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
-    const { error } = await supabase
-      .from('payment_records')
-      .delete()
-      .eq('id', id)
-
+    const { error } = await supabase.from('payment_records').delete().eq('id', id)
     if (error) throw error
 
-    await logAudit(supabase, {
+    void logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
       action:    'payment_deleted',

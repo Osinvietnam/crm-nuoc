@@ -69,3 +69,35 @@ export async function PATCH(
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
+
+// ─── DELETE /api/lark/products/[id] — Xóa sản phẩm (admin/ceo/director) ──────
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user.id).single()
+    if (!['admin', 'ceo', 'director'].includes(profile?.role ?? '')) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới xóa được sản phẩm' }, { status: 403 })
+    }
+
+    const { id } = await params
+    const query = supabase.from('products').delete()
+    const { error } = await (/^\d+$/.test(id)
+      ? query.eq('id', parseInt(id))
+      : query.eq('lark_record_id', id)
+    )
+
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/lark/products/[id]:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
+  }
+}

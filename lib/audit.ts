@@ -18,8 +18,20 @@ export type AuditAction =
   | 'payment_updated'
   | 'payment_deleted'
   | 'kpi_target_set'
+  | 'permissions_updated'
+  | 'permissions_reset'
+  | 'customer_created'
+  | 'customer_updated'
+  | 'expense_created'
+  | 'expense_updated'
+  | 'expense_deleted'
+  | 'commission_paid'
+  | 'commission_unpaid'
+  | 'task_started'
+  | 'task_updated'
+  | 'task_reset'
 
-export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi'
+export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task'
 
 export async function logAudit(
   supabase: SupabaseClient,

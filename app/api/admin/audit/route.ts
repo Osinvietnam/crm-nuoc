@@ -11,18 +11,31 @@ export async function GET(req: NextRequest) {
 
     const { data: me } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
-    if (!me || !['admin', 'manager'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
-    const limit  = Number(req.nextUrl.searchParams.get('limit')  ?? 50)
-    const offset = Number(req.nextUrl.searchParams.get('offset') ?? 0)
+    const sp     = req.nextUrl.searchParams
+    const limit  = Number(sp.get('limit')  ?? 50)
+    const offset = Number(sp.get('offset') ?? 0)
+    const action    = sp.get('action')
+    const user_name = sp.get('user_name')
+    const entity    = sp.get('entity')
+    const from      = sp.get('from')
+    const to        = sp.get('to')
 
-    const { data, error, count } = await supabase
+    let query = supabase
       .from('audit_logs')
       .select('id, user_name, action, entity, detail, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+
+    if (action)    query = query.eq('action', action)
+    if (user_name) query = query.ilike('user_name', `%${user_name}%`)
+    if (entity)    query = query.eq('entity', entity)
+    if (from)      query = query.gte('created_at', from)
+    if (to)        query = query.lte('created_at', to)
+
+    const { data, error, count } = await query.range(offset, offset + limit - 1)
 
     if (error) throw error
     return NextResponse.json({ data: data ?? [], total: count ?? 0 })
