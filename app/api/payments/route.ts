@@ -51,8 +51,9 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
-    if (!['accountant', 'admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO mới thêm được thanh toán' }, { status: 403 })
+    const CAN_WRITE_PAYMENT = ['accountant', 'admin', 'ceo', 'director']
+    if (!CAN_WRITE_PAYMENT.includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO/giám đốc mới thêm được thanh toán' }, { status: 403 })
     }
 
     const body = await req.json()
@@ -63,10 +64,12 @@ export async function POST(req: NextRequest) {
       contract_record_id,
       installment,
       percent,
-      amount,
       due_date,
       notes,
     } = body
+
+    // FIN-12: chỉ accountant/admin/ceo/director mới được set amount
+    const amount = CAN_WRITE_PAYMENT.includes(me.role) ? body.amount : undefined
 
     if (!customer_record_id || !installment) {
       return NextResponse.json({ error: 'Thiếu customer_record_id hoặc installment' }, { status: 400 })
@@ -130,8 +133,8 @@ export async function PATCH(req: NextRequest) {
       .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
-    if (!['accountant', 'admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO mới sửa được thanh toán' }, { status: 403 })
+    if (!['accountant', 'admin', 'ceo', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ kế toán/admin/CEO/giám đốc mới sửa được thanh toán' }, { status: 403 })
     }
 
     const body = await req.json()
@@ -180,8 +183,8 @@ export async function DELETE(req: NextRequest) {
 
     const { data: me } = await supabase
       .from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO mới xóa được' }, { status: 403 })
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/giám đốc mới xóa được' }, { status: 403 })
     }
 
     const id = req.nextUrl.searchParams.get('id')

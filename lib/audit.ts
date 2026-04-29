@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/lib/supabase/server'
 
 export type AuditAction =
   | 'role_changed'
@@ -36,7 +37,7 @@ export type AuditAction =
 export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task' | 'order'
 
 export async function logAudit(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   opts: {
     user_id:   string
     user_name: string
@@ -45,7 +46,8 @@ export async function logAudit(
     detail:    string
   }
 ): Promise<void> {
-  await supabase.from('audit_logs').insert({
+  const service = createServiceClient()
+  await service.from('audit_logs').insert({
     user_id:   opts.user_id,
     user_name: opts.user_name,
     action:    opts.action,

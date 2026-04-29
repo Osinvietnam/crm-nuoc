@@ -77,6 +77,32 @@ export async function PATCH(req: NextRequest) {
     }
 
     const service = createServiceClient()
+
+    // FIN-07: validate hoa hồng không vượt giới hạn cho phép trước khi mark paid
+    if (is_paid) {
+      const { data: ordersToCheck } = await service
+        .from('orders')
+        .select('id, ma_hd, gia_tri_hd, hh_phan_tram, hh_kinh_doanh')
+        .in('id', order_ids)
+
+      const invalid = (ordersToCheck ?? []).filter(o => {
+        const maxAllowed = Math.round((o.gia_tri_hd ?? 0) * (o.hh_phan_tram ?? 0) / 100)
+        return (o.hh_kinh_doanh ?? 0) > maxAllowed
+      })
+
+      if (invalid.length > 0) {
+        return NextResponse.json({
+          error: `Hoa hồng vượt giới hạn cho phép: ${invalid.map(o => o.ma_hd).join(', ')}`,
+          invalid_orders: invalid.map(o => ({
+            id:            o.id,
+            ma_hd:         o.ma_hd,
+            hh_kinh_doanh: o.hh_kinh_doanh,
+            max_allowed:   Math.round((o.gia_tri_hd ?? 0) * (o.hh_phan_tram ?? 0) / 100),
+          })),
+        }, { status: 422 })
+      }
+    }
+
     const updates: Record<string, unknown> = {
       hh_da_tra:  is_paid,
       updated_at: new Date().toISOString(),
