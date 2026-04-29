@@ -129,6 +129,7 @@ export async function PATCH(
       action:    'customer_updated',
       entity:    'customer',
       detail:    `KH #${numericId ?? id}: ${Object.keys(updates).join(', ')}`,
+      after:     updates as Record<string, unknown>,
     })
 
     // LOG-A11: Log riêng khi nguoi_phu_trach thay đổi
@@ -139,6 +140,8 @@ export async function PATCH(
         action:    'customer_reassigned',
         entity:    'customer',
         detail:    `KH #${numericId ?? id}: chuyển từ ${current?.nguoi_phu_trach ?? 'chưa có'} → ${updates.nguoi_phu_trach}`,
+        before:    { nguoi_phu_trach: current?.nguoi_phu_trach ?? null },
+        after:     { nguoi_phu_trach: updates.nguoi_phu_trach as string },
       })
     }
 

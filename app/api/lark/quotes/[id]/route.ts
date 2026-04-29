@@ -169,13 +169,15 @@ export async function PATCH(
     }
 
     // H3: Audit log khi thay đổi trạng thái quan trọng
-    if (body.trang_thai && ['Chấp nhận', 'Từ chối', 'Hết hạn'].includes(body.trang_thai)) {
+    if (body.trang_thai && body.trang_thai !== current.trang_thai) {
       void logAudit(supabase, {
         user_id:   user.id,
         user_name: profile.full_name,
         action:    'quote_status_changed',
         entity:    'quote',
         detail:    `BG ${data.ma_bao_gia} → ${body.trang_thai}`,
+        before:    { trang_thai: current.trang_thai },
+        after:     { trang_thai: body.trang_thai },
       })
     }
 
@@ -196,7 +198,8 @@ export async function PATCH(
       await supabase.from('quote_items').delete().eq('quote_id', data.id)
       // Insert items mới
       if (body.items.length > 0) {
-        const newItems = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }, idx: number) => ({
+        type PatchItem = { quote_id: number; product_id: number | null; ten_sp: string; don_gia: number; so_luong: number; sort_order: number }
+        const newItems: PatchItem[] = body.items.map((item: { ten_sp: string; don_gia: number; so_luong: number; product_id?: number | null }, idx: number) => ({
           quote_id:   data.id,
           product_id: item.product_id ?? null,
           ten_sp:     item.ten_sp,
@@ -204,6 +207,16 @@ export async function PATCH(
           so_luong:   Number(item.so_luong) || 1,
           sort_order: idx,
         }))
+        // PRD-01: fallback lookup product_id by ten_sp for items missing it
+        const needLookup = newItems.filter(i => !i.product_id && i.ten_sp)
+        if (needLookup.length > 0) {
+          const { data: matched } = await supabase
+            .from('products').select('id, ten_sp').in('ten_sp', needLookup.map(i => i.ten_sp))
+          if (matched) {
+            const byName: Record<string, number> = Object.fromEntries(matched.map((p: { id: number; ten_sp: string }) => [p.ten_sp, p.id]))
+            newItems.forEach(i => { if (!i.product_id && byName[i.ten_sp]) i.product_id = byName[i.ten_sp] })
+          }
+        }
         const { error: itemsErr } = await supabase.from('quote_items').insert(newItems)
         if (itemsErr) console.error('Sync quote_items:', itemsErr.message)
       }

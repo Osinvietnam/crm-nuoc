@@ -50,15 +50,19 @@ export async function logAudit(
     action:    AuditAction
     entity:    AuditEntity
     detail:    string
+    before?:   Record<string, unknown>
+    after?:    Record<string, unknown>
   }
 ): Promise<void> {
   const service = createServiceClient()
   await service.from('audit_logs').insert({
-    user_id:   opts.user_id,
-    user_name: opts.user_name,
-    action:    opts.action,
-    entity:    opts.entity,
-    detail:    opts.detail,
+    user_id:     opts.user_id,
+    user_name:   opts.user_name,
+    action:      opts.action,
+    entity:      opts.entity,
+    detail:      opts.detail,
+    before_data: opts.before ?? null,
+    after_data:  opts.after  ?? null,
   }).then(({ error }) => {
     if (error) console.error('audit log error:', error.message)
   })

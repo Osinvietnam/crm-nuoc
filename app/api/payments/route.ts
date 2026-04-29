@@ -180,6 +180,7 @@ export async function PATCH(req: NextRequest) {
       action:    'payment_updated',
       entity:    'payment',
       detail:    `ID ${id}: ${JSON.stringify(updates)}`,
+      after:     updates,
     })
 
     return NextResponse.json({ success: true, data: record })
