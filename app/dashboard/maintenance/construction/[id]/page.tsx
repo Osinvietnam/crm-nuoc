@@ -43,6 +43,9 @@ export default function ConstructionDetailPage() {
   const [photos, setPhotos]     = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [me, setMe]             = useState({ role: '', fullName: '' })
+  const [techList, setTechList] = useState<{ id: string; full_name: string }[]>([])
+  const [showKtvPicker, setShowKtvPicker] = useState(false)
+  const [savingKtv, setSavingKtv] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -55,6 +58,7 @@ export default function ConstructionDetailPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
     fetch('/api/auth/me').then(r => r.json()).then(d => setMe({ role: d?.role ?? '', fullName: d?.full_name ?? '' })).catch(() => {})
+    fetch('/api/staff?role=tech').then(r => r.json()).then(d => setTechList(d.data ?? [])).catch(() => {})
   }, [id])
 
   const uploadPhoto = async (file: File) => {
@@ -88,6 +92,22 @@ export default function ConstructionDetailPage() {
       setSuccessMsg('Đã cập nhật')
       setTimeout(() => setSuccessMsg(''), 2000)
     } catch {} finally { setUpdating(false); setShowStatus(false) }
+  }
+
+  const assignKtv = async (profileId: string) => {
+    setSavingKtv(true)
+    try {
+      const res = await fetch(`/api/lark/maintenance/construction/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ktv_phu_trach: profileId }),
+      })
+      if (!res.ok) throw new Error()
+      const ktvName = techList.find(t => t.id === profileId)?.full_name ?? ''
+      setItem(prev => prev ? { ...prev, ktv_phu_trach: ktvName } : prev)
+      setSuccessMsg('Đã phân công KTV')
+      setTimeout(() => setSuccessMsg(''), 2000)
+    } catch {} finally { setSavingKtv(false); setShowKtvPicker(false) }
   }
 
   if (loading) return (
@@ -218,7 +238,17 @@ export default function ConstructionDetailPage() {
           <p className="text-xs font-semibold text-gray-400 mb-3">CHI TIẾT CÔNG TRÌNH</p>
           <InfoRow label="Khách hàng" value={item.ten_kh} />
           <InfoRow label="Số điện thoại" value={item.sdt} />
-          <InfoRow label="KTV phụ trách" value={item.ktv_phu_trach} />
+          {/* KTV phụ trách + phân công */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-gray-50">
+            <span className="text-xs text-gray-400 w-36 flex-shrink-0">KTV phụ trách</span>
+            <span className="text-sm text-gray-700 flex-1">{item.ktv_phu_trach || '—'}</span>
+            {['admin', 'ceo', 'director', 'tech'].includes(me.role) && techList.length > 0 && (
+              <button onClick={() => setShowKtvPicker(true)} disabled={savingKtv}
+                className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-lg flex-shrink-0">
+                {savingKtv ? '...' : 'Đổi'}
+              </button>
+            )}
+          </div>
           <InfoRow label="Sản phẩm" value={item.san_pham} />
           <InfoRow label="Địa chỉ" value={item.dia_chi} />
           <InfoRow label="GH kỹ thuật" value={fmtDate(item.ngay_gh_thuc)} />
@@ -267,6 +297,30 @@ export default function ConstructionDetailPage() {
           </div>
         )}
       </div>
+
+      {/* KTV picker bottom sheet */}
+      {showKtvPicker && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+          onClick={e => e.target === e.currentTarget && setShowKtvPicker(false)}>
+          <div className="bg-white rounded-t-3xl">
+            <div className="flex justify-center pt-3 pb-1"><div className="w-12 h-1.5 bg-gray-300 rounded-full" /></div>
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-800">Phân công KTV</h2>
+            </div>
+            <div className="p-4 space-y-2 pb-8">
+              {techList.map(t => (
+                <button key={t.id} onClick={() => assignKtv(t.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left ${
+                    item.ktv_phu_trach === t.full_name ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50 text-gray-700'
+                  }`}>
+                  <span className="text-sm font-medium">{t.full_name}</span>
+                  {item.ktv_phu_trach === t.full_name && <span className="text-xs">✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status picker bottom sheet */}
       {showStatus && (

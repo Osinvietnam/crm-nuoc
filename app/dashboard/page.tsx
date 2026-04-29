@@ -235,6 +235,66 @@ function PipelineSection({ pipeline }: { pipeline: Record<string, number> }) {
   )
 }
 
+// ─── My Tasks widget ─────────────────────────────────────────────────────────
+
+interface MyTaskItem {
+  completion_id:     number
+  label:             string
+  customer_name:     string | null
+  customer_record_id: number | null
+  status:            string
+}
+
+function MyTasksWidget({ role }: { role: string }) {
+  const router = useRouter()
+  const [tasks, setTasks] = useState<MyTaskItem[]>([])
+
+  useEffect(() => {
+    fetch('/api/tasks/my')
+      .then(r => r.json())
+      .then(d => setTasks((d.data ?? []).slice(0, 5)))
+      .catch(() => {})
+  }, [])
+
+  const SHOW_ROLES = ['tech', 'logistics', 'sales', 'partner']
+  if (!SHOW_ROLES.includes(role) || tasks.length === 0) return null
+
+  const STATUS_DOT: Record<string, string> = {
+    dang_lam: 'bg-amber-400',
+    kiem_tra: 'bg-blue-400',
+    blocked:  'bg-red-400',
+    chua_lam: 'bg-gray-300',
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-700">Việc cần làm</p>
+        <button onClick={() => router.push('/dashboard/tasks')}
+          className="text-xs text-blue-600 font-medium">Xem tất cả →</button>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
+        {tasks.map(t => (
+          <button key={t.completion_id}
+            onClick={() => t.customer_record_id && router.push(`/dashboard/customers/${t.customer_record_id}`)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-gray-50">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[t.status] ?? 'bg-gray-300'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-700 truncate">{t.label}</p>
+              {t.customer_name && (
+                <p className="text-xs text-gray-400 truncate">{t.customer_name}</p>
+              )}
+            </div>
+            <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Build cards per role ─────────────────────────────────────────────────────
 
 function buildCards(role: string, s: DashboardStats, target: number | null): KPICard[] {
@@ -401,6 +461,9 @@ export default function DashboardPage() {
 
       {/* ── Quick actions ── */}
       <QuickActions role={role} />
+
+      {/* ── Việc cần làm (tech/logistics/sales) ── */}
+      <MyTasksWidget role={role} />
 
       {/* ── KPI cards ── */}
       {cards.length > 0 && <KPIGrid cards={cards} loading={false} />}

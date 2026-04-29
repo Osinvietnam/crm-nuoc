@@ -22,6 +22,9 @@ export interface TaskWithStatus {
   blocked_waiting_for: string | null
   attachment_url:      string | null
   notes:               string | null
+  due_date:            string | null
+  assigned_to:         string | null
+  assigned_to_name:    string | null
   updated_by:          string | null
   updated_by_name:     string | null
   updated_at:          string | null
@@ -127,6 +130,9 @@ export async function GET(req: NextRequest) {
         blocked_waiting_for: comp?.blocked_waiting_for ?? null,
         attachment_url:      comp?.attachment_url      ?? null,
         notes:               comp?.notes               ?? null,
+        due_date:            comp?.due_date            ?? null,
+        assigned_to:         comp?.assigned_to         ?? null,
+        assigned_to_name:    comp?.assigned_to_name    ?? null,
         updated_by:          comp?.updated_by          ?? null,
         updated_by_name:     comp?.updated_by_name     ?? null,
         updated_at:          comp?.updated_at          ?? null,
@@ -242,10 +248,26 @@ export async function PATCH(req: NextRequest) {
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
     const body = await req.json()
-    const { id, status: newStatus, notes, blocked_reason, blocked_waiting_for, attachment_url } = body
+    const { id, status: newStatus, notes, blocked_reason, blocked_waiting_for, attachment_url,
+            due_date, assigned_to, assigned_to_name } = body
 
-    if (!id || !newStatus) {
-      return NextResponse.json({ error: 'Thiếu id hoặc status' }, { status: 400 })
+    const hasMetadata = due_date !== undefined || assigned_to !== undefined || notes !== undefined
+    if (!id || (!newStatus && !hasMetadata)) {
+      return NextResponse.json({ error: 'Thiếu id hoặc nội dung cập nhật' }, { status: 400 })
+    }
+
+    // ── Metadata-only update (không đổi status) ───────────────────────────────
+    if (!newStatus && hasMetadata) {
+      const svc = createServiceClient()
+      const meta: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (due_date        !== undefined) meta.due_date         = due_date || null
+      if (assigned_to     !== undefined) meta.assigned_to      = assigned_to || null
+      if (assigned_to_name !== undefined) meta.assigned_to_name = assigned_to_name || null
+      if (notes           !== undefined) meta.notes            = notes || null
+      const { data: updated, error: metaErr } = await svc
+        .from('task_completions').update(meta).eq('id', Number(id)).select().single()
+      if (metaErr) throw metaErr
+      return NextResponse.json({ success: true, data: updated })
     }
 
     // ── Load completion hiện tại ──────────────────────────────────────────────
@@ -305,10 +327,13 @@ export async function PATCH(req: NextRequest) {
       updated_by_name:     me.full_name ?? user.email ?? '',
       updated_at:          new Date().toISOString(),
     }
-    if (notes          !== undefined) updatePayload.notes               = notes
-    if (attachment_url !== undefined) updatePayload.attachment_url      = attachment_url
-    if (blocked_reason !== undefined) updatePayload.blocked_reason      = blocked_reason
+    if (notes               !== undefined) updatePayload.notes               = notes
+    if (attachment_url      !== undefined) updatePayload.attachment_url      = attachment_url
+    if (blocked_reason      !== undefined) updatePayload.blocked_reason      = blocked_reason
     if (blocked_waiting_for !== undefined) updatePayload.blocked_waiting_for = blocked_waiting_for
+    if (due_date            !== undefined) updatePayload.due_date            = due_date || null
+    if (assigned_to         !== undefined) updatePayload.assigned_to         = assigned_to || null
+    if (assigned_to_name    !== undefined) updatePayload.assigned_to_name    = assigned_to_name || null
 
     // Khi unblock → clear lý do
     if (newStatus !== 'blocked') {

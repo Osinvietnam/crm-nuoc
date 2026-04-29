@@ -44,17 +44,23 @@ const STATUS_ORDER = ['dang_lam', 'kiem_tra', 'blocked', 'chua_lam']
 
 export default function MyTasksPage() {
   const router = useRouter()
-  const [tasks, setTasks]     = useState<MyTask[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter]   = useState<string>('all')
-  const [updating, setUpdating] = useState<number | null>(null)
+  const [tasks,    setTasks]   = useState<MyTask[]>([])
+  const [loading,  setLoading] = useState(true)
+  const [filter,   setFilter]  = useState<string>('all')
+  const [updating, setUpdating]= useState<number | null>(null)
+  const [myRole,   setMyRole]  = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await fetch('/api/tasks/my')
-      const json = await res.json()
-      setTasks(json.data ?? [])
+      const [taskRes, meRes] = await Promise.all([
+        fetch('/api/tasks/my'),
+        fetch('/api/auth/me'),
+      ])
+      const taskJson = await taskRes.json()
+      const meJson   = await meRes.json()
+      setTasks(taskJson.data ?? [])
+      setMyRole(meJson?.role ?? '')
     } finally {
       setLoading(false)
     }
@@ -77,6 +83,18 @@ export default function MyTasksPage() {
       setUpdating(null)
     }
   }
+
+  const resetTask = async (completionId: number) => {
+    setUpdating(completionId)
+    try {
+      await fetch(`/api/tasks?id=${completionId}`, { method: 'DELETE' })
+      setTasks(prev => prev.filter(t => t.completion_id !== completionId))
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  const isManager = ['admin', 'ceo', 'director'].includes(myRole)
 
   const filtered = tasks
     .filter(t => filter === 'all' || t.status === filter)
@@ -197,19 +215,24 @@ export default function MyTasksPage() {
               {/* Action buttons */}
               <div className="flex flex-col gap-1.5 flex-shrink-0">
                 {nextStatuses(t.status).map(ns => (
-                  <button
-                    key={ns}
+                  <button key={ns}
                     onClick={() => updateStatus(t.completion_id, ns)}
                     disabled={updating === t.completion_id}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-xl disabled:opacity-50 whitespace-nowrap ${
                       ns === 'hoan_thanh' ? 'bg-green-600 text-white hover:bg-green-700'
                       : ns === 'blocked'  ? 'bg-red-50 text-red-600 border border-red-200'
                       : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
-                    }`}
-                  >
+                    }`}>
                     {updating === t.completion_id ? '...' : ACTION_LABEL[ns] ?? ns}
                   </button>
                 ))}
+                {isManager && (
+                  <button onClick={() => { if (confirm('Đặt lại task về Chưa làm?')) resetTask(t.completion_id) }}
+                    disabled={updating === t.completion_id}
+                    className="text-[10px] text-gray-400 hover:text-red-500 px-2 py-1 rounded-lg disabled:opacity-50">
+                    Đặt lại
+                  </button>
+                )}
               </div>
             </div>
           </div>
