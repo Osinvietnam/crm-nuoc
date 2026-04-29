@@ -1,6 +1,13 @@
--- Migration 052: bảng warranty_tickets (CJ-13)
+-- Migration 052: thay thế warranty_tickets (035) bằng schema mới đơn giản hơn
 
-CREATE TABLE IF NOT EXISTS warranty_tickets (
+-- ─── 1. Xóa schema cũ từ migration 035 ───────────────────────────────────────
+
+DROP TABLE IF EXISTS warranty_tasks    CASCADE;
+DROP TABLE IF EXISTS warranty_tickets  CASCADE;
+
+-- ─── 2. Tạo lại bảng theo schema mới ─────────────────────────────────────────
+
+CREATE TABLE warranty_tickets (
   id                SERIAL PRIMARY KEY,
   warranty_id       INT  REFERENCES order_warranties(id) ON DELETE SET NULL,
   order_id          INT  REFERENCES orders(id) ON DELETE CASCADE,
@@ -17,9 +24,11 @@ CREATE TABLE IF NOT EXISTS warranty_tickets (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_warranty_tickets_order_id  ON warranty_tickets(order_id);
-CREATE INDEX IF NOT EXISTS idx_warranty_tickets_status    ON warranty_tickets(trang_thai);
-CREATE INDEX IF NOT EXISTS idx_warranty_tickets_handler   ON warranty_tickets(nguoi_xu_ly);
+CREATE INDEX idx_warranty_tickets_order_id  ON warranty_tickets(order_id);
+CREATE INDEX idx_warranty_tickets_status    ON warranty_tickets(trang_thai);
+CREATE INDEX idx_warranty_tickets_handler   ON warranty_tickets(nguoi_xu_ly);
+
+-- ─── 3. RLS ──────────────────────────────────────────────────────────────────
 
 ALTER TABLE warranty_tickets ENABLE ROW LEVEL SECURITY;
 
