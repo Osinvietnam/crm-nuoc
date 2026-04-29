@@ -301,6 +301,9 @@ function buildAlerts(role: string, s: DashboardStats) {
   if (role === 'sales' || role === 'partner') {
     base.push({ label: `${s.quotes_stale} báo giá đã gửi chưa phản hồi`, count: s.quotes_stale, href: '/dashboard/orders', color: 'bg-blue-50 text-blue-700 border border-blue-200' })
   }
+  if (['admin', 'ceo', 'director'].includes(role) && s.quotes_cho_duyet > 0) {
+    base.unshift({ label: `${s.quotes_cho_duyet} báo giá chờ duyệt`, count: s.quotes_cho_duyet, href: '/dashboard/orders', color: 'bg-orange-50 text-orange-700 border border-orange-300' })
+  }
   if (role === 'logistics') {
     base.push({ label: `${s.logistics_overdue} đơn giao quá hạn`, count: s.logistics_overdue, href: '/dashboard/orders', color: 'bg-red-50 text-red-700 border border-red-200' })
   }

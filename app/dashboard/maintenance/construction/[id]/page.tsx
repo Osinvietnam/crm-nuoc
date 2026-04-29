@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import type { Construction } from '@/app/api/lark/maintenance/_mappers'
 
@@ -34,19 +34,43 @@ function diffDays(target: number): number {
 export default function ConstructionDetailPage() {
   const router = useRouter()
   const { id } = useParams() as { id: string }
-  const [item, setItem]         = useState<Construction | null>(null)
+  const [item, setItem]         = useState<Construction & { hinh_anh?: string[] } | null>(null)
   const [loading, setLoading]   = useState(true)
   const [showStatus, setShowStatus] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [photos, setPhotos]     = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch(`/api/lark/maintenance/construction/${id}`)
       .then(r => r.json())
-      .then(d => setItem(d.data))
+      .then(d => {
+        setItem(d.data)
+        setPhotos(d.data?.hinh_anh ?? [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
+
+  const uploadPhoto = async (file: File) => {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/lark/maintenance/construction/${id}/photos`, { method: 'POST', body: fd })
+      const json = await res.json()
+      if (json.url) setPhotos(prev => [...prev, json.url])
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const deletePhoto = async (url: string) => {
+    await fetch(`/api/lark/maintenance/construction/${id}/photos?url=${encodeURIComponent(url)}`, { method: 'DELETE' })
+    setPhotos(prev => prev.filter(u => u !== url))
+  }
 
   const updateStatus = async (status: string) => {
     setUpdating(true)
@@ -197,6 +221,34 @@ export default function ConstructionDetailPage() {
           <InfoRow label="GH kỹ thuật" value={fmtDate(item.ngay_gh_thuc)} />
           <InfoRow label="Nghiệm thu" value={fmtDate(item.ngay_nt)} />
           {item.ghi_chu && <InfoRow label="Ghi chú" value={item.ghi_chu} />}
+        </div>
+
+        {/* Ảnh nghiệm thu */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400">ẢNH NGHIỆM THU</p>
+            <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {uploading ? 'Đang tải...' : '+ Thêm ảnh'}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = '' }} />
+          </div>
+          {photos.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">Chưa có ảnh nghiệm thu</p>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((url, i) => (
+              <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                <img src={url} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                <button
+                  onClick={() => { if (confirm('Xóa ảnh này?')) deletePhoto(url) }}
+                  className="absolute top-1 right-1 bg-black/50 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center leading-none">
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

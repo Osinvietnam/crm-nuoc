@@ -349,14 +349,21 @@ function ProductThumb({ recordId, size = 64 }: { recordId: string; size?: number
 
 // ─── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ p, onClick, isAdmin, onDelete }: { p: Product; onClick: () => void; isAdmin: boolean; onDelete?: () => void }) {
+function ProductCard({ p, onClick, isAdmin, onDelete, onToggleStock }: {
+  p: Product; onClick: () => void; isAdmin: boolean; onDelete?: () => void; onToggleStock?: () => void
+}) {
   return (
-    <button onClick={onClick} className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:scale-[0.98] transition-transform">
+    <button onClick={onClick} className={`w-full bg-white rounded-2xl shadow-sm border p-4 text-left active:scale-[0.98] transition-transform ${p.con_hang === false ? 'border-red-200 opacity-70' : 'border-gray-100'}`}>
       <div className="flex items-start gap-3">
         <ProductThumb recordId={p.record_id} size={64} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-gray-800 text-sm leading-snug">{p.ten_sp}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-semibold text-gray-800 text-sm leading-snug">{p.ten_sp}</p>
+              {p.con_hang === false && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex-shrink-0">Hết hàng</span>
+              )}
+            </div>
             {p.nhom_sp && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
                 {p.nhom_sp}
@@ -391,13 +398,25 @@ function ProductCard({ p, onClick, isAdmin, onDelete }: { p: Product; onClick: (
           {p.hh_kd > 0 && (
             <p className="text-xs text-gray-500 mt-1.5">HH KD: <span className="text-gray-600 font-medium">{p.hh_kd}%</span></p>
           )}
-          {isAdmin && onDelete && (
-            <button
-              onClick={e => { e.stopPropagation(); onDelete() }}
-              className="mt-2 text-xs text-red-500 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50"
-            >
-              Xóa
-            </button>
+          {isAdmin && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              {onToggleStock && (
+                <button
+                  onClick={e => { e.stopPropagation(); onToggleStock() }}
+                  className={`text-xs border rounded-lg px-2.5 py-1 ${p.con_hang === false ? 'text-green-600 border-green-200 hover:bg-green-50' : 'text-orange-500 border-orange-200 hover:bg-orange-50'}`}
+                >
+                  {p.con_hang === false ? 'Còn hàng' : 'Đánh dấu hết hàng'}
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={e => { e.stopPropagation(); onDelete() }}
+                  className="text-xs text-red-500 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50"
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -530,6 +549,17 @@ export default function ProductsPage() {
             p={p}
             isAdmin={isAdmin}
             onClick={() => router.push(`/dashboard/products/${p.record_id}`)}
+            onToggleStock={isAdmin ? async () => {
+              const res = await fetch(`/api/lark/products/${p.record_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ con_hang: !p.con_hang }),
+              })
+              if (res.ok) {
+                const json = await res.json()
+                setProducts(prev => prev.map(x => x.record_id === p.record_id ? json.data : x))
+              }
+            } : undefined}
             onDelete={isAdmin ? async () => {
               if (!confirm(`Xóa sản phẩm "${p.ten_sp}"? Hành động này không thể hoàn tác.`)) return
               const res = await fetch(`/api/lark/products/${p.record_id}`, { method: 'DELETE' })

@@ -75,12 +75,13 @@ export async function PATCH(
       if (!isManager) {
         // Định nghĩa chuyển trạng thái hợp lệ — chỉ manager mới duyệt 'Chấp nhận'
         const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-          'Nháp':      ['Đã gửi', 'Hết hạn'],
-          'Đã gửi':   ['Đàm phán', 'Từ chối', 'Hết hạn'],
-          'Đàm phán':  ['Từ chối', 'Hết hạn'],
-          'Chấp nhận': [],                     // Terminal cho non-manager
-          'Từ chối':   [],                     // Terminal (chỉ admin)
-          'Hết hạn':   ['Nháp', 'Đã gửi'],    // Cho phép reopen manual
+          'Nháp':       ['Đã gửi', 'Hết hạn'],
+          'Đã gửi':    ['Đàm phán', 'Chờ duyệt', 'Từ chối', 'Hết hạn'],
+          'Đàm phán':   ['Chờ duyệt', 'Từ chối', 'Hết hạn'],
+          'Chờ duyệt':  [],           // Chỉ manager mới duyệt hoặc từ chối
+          'Chấp nhận':  [],           // Terminal cho non-manager
+          'Từ chối':    [],           // Terminal (chỉ admin)
+          'Hết hạn':    ['Nháp', 'Đã gửi'],
         }
         const allowed = ALLOWED_TRANSITIONS[current.trang_thai] ?? []
         if (!allowed.includes(body.trang_thai)) {

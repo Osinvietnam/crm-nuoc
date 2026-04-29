@@ -25,6 +25,7 @@ export interface DashboardStats {
   logistics_overdue:         number
   kh_no_contact_30d:         number
   quotes_stale:              number
+  quotes_cho_duyet:          number   // báo giá đang chờ manager duyệt
   // Phase 8 — Finance
   hoa_hong_chua_tra:         number   // tổng VNĐ hoa hồng chưa trả
   khau_hao_thang:            number   // tổng khấu hao tháng hiện tại
@@ -81,7 +82,7 @@ function zero(): DashboardStats {
     revenue_month: 0, revenue_6months: last6MonthsLabels(), contracts_unpaid: 0,
     maintenance_week: 0, construction_ongoing: 0, maintenance_overdue: 0,
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
-    logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0,
+    logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0, quotes_cho_duyet: 0,
     hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0,
   }
 }
@@ -102,7 +103,7 @@ export async function GET() {
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
     const { role } = profile
-    const isManager  = ['admin', 'ceo', 'tech_lead', 'accountant'].includes(role)
+    const isManager  = ['admin', 'ceo', 'director', 'accountant'].includes(role)
     const isSales    = role === 'sales' || role === 'partner'
     const isTech     = role === 'tech'
     const isLogistics = role === 'logistics'
@@ -123,7 +124,8 @@ export async function GET() {
       supabase.from('customers').select('*', { count: 'exact', head: true })
         .gte('ngay_lien_he_dau', mFrom).lte('ngay_lien_he_dau', mTo),
       supabase.from('customers').select('*', { count: 'exact', head: true })
-        .lt('updated_at', ago30 + 'T00:00:00Z'),
+        .or(`ngay_follow_up.is.null,ngay_follow_up.lt.${ago30}`)
+        .not('pipeline', 'in', '("Từ chối","Bảo hành")'),
       supabase.from('customers').select('pipeline'),
     ])
 
@@ -151,9 +153,14 @@ export async function GET() {
         staleQ   = staleQ.eq('nguoi_phu_trach', profile.id)
       }
 
-      const [pq, sq] = await Promise.all([pendingQ, staleQ])
-      stats.pending_quotes = pq.count ?? 0
-      stats.quotes_stale   = sq.count ?? 0
+      const choDuyetQ = isManager
+        ? supabase.from('quotes').select('*', { count: 'exact', head: true }).eq('trang_thai', 'Chờ duyệt')
+        : null
+
+      const [pq, sq, cdq] = await Promise.all([pendingQ, staleQ, choDuyetQ ?? Promise.resolve({ count: 0 })])
+      stats.pending_quotes    = (pq as any).count ?? 0
+      stats.quotes_stale      = (sq as any).count ?? 0
+      stats.quotes_cho_duyet  = (cdq as any).count ?? 0
     }
 
     // ── C. Đơn hàng tháng ────────────────────────────────────────────────────
@@ -175,16 +182,17 @@ export async function GET() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const addTech = (q: any, col: string) => techId ? q.eq(col, techId) : q
 
-      const [ptTodayR, ptWeekR, ptOverdueR, ctTodayR, ctOngoingR] = await Promise.all([
+      const [ptTodayR, ptWeekR, ptOverdueR, ctTodayR, ctWeekR, ctOngoingR] = await Promise.all([
         addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).eq('lan_bd_tiep_theo', today), 'nv_phu_trach'),
         addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).gte('lan_bd_tiep_theo', wFrom).lte('lan_bd_tiep_theo', wTo), 'nv_phu_trach'),
         addTech(supabase.from('maintenance_periodic').select('*', { count: 'exact', head: true }).lt('lan_bd_tiep_theo', today).eq('trang_thai', 'Đang hoạt động'), 'nv_phu_trach'),
         addTech(supabase.from('maintenance_construction').select('*', { count: 'exact', head: true }).eq('ngay_can_cs', today), 'ktv_phu_trach'),
+        addTech(supabase.from('maintenance_construction').select('*', { count: 'exact', head: true }).gte('ngay_can_cs', wFrom).lte('ngay_can_cs', wTo), 'ktv_phu_trach'),
         addTech(supabase.from('maintenance_construction').select('*', { count: 'exact', head: true }).eq('trang_thai', 'Đang thi công'), 'ktv_phu_trach'),
       ])
 
       stats.maintenance_today    = (ptTodayR.count ?? 0) + (ctTodayR.count ?? 0)
-      stats.maintenance_week     = (ptWeekR.count  ?? 0) + (ctTodayR.count ?? 0)
+      stats.maintenance_week     = (ptWeekR.count  ?? 0) + (ctWeekR.count  ?? 0)
       stats.maintenance_overdue  = ptOverdueR.count  ?? 0
       stats.construction_ongoing = ctOngoingR.count  ?? 0
     }

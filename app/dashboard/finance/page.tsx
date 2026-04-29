@@ -40,6 +40,12 @@ interface Asset {
   khau_hao_thang: number; gia_tri_con_lai: number; so_thang_con_lai: number; is_fully_depreciated: boolean
 }
 interface Receivable { amount: number; due_date: string; customer_name: string | null; installment: number }
+interface PayRecord {
+  id: number; customer_record_id: number | null; customer_name: string | null
+  nguoi_phu_trach: string | null; installment: number; percent: number | null
+  amount: number | null; due_date: string | null; paid_date: string | null
+  is_paid: boolean; notes: string | null
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -67,7 +73,7 @@ const ASSET_TYPE_LABEL: Record<string, string> = {
   may_moc: 'Máy móc', xe_cong: 'Xe công', thiet_bi_van_phong: 'TB Văn phòng', khac: 'Khác',
 }
 
-type Tab = 'overview' | 'expenses' | 'commissions' | 'receivables' | 'assets'
+type Tab = 'overview' | 'expenses' | 'commissions' | 'receivables' | 'assets' | 'payments'
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -98,6 +104,16 @@ export default function FinancePage() {
   const [assetForm, setAssetForm] = useState({ ten_tai_san: '', loai_tai_san: 'may_moc', gia_tri_ban_dau: '', ngay_mua: '', thoi_gian_kh_thang: '36', ghi_chu: '' })
   const [assetSaving, setAssetSaving] = useState(false)
   const [showAssetForm, setShowAssetForm] = useState(false)
+
+  // Payments tab state
+  const [paySearch, setPaySearch]     = useState('')
+  const [payRecords, setPayRecords]   = useState<PayRecord[]>([])
+  const [payLoading, setPayLoading]   = useState(false)
+  const [payMarkingId, setPayMarkingId] = useState<number | null>(null)
+  const [payPaidDate, setPayPaidDate] = useState(new Date().toISOString().split('T')[0])
+  const [showPayForm, setShowPayForm] = useState(false)
+  const [payForm, setPayForm] = useState({ customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
+  const [payFormSaving, setPayFormSaving] = useState(false)
 
   // Fetch role once
   useEffect(() => {
@@ -233,6 +249,58 @@ export default function FinancePage() {
     fetchAssets()
   }
 
+  async function searchPayments(q: string) {
+    if (!q.trim()) { setPayRecords([]); return }
+    setPayLoading(true)
+    const supa = createClient()
+    const { data } = await supa
+      .from('payment_records' as never)
+      .select('id, customer_record_id, customer_name, nguoi_phu_trach, installment, percent, amount, due_date, paid_date, is_paid, notes')
+      .ilike('customer_name', `%${q}%`)
+      .order('is_paid', { ascending: true })
+      .order('installment', { ascending: true })
+      .limit(50)
+    setPayRecords((data as PayRecord[] | null) ?? [])
+    setPayLoading(false)
+  }
+
+  async function markAsPaid(id: number) {
+    setPayMarkingId(id)
+    const res = await fetch('/api/payments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_paid: true, paid_date: payPaidDate }),
+    })
+    if (res.ok) {
+      setPayRecords(prev => prev.map(r => r.id === id ? { ...r, is_paid: true, paid_date: payPaidDate } : r))
+      fetchReport()
+    }
+    setPayMarkingId(null)
+  }
+
+  async function savePayRecord() {
+    if (!payForm.customer_name || !payForm.amount) return
+    setPayFormSaving(true)
+    try {
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name:      payForm.customer_name,
+          installment:        Number(payForm.installment),
+          amount:             Number(payForm.amount.replace(/\D/g, '')),
+          due_date:           payForm.due_date || null,
+          notes:              payForm.notes || null,
+        }),
+      })
+      setPayForm({ customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
+      setShowPayForm(false)
+      if (paySearch) searchPayments(paySearch)
+    } finally {
+      setPayFormSaving(false)
+    }
+  }
+
   // ── Month navigation ───────────────────────────────────────────────────────
   function prevMonth() {
     if (thang === 1) { setThang(12); setNam(n => n - 1) }
@@ -248,10 +316,11 @@ export default function FinancePage() {
   // ── Tabs config ────────────────────────────────────────────────────────────
   const tabs: { id: Tab; label: string; managerOnly?: boolean; adminOnly?: boolean }[] = [
     { id: 'overview',     label: 'Tổng quan' },
-    { id: 'expenses',     label: 'Chi phí',  managerOnly: true },
-    { id: 'commissions',  label: 'Hoa hồng', managerOnly: true },
-    { id: 'receivables',  label: 'Công nợ',  managerOnly: true },
-    { id: 'assets',       label: 'Tài sản',  adminOnly: true },
+    { id: 'payments',     label: 'Ghi thu',   managerOnly: true },
+    { id: 'expenses',     label: 'Chi phí',   managerOnly: true },
+    { id: 'commissions',  label: 'Hoa hồng',  managerOnly: true },
+    { id: 'receivables',  label: 'Công nợ',   managerOnly: true },
+    { id: 'assets',       label: 'Tài sản',   adminOnly: true },
   ]
   const visibleTabs = tabs.filter(t => {
     if (t.adminOnly)   return ['admin', 'ceo', 'accountant'].includes(role)
@@ -401,6 +470,129 @@ export default function FinancePage() {
           </div>
         )
       })()}
+
+      {/* ── Tab: Ghi thu ── */}
+      {tab === 'payments' && isManager && (
+        <div className="space-y-3">
+          {/* Ngày thanh toán mặc định */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500">Tìm kiếm công nợ theo tên KH</p>
+              <button onClick={() => setShowPayForm(v => !v)} className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+                {showPayForm ? 'Đóng' : '+ Ghi thu mới'}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text" placeholder="Tên khách hàng..." value={paySearch}
+                onChange={e => setPaySearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchPayments(paySearch)}
+                className="crm-input flex-1"
+              />
+              <button onClick={() => searchPayments(paySearch)}
+                className="bg-blue-600 text-white text-sm font-semibold px-4 rounded-xl">
+                Tìm
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500 w-28 flex-shrink-0">Ngày thanh toán</label>
+              <input type="date" value={payPaidDate} onChange={e => setPayPaidDate(e.target.value)} className="crm-input flex-1" />
+            </div>
+          </div>
+
+          {/* Form ghi thu mới */}
+          {showPayForm && (
+            <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-4 space-y-3">
+              <p className="text-xs font-semibold text-blue-600">Ghi thu nhanh</p>
+              <input placeholder="Tên khách hàng *" value={payForm.customer_name}
+                onChange={e => setPayForm(f => ({ ...f, customer_name: e.target.value }))} className="crm-input w-full" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Đợt thanh toán</label>
+                  <select value={payForm.installment} onChange={e => setPayForm(f => ({ ...f, installment: e.target.value }))} className="crm-input w-full">
+                    <option value="1">Đợt 1</option>
+                    <option value="2">Đợt 2</option>
+                    <option value="3">Đợt 3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Hạn thu</label>
+                  <input type="date" value={payForm.due_date} onChange={e => setPayForm(f => ({ ...f, due_date: e.target.value }))} className="crm-input w-full" />
+                </div>
+              </div>
+              <input placeholder="Số tiền (VNĐ) *" value={payForm.amount}
+                onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} className="crm-input w-full" />
+              <input placeholder="Ghi chú (tùy chọn)" value={payForm.notes}
+                onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} className="crm-input w-full" />
+              <button onClick={savePayRecord} disabled={payFormSaving || !payForm.customer_name || !payForm.amount} className="crm-btn-primary w-full">
+                {payFormSaving ? 'Đang lưu...' : 'Lưu đợt thanh toán'}
+              </button>
+            </div>
+          )}
+
+          {/* Kết quả tìm kiếm */}
+          {payLoading && <div className="flex justify-center py-6"><span className="crm-spinner" /></div>}
+          {!payLoading && payRecords.length === 0 && paySearch && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-sm text-gray-400">Không tìm thấy kết quả</div>
+          )}
+          {payRecords.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y">
+              {payRecords.map(pr => (
+                <div key={pr.id} className={`px-4 py-3 ${pr.is_paid ? 'opacity-60' : ''}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{pr.customer_name ?? '—'}</p>
+                      <p className="text-xs text-gray-500">
+                        Đợt {pr.installment}
+                        {pr.due_date ? ` · Hạn ${pr.due_date}` : ''}
+                        {pr.nguoi_phu_trach ? ` · ${pr.nguoi_phu_trach}` : ''}
+                      </p>
+                      {pr.notes && <p className="text-xs text-gray-400 mt-0.5">{pr.notes}</p>}
+                    </div>
+                    <div className="text-right ml-3 flex-shrink-0">
+                      <p className="text-sm font-semibold text-gray-800">{fmt(pr.amount)}</p>
+                      {pr.is_paid
+                        ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <p className="text-xs text-green-600 font-medium">✓ Đã thu {pr.paid_date}</p>
+                            <button
+                              onClick={async () => {
+                                const { downloadReceiptPDF } = await import('@/components/ReceiptPDF')
+                                const company = await fetch('/api/admin/settings').then(r => r.json()).then(d => d.data ?? {})
+                                await downloadReceiptPDF({
+                                  receipt_no:    `PT-${pr.id}`,
+                                  customer_name: pr.customer_name ?? '—',
+                                  nguoi_phu_trach: pr.nguoi_phu_trach,
+                                  installment:   pr.installment,
+                                  amount:        pr.amount ?? 0,
+                                  paid_date:     pr.paid_date ?? new Date().toISOString().split('T')[0],
+                                  notes:         pr.notes,
+                                }, company)
+                              }}
+                              className="text-xs text-blue-600 font-medium hover:underline"
+                            >
+                              Xuất biên lai
+                            </button>
+                          </div>
+                        )
+                        : (
+                          <button
+                            onClick={() => markAsPaid(pr.id)}
+                            disabled={payMarkingId === pr.id}
+                            className="mt-1 text-xs text-white bg-green-600 hover:bg-green-700 px-2.5 py-1 rounded-lg font-semibold disabled:opacity-50"
+                          >
+                            {payMarkingId === pr.id ? '...' : 'Đánh dấu đã thu'}
+                          </button>
+                        )
+                      }
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Tab: Chi phí ── */}
       {tab === 'expenses' && isManager && (

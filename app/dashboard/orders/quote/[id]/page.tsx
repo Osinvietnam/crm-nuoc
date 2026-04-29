@@ -727,6 +727,41 @@ export default function QuoteDetailPage() {
             </button>
           )}
 
+          {/* Gửi duyệt — sales khi BG đã gửi hoặc đàm phán */}
+          {['Đã gửi', 'Đàm phán'].includes(quote.trang_thai) && (
+            <button
+              onClick={() => handleStatusChange('Chờ duyệt')}
+              disabled={updating}
+              className="w-full bg-orange-500 disabled:bg-orange-300 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-orange-600">
+              <span>⏳</span>
+              {updating ? 'Đang gửi...' : 'Gửi lên CEO duyệt'}
+            </button>
+          )}
+
+          {/* Duyệt / Từ chối — manager khi BG đang chờ duyệt */}
+          {quote.trang_thai === 'Chờ duyệt' && (
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-orange-700 text-center">Báo giá đang chờ duyệt</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleStatusChange('Chấp nhận')}
+                  disabled={updating}
+                  className="bg-green-600 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">
+                  ✅ Duyệt
+                </button>
+                <button
+                  onClick={() => {
+                    const ly_do = prompt('Lý do từ chối:')
+                    if (ly_do !== null) handleStatusChange('Từ chối', ly_do)
+                  }}
+                  disabled={updating}
+                  className="bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">
+                  ✕ Từ chối
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Xuất PDF */}
           <button
             onClick={async () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CONTRACT_STATUS_COLORS } from '@/lib/lark/tables'
 import type { Contract } from '@/app/api/lark/orders/route'
@@ -41,20 +41,51 @@ const CONTRACT_STATUSES = [
 export default function ContractDetailPage() {
   const router = useRouter()
   const { id } = useParams() as { id: string }
-  const [contract, setContract] = useState<Contract | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [contract, setContract]     = useState<Contract | null>(null)
+  const [loading, setLoading]       = useState(true)
   const [showStatus, setShowStatus] = useState(false)
-  const [updating, setUpdating] = useState(false)
+  const [updating, setUpdating]     = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [exportingPDF, setExportingPDF] = useState(false)
+  const [deliveryPhotos, setDeliveryPhotos] = useState<string[]>([])
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState<string | null>(null)
+  const [deliveryNotes, setDeliveryNotes] = useState('')
+  const [uploadingDelivery, setUploadingDelivery] = useState(false)
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false)
+  const deliveryFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch(`/api/lark/orders/contract/${id}`)
       .then(r => r.json())
-      .then(d => setContract(d.data))
+      .then(d => {
+        setContract(d.data)
+        setDeliveryPhotos(d.data?.delivery_photos ?? [])
+        setDeliveryConfirmed(d.data?.delivery_confirmed_at ?? null)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
+
+  const confirmDelivery = async (file?: File) => {
+    setUploadingDelivery(true)
+    try {
+      const fd = new FormData()
+      if (file) fd.append('file', file)
+      if (deliveryNotes) fd.append('notes', deliveryNotes)
+      const res  = await fetch(`/api/lark/orders/contract/${id}/delivery`, { method: 'POST', body: fd })
+      const json = await res.json()
+      if (json.success) {
+        setDeliveryConfirmed(new Date().toISOString())
+        if (json.urls?.length) setDeliveryPhotos(prev => [...prev, ...json.urls])
+        setDeliveryNotes('')
+        setShowDeliveryForm(false)
+        setSuccessMsg('Đã xác nhận giao hàng')
+        setTimeout(() => setSuccessMsg(''), 2500)
+      }
+    } finally {
+      setUploadingDelivery(false)
+    }
+  }
 
   const updateStatus = async (status: string) => {
     setUpdating(true)
@@ -159,6 +190,58 @@ export default function ContractDetailPage() {
           <InfoRow label="Ngày ký" value={fmtDate(contract.ngay_ky)} />
           <InfoRow label="Ngày giao DK" value={fmtDate(contract.ngay_giao_dk)} />
           {contract.ghi_chu && <InfoRow label="Ghi chú" value={contract.ghi_chu} />}
+        </div>
+
+        {/* Xác nhận giao hàng */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400">XÁC NHẬN GIAO HÀNG</p>
+            {deliveryConfirmed
+              ? <span className="text-xs text-green-600 font-medium">✓ Đã giao {new Date(deliveryConfirmed).toLocaleDateString('vi-VN')}</span>
+              : <button onClick={() => setShowDeliveryForm(v => !v)}
+                  className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+                  {showDeliveryForm ? 'Đóng' : 'Xác nhận giao'}
+                </button>
+            }
+          </div>
+
+          {showDeliveryForm && !deliveryConfirmed && (
+            <div className="space-y-2 mb-3">
+              <textarea
+                value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)}
+                placeholder="Ghi chú giao hàng (tùy chọn)..." rows={2}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 outline-none focus:border-blue-400 resize-none"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => deliveryFileRef.current?.click()} disabled={uploadingDelivery}
+                  className="flex-1 border border-gray-200 text-gray-600 text-xs font-semibold py-2.5 rounded-xl hover:bg-gray-50">
+                  📷 Chụp/Tải ảnh
+                </button>
+                <button onClick={() => confirmDelivery()} disabled={uploadingDelivery}
+                  className="flex-1 bg-green-600 text-white text-xs font-semibold py-2.5 rounded-xl hover:bg-green-700 disabled:opacity-50">
+                  {uploadingDelivery ? 'Đang lưu...' : '✓ Xác nhận'}
+                </button>
+              </div>
+              <input ref={deliveryFileRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) confirmDelivery(f); e.target.value = '' }} />
+            </div>
+          )}
+
+          {deliveryPhotos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {deliveryPhotos.map((url, i) => (
+                <div key={i} className="aspect-square rounded-xl overflow-hidden bg-gray-100">
+                  <img src={url} alt={`Ảnh giao ${i + 1}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
+          {deliveryPhotos.length === 0 && deliveryConfirmed && (
+            <p className="text-xs text-gray-400">Không có ảnh giao hàng</p>
+          )}
+          {!deliveryConfirmed && !showDeliveryForm && (
+            <p className="text-sm text-gray-400 text-center py-2">Chưa xác nhận giao hàng</p>
+          )}
         </div>
 
         {/* Xuất PDF */}

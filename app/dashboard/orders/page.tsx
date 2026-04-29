@@ -1202,7 +1202,7 @@ export default function OrdersPage() {
         {/* M7: Status filter — chỉ hiện ở tab Báo giá */}
         {tab === 'quotes' && (
           <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-            {['all', 'Nháp', 'Đã gửi', 'Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'].map(s => (
+            {['all', 'Chờ duyệt', 'Nháp', 'Đã gửi', 'Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'].map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
