@@ -115,6 +115,26 @@ export async function PATCH(
       void autoCreateConstruction(supabase, data).catch((e: unknown) => console.error('autoCreateConstruction:', e))
     }
 
+    // CJ-12: HĐ Hoàn thành → tự tạo bảo hành 24 tháng (dedup: 1 warranty per order)
+    if (body.trang_thai === 'Hoàn thành' && data.id) {
+      void (async () => {
+        const { data: existing } = await supabase
+          .from('order_warranties').select('id').eq('order_id', data.id).maybeSingle()
+        if (!existing) {
+          const today    = new Date().toISOString().split('T')[0]
+          const het_han  = new Date(Date.now() + 24 * 30 * 86_400_000).toISOString().split('T')[0]
+          const { error: wErr } = await supabase.from('order_warranties').insert({
+            order_id:   data.id,
+            bat_dau:    today,
+            het_han,
+            loai_bh:    '24 tháng',
+            created_by: user.id,
+          })
+          if (wErr) console.error('Auto warranty:', wErr.message)
+        }
+      })()
+    }
+
     // C6: Tự động cập nhật pipeline KH theo trạng thái hợp đồng
     // Giao hàng (thi công) → Nghiệm thu → Bảo hành
     // Mapping contract.trang_thai → customer.pipeline (đúng với CONTRACT_STATUS_COLORS)

@@ -30,6 +30,7 @@ export interface DashboardStats {
   hoa_hong_chua_tra:         number   // tổng VNĐ hoa hồng chưa trả
   khau_hao_thang:            number   // tổng khấu hao tháng hiện tại
   cong_no_qua_han:           number   // tổng công nợ quá hạn (due_date < today)
+  warranty_tickets_pending:  number   // yêu cầu bảo hành Chờ xử lý
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ function zero(): DashboardStats {
     maintenance_week: 0, construction_ongoing: 0, maintenance_overdue: 0,
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
     logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0, quotes_cho_duyet: 0,
-    hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0,
+    hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0, warranty_tickets_pending: 0,
   }
 }
 
@@ -247,6 +248,16 @@ export async function GET() {
         }
       }
       stats.khau_hao_thang = khtong
+    }
+
+    // ── G. Bảo hành ──────────────────────────────────────────────────────────
+    if (isTech || isManager) {
+      let wq = supabase.from('warranty_tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('trang_thai', 'Chờ xử lý')
+      if (isTech) wq = wq.eq('nguoi_xu_ly', profile.id)
+      const { count: wCount } = await wq
+      stats.warranty_tickets_pending = wCount ?? 0
     }
 
     // ── F. Logistics ──────────────────────────────────────────────────────────

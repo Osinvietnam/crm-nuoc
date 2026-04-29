@@ -330,7 +330,7 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
     { label: 'Bảo trì hôm nay', value: s.maintenance_today,   sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
     { label: 'Tuần này',         value: s.maintenance_week,    sub: 'CT + Định kỳ',       color: 'bg-amber-50 text-amber-600',   icon: '📅', href: '/dashboard/calendar' },
     { label: 'Đang thi công',    value: s.construction_ongoing, sub: 'Công trình',         color: 'bg-blue-50 text-blue-600',    icon: '🏗️', href: '/dashboard/maintenance' },
-    { label: 'Quá hạn',          value: s.maintenance_overdue, sub: 'Bảo trì định kỳ',   color: 'bg-red-50 text-red-600',      icon: '⚠️', href: '/dashboard/maintenance' },
+    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending, sub: 'Yêu cầu chờ xử lý', color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty' },
   ]
 
   if (role === 'logistics') return [
@@ -354,6 +354,9 @@ function buildAlerts(role: string, s: DashboardStats) {
 
   if (['admin', 'ceo', 'director', 'tech'].includes(role)) {
     base.push({ label: `${s.maintenance_overdue} bảo trì định kỳ quá hạn`, count: s.maintenance_overdue, href: '/dashboard/maintenance', color: 'bg-red-50 text-red-700 border border-red-200' })
+    if (s.warranty_tickets_pending > 0) {
+      base.push({ label: `${s.warranty_tickets_pending} yêu cầu bảo hành chờ xử lý`, count: s.warranty_tickets_pending, href: '/dashboard/warranty', color: 'bg-purple-50 text-purple-700 border border-purple-200' })
+    }
   }
   if (role === 'accountant') {
     base.push({ label: `${s.contracts_unpaid} hợp đồng chưa thu đủ`, count: s.contracts_unpaid, href: '/dashboard/orders', color: 'bg-red-50 text-red-700 border border-red-200' })

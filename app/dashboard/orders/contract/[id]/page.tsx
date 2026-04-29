@@ -53,6 +53,13 @@ export default function ContractDetailPage() {
   const [uploadingDelivery, setUploadingDelivery] = useState(false)
   const [showDeliveryForm, setShowDeliveryForm] = useState(false)
   const [myRole, setMyRole] = useState('')
+  const [warranties,    setWarranties]    = useState<any[]>([])
+  const [wTickets,      setWTickets]      = useState<any[]>([])
+  const [showAddTicket, setShowAddTicket] = useState(false)
+  const [ticketTitle,   setTicketTitle]   = useState('')
+  const [ticketMoTa,    setTicketMoTa]    = useState('')
+  const [ticketPriority,setTicketPriority]= useState('Bình thường')
+  const [savingTicket,  setSavingTicket]  = useState(false)
   const deliveryFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -66,6 +73,9 @@ export default function ContractDetailPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
     fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
+    // Load warranties + tickets sau khi có id
+    fetch(`/api/warranties?order_id=${id}`).then(r => r.json()).then(d => setWarranties(d.data ?? [])).catch(() => {})
+    fetch(`/api/warranty-tickets?order_id=${id}`).then(r => r.json()).then(d => setWTickets(d.data ?? [])).catch(() => {})
   }, [id])
 
   const confirmDelivery = async (file?: File) => {
@@ -254,6 +264,127 @@ export default function ContractDetailPage() {
           )}
           {!deliveryConfirmed && !showDeliveryForm && (
             <p className="text-sm text-gray-400 text-center py-2">Chưa xác nhận giao hàng</p>
+          )}
+        </div>
+
+        {/* ── Bảo hành ── */}
+        {warranties.length > 0 && (() => {
+          const w = warranties[0]
+          const daysLeft = w.days_left as number
+          const isActive = w.is_active as boolean
+          return (
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-gray-400">BẢO HÀNH SẢN PHẨM</p>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                  {isActive ? `Còn ${daysLeft} ngày` : 'Đã hết hạn'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <p className="text-xs text-gray-400">Bắt đầu</p>
+                  <p className="font-semibold text-gray-700">{new Date(w.bat_dau).toLocaleDateString('vi-VN')}</p>
+                </div>
+                <div className="text-gray-300">→</div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400">Hết hạn</p>
+                  <p className={`font-semibold ${isActive ? 'text-gray-700' : 'text-red-600'}`}>
+                    {new Date(w.het_han).toLocaleDateString('vi-VN')}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400">Loại BH</p>
+                  <p className="font-semibold text-gray-700 text-xs">{w.loai_bh}</p>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ── Yêu cầu bảo hành ── */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400">YÊU CẦU BẢO HÀNH</p>
+            <button onClick={() => setShowAddTicket(v => !v)}
+              className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+              {showAddTicket ? 'Đóng' : '+ Tạo yêu cầu'}
+            </button>
+          </div>
+
+          {showAddTicket && (
+            <div className="space-y-2 mb-3 pb-3 border-b border-gray-100">
+              <input value={ticketTitle} onChange={e => setTicketTitle(e.target.value)}
+                placeholder="Tiêu đề yêu cầu *"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-400" />
+              <textarea rows={2} value={ticketMoTa} onChange={e => setTicketMoTa(e.target.value)}
+                placeholder="Mô tả vấn đề..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-400 resize-none" />
+              <select value={ticketPriority} onChange={e => setTicketPriority(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white outline-none focus:border-blue-400">
+                {['Khẩn cấp', 'Cao', 'Bình thường', 'Thấp'].map(p => <option key={p}>{p}</option>)}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!ticketTitle.trim()) return
+                  setSavingTicket(true)
+                  const res = await fetch('/api/warranty-tickets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      order_id:    Number(id),
+                      customer_id: contract?.customer_id,
+                      warranty_id: warranties[0]?.id ?? null,
+                      title:       ticketTitle.trim(),
+                      mo_ta:       ticketMoTa.trim() || null,
+                      priority:    ticketPriority,
+                    }),
+                  })
+                  const json = await res.json()
+                  if (json.data) {
+                    setWTickets(prev => [json.data, ...prev])
+                    setTicketTitle(''); setTicketMoTa(''); setShowAddTicket(false)
+                  }
+                  setSavingTicket(false)
+                }}
+                disabled={!ticketTitle.trim() || savingTicket}
+                className="w-full py-2.5 bg-blue-600 disabled:bg-blue-300 text-white text-sm font-semibold rounded-xl">
+                {savingTicket ? 'Đang tạo...' : 'Tạo yêu cầu'}
+              </button>
+            </div>
+          )}
+
+          {wTickets.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-2">Chưa có yêu cầu bảo hành</p>
+          ) : (
+            <div className="space-y-2">
+              {wTickets.map(t => {
+                const statusColor: Record<string, string> = {
+                  'Chờ xử lý':  'bg-amber-100 text-amber-700',
+                  'Đang xử lý': 'bg-blue-100 text-blue-700',
+                  'Hoàn thành': 'bg-green-100 text-green-700',
+                  'Đóng':       'bg-gray-100 text-gray-600',
+                }
+                const prioColor: Record<string, string> = {
+                  'Khẩn cấp': 'text-red-600', 'Cao': 'text-orange-500',
+                  'Bình thường': 'text-gray-500', 'Thấp': 'text-gray-400',
+                }
+                return (
+                  <div key={t.id} className="border border-gray-100 rounded-xl p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-800 flex-1">{t.title}</p>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${statusColor[t.trang_thai] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {t.trang_thai}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] font-medium ${prioColor[t.priority] ?? ''}`}>{t.priority}</span>
+                      {t.nguoi_xu_ly_name && <span className="text-[10px] text-gray-400">→ {t.nguoi_xu_ly_name}</span>}
+                      <span className="text-[10px] text-gray-400 ml-auto">{new Date(t.created_at).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
 
