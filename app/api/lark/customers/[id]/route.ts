@@ -159,7 +159,7 @@ export async function PATCH(
     // ── Warning checks (H5 + H6) — non-blocking ──────────────────────────────
     const warnings: string[] = []
     const newPipeline = updates.pipeline as string | undefined
-    const isManager = ['admin', 'ceo'].includes(profile?.role ?? '')
+    const isManager = ['admin', 'ceo', 'director'].includes(profile?.role ?? '')
 
     if (newPipeline && current && newPipeline !== current.pipeline && !isManager) {
       const customerId: number = (data as any).id ?? current?.id

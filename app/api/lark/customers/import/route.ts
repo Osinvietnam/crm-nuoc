@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!profile || !['admin', 'manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/manager mới được import' }, { status: 403 })
+    if (!profile || !['admin', 'ceo', 'director'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới được import' }, { status: 403 })
     }
 
     const { rows } = await req.json() as {

@@ -19,8 +19,8 @@ export async function POST(
       .eq('id', user.id)
       .single()
 
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO mới có thể đặt lại mật khẩu' }, { status: 403 })
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới có thể đặt lại mật khẩu' }, { status: 403 })
     }
 
     const { id } = await params

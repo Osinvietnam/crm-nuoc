@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO mới thêm tài sản' }, { status: 403 })
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới thêm tài sản' }, { status: 403 })
     }
 
     const body = await req.json()
@@ -114,8 +114,8 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
-      return NextResponse.json({ error: 'Chỉ admin/CEO mới sửa tài sản' }, { status: 403 })
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới sửa tài sản' }, { status: 403 })
     }
 
     const body = await req.json()

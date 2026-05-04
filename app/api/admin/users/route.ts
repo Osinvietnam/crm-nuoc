@@ -157,7 +157,7 @@ export async function PATCH(req: NextRequest) {
 
     const { data: me } = await supabase
       .from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'director'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
