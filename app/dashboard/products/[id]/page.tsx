@@ -230,7 +230,7 @@ export default function ProductDetailPage() {
       .finally(() => setLoading(false))
 
     fetch('/api/auth/me').then(r => r.json())
-      .then(d => { if (d?.role === 'admin' || d?.role === 'manager') setIsAdmin(true) })
+      .then(d => { if (['admin', 'ceo', 'director'].includes(d?.role)) setIsAdmin(true) })
       .catch(() => {})
   }, [id])
 

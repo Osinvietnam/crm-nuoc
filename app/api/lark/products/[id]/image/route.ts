@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const BUCKET = 'product-images'
-const ALLOWED_ROLES = ['admin', 'ceo']
+const ALLOWED_ROLES = ['admin', 'ceo', 'director']
 
 export async function POST(
   req: NextRequest,
@@ -45,8 +45,7 @@ export async function POST(
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(id)
 
-    // Lưu URL vào products.image_url
-    await supabase.from('products').update({ image_url: publicUrl }).eq('id', Number(id))
+    await supabase.from('products').update({ anh_sp: publicUrl }).eq('id', Number(id))
 
     // Cache-bust URL cho UI
     return NextResponse.json({ url: `${publicUrl}?t=${Date.now()}` })
@@ -73,7 +72,7 @@ export async function DELETE(
 
     const { id } = await params
     await supabase.storage.from(BUCKET).remove([id])
-    await supabase.from('products').update({ image_url: null }).eq('id', Number(id))
+    await supabase.from('products').update({ anh_sp: null }).eq('id', Number(id))
 
     return NextResponse.json({ ok: true })
   } catch (err) {
