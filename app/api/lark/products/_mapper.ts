@@ -14,6 +14,7 @@ export interface Product {
   mo_ta:          string
   anh_sp:         string  // URL ảnh từ Supabase Storage
   con_hang:       boolean
+  updated_at:     string | null
 }
 
 // Legacy: kept for import route compatibility
@@ -45,10 +46,8 @@ export function mapProduct(r: any): Product {
     gia_npp:        r.gia_npp        ?? 0,
     hh_kd:          r.hh_kd          ?? 0,
     mo_ta:          r.mo_ta          ?? '',
-    anh_sp:         r.anh_sp
-      ?? (r.lark_record_id
-          ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-images/${r.lark_record_id}`
-          : ''),
+    anh_sp:         r.anh_sp         ?? '',
     con_hang:       r.con_hang       ?? true,
+    updated_at:     r.updated_at     ?? null,
   }
 }

@@ -433,11 +433,14 @@ export default function ProductsPage() {
   const [error, setError]       = useState('')
   const [search, setSearch]     = useState('')
   const [filterPhanLoai, setFilterPhanLoai] = useState('all')
+  const [filterNhomSP, setFilterNhomSP]     = useState('all')
+  const [filterStock, setFilterStock]       = useState<'all' | 'con' | 'het'>('all')
   const [showAdd, setShowAdd]   = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importMsg, setImportMsg]   = useState('')
   const [isAdmin, setIsAdmin]   = useState(false)
   const [showActions, setShowActions] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -459,9 +462,13 @@ export default function ProductsPage() {
   }, [load])
 
   const phanLoaiOptions = ['all', ...Array.from(new Set(products.map(p => p.phan_loai).filter(Boolean)))]
+  const nhomSPOptions   = ['all', ...Array.from(new Set(products.map(p => p.nhom_sp).filter(Boolean)))]
 
   const filtered = products.filter(p => {
     if (filterPhanLoai !== 'all' && p.phan_loai !== filterPhanLoai) return false
+    if (filterNhomSP   !== 'all' && p.nhom_sp   !== filterNhomSP)   return false
+    if (filterStock === 'con' && p.con_hang === false) return false
+    if (filterStock === 'het' && p.con_hang !== false) return false
     if (search) {
       const q = search.toLowerCase()
       return (p.ten_sp + p.ma_sp + p.phan_loai + p.nhom_sp).toLowerCase().includes(q)
@@ -500,18 +507,41 @@ export default function ProductsPage() {
           />
         </div>
 
-        {/* Phân loại filter */}
+        {/* Filter: tồn kho */}
+        <div className="flex gap-2">
+          {(['all', 'con', 'het'] as const).map(v => (
+            <button key={v} onClick={() => setFilterStock(v)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                filterStock === v ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+              {v === 'all' ? 'Tất cả' : v === 'con' ? 'Còn hàng' : 'Hết hàng'}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter: phân loại */}
         {phanLoaiOptions.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
             {phanLoaiOptions.map(pl => (
-              <button
-                key={pl}
-                onClick={() => setFilterPhanLoai(pl)}
+              <button key={pl} onClick={() => setFilterPhanLoai(pl)}
                 className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  filterPhanLoai === pl ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {pl === 'all' ? 'Tất cả' : pl}
+                  filterPhanLoai === pl ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                {pl === 'all' ? 'Phân loại' : pl}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Filter: nhóm SP */}
+        {nhomSPOptions.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+            {nhomSPOptions.map(n => (
+              <button key={n} onClick={() => setFilterNhomSP(n)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  filterNhomSP === n ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                {n === 'all' ? 'Nhóm SP' : n}
               </button>
             ))}
           </div>
@@ -560,12 +590,7 @@ export default function ProductsPage() {
                 setProducts(prev => prev.map(x => x.record_id === p.record_id ? json.data : x))
               }
             } : undefined}
-            onDelete={isAdmin ? async () => {
-              if (!confirm(`Xóa sản phẩm "${p.ten_sp}"? Hành động này không thể hoàn tác.`)) return
-              const res = await fetch(`/api/lark/products/${p.record_id}`, { method: 'DELETE' })
-              if (res.ok) setProducts(prev => prev.filter(x => x.record_id !== p.record_id))
-              else alert('Xóa thất bại, thử lại sau.')
-            } : undefined}
+            onDelete={isAdmin ? () => setDeleteTarget(p) : undefined}
           />
         ))}
       </div>
@@ -618,9 +643,36 @@ export default function ProductsPage() {
           onDone={(created, updated) => {
             setShowImport(false)
             setImportMsg(`✅ Import xong: ${created} tạo mới, ${updated} cập nhật`)
-            load() // Reload list
+            load()
           }}
         />
+      )}
+
+      {/* Delete confirm BottomSheet */}
+      {deleteTarget && (
+        <BottomSheet title="Xóa sản phẩm" onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm text-gray-600">
+            Bạn có chắc muốn xóa <span className="font-semibold text-gray-800">"{deleteTarget.ten_sp}"</span>?
+            Hành động này không thể hoàn tác.
+          </p>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button onClick={() => setDeleteTarget(null)}
+              className="py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-600">
+              Hủy
+            </button>
+            <button
+              onClick={async () => {
+                const target = deleteTarget
+                setDeleteTarget(null)
+                const res = await fetch(`/api/lark/products/${target.record_id}`, { method: 'DELETE' })
+                if (res.ok) setProducts(prev => prev.filter(x => x.record_id !== target.record_id))
+              }}
+              className="py-3 bg-red-600 text-white rounded-xl text-sm font-bold"
+            >
+              Xóa
+            </button>
+          </div>
+        </BottomSheet>
       )}
     </div>
   )

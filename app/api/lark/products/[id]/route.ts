@@ -57,14 +57,31 @@ export async function PATCH(
       if (key in body) updates[key] = body[key]
     }
 
+    // Fetch current values for before/after audit
+    const numId = /^\d+$/.test(id) ? parseInt(id) : null
+    const { data: current } = await supabase.from('products').select('*')
+      .eq(numId !== null ? 'id' : 'lark_record_id', numId ?? id).single()
+
     const query = supabase.from('products').update(updates).select('*')
-    const { data, error } = await (/^\d+$/.test(id)
-      ? query.eq('id', parseInt(id))
+    const { data, error } = await (numId !== null
+      ? query.eq('id', numId)
       : query.eq('lark_record_id', id)
     ).single()
 
     if (error) throw error
-    void logAudit(supabase, { user_id: user.id, user_name: profile?.full_name ?? '', action: 'product_updated', entity: 'product', detail: `SP #${id}: ${Object.keys(updates).join(', ')}` })
+
+    const beforeSnap = current
+      ? Object.fromEntries(Object.keys(updates).map(k => [k, (current as Record<string, unknown>)[k]]))
+      : undefined
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile?.full_name ?? '',
+      action:    'product_updated',
+      entity:    'product',
+      detail:    `SP #${id}: ${Object.keys(updates).join(', ')}`,
+      before:    beforeSnap,
+      after:     updates,
+    })
     return NextResponse.json({ data: mapProduct(data) })
   } catch (err) {
     console.error('PATCH /api/lark/products/[id]:', err)

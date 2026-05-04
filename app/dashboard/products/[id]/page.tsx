@@ -343,6 +343,15 @@ export default function ProductDetailPage() {
               <InfoRow label="Phân loại" value={product.phan_loai} />
               <InfoRow label="Nhóm SP" value={product.nhom_sp} />
               {product.mo_ta && <InfoRow label="Mô tả" value={product.mo_ta} />}
+              {product.updated_at && (
+                <InfoRow
+                  label="Cập nhật lần cuối"
+                  value={new Date(product.updated_at).toLocaleString('vi-VN', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                />
+              )}
             </div>
           </>
         ) : (
