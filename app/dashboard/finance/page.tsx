@@ -632,7 +632,7 @@ export default function FinancePage() {
                       <span>{e.mo_ta || '—'}</span>
                       <div className="flex items-center gap-2">
                         <span>{fmt(e.amount)}</span>
-                        {['admin', 'ceo'].includes(role) && (
+                        {['admin', 'ceo', 'director'].includes(role) && (
                           <button onClick={() => deleteExpense(e.id)} className="text-red-400 hover:text-red-600">✕</button>
                         )}
                       </div>
@@ -727,7 +727,7 @@ export default function FinancePage() {
       )}
 
       {/* ── Tab: Tài sản ── */}
-      {tab === 'assets' && ['admin', 'ceo'].includes(role) && (
+      {tab === 'assets' && ['admin', 'ceo', 'director'].includes(role) && (
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <div className="text-sm text-gray-600">Khấu hao tháng: <span className="font-bold text-gray-800">{fmt(tong_kh)}</span></div>
@@ -772,7 +772,7 @@ export default function FinancePage() {
                     <p className="text-sm font-semibold text-gray-800">{a.ten_tai_san}</p>
                     <p className="text-xs text-gray-500">{ASSET_TYPE_LABEL[a.loai_tai_san]} · Mua {a.ngay_mua}</p>
                   </div>
-                  {['admin', 'ceo'].includes(role) && (
+                  {['admin', 'ceo', 'director'].includes(role) && (
                     <button onClick={() => deactivateAsset(a.id)} className="text-xs text-gray-400 hover:text-red-500">Thanh lý</button>
                   )}
                 </div>

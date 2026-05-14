@@ -49,7 +49,7 @@ export async function DELETE(
 
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
-    if (!['admin', 'ceo'].includes(profile?.role ?? '')) {
+    if (!['admin', 'ceo', 'director'].includes(profile?.role ?? '')) {
       return NextResponse.json({ error: 'Không có quyền xóa' }, { status: 403 })
     }
 

@@ -165,9 +165,9 @@ export async function PATCH(req: NextRequest) {
     const { id, ...updates } = body
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
-    // Chỉ admin mới được đổi role
-    if ('role' in updates && me.role !== 'admin') {
-      return NextResponse.json({ error: 'Chỉ admin mới đổi được vai trò' }, { status: 403 })
+    // Chỉ admin/director mới được đổi role
+    if ('role' in updates && !['admin', 'director'].includes(me.role)) {
+      return NextResponse.json({ error: 'Chỉ admin/Director mới đổi được vai trò' }, { status: 403 })
     }
     if ('role' in updates && updates.role && !ROLES.includes(updates.role)) {
       return NextResponse.json({ error: 'Vai trò không hợp lệ' }, { status: 400 })
