@@ -88,6 +88,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { href: '/dashboard/finance', label: 'Tài chính', icon: '💰' },
       { href: '/dashboard/staff', label: 'Nhân viên', icon: '👤' },
     ],
+    director: [
+      { href: '/dashboard',             label: 'Tổng quan',  icon: '📊' },
+      { href: '/dashboard/customers',   label: 'Khách hàng', icon: '👥' },
+      { href: '/dashboard/orders',      label: 'Đơn hàng',   icon: '📦' },
+      { href: '/dashboard/maintenance', label: 'Bảo trì',    icon: '🔧' },
+      { href: '/dashboard/warranty',    label: 'Bảo hành',   icon: '🛡️' },
+      { href: '/dashboard/finance',     label: 'Tài chính',  icon: '💰' },
+      { href: '/dashboard/staff',       label: 'Nhân viên',  icon: '👤' },
+    ],
     tech_lead: [
       { href: '/dashboard', label: 'Tổng quan', icon: '📊' },
       { href: '/dashboard/customers', label: 'Khách hàng', icon: '👥' },
@@ -136,6 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const roleLabel: Record<string, string> = {
     admin:      'Quản trị viên',
     ceo:        'Giám đốc',
+    director:   'Giám đốc / Quản lý',
     tech_lead:  'Trưởng phòng KT',
     accountant: 'Kế toán',
     sales:      'Kinh doanh',

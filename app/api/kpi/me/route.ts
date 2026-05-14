@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
     const year   = Number(req.nextUrl.searchParams.get('year')   ?? new Date().getFullYear())
     const userId = req.nextUrl.searchParams.get('userId') ?? user.id
 
-    // Chỉ admin/CEO mới xem được của người khác
-    const isManager = ['admin', 'ceo'].includes(me.role)
+    // Admin / CEO / Director xem được KPI của người khác
+    const isManager = ['admin', 'ceo', 'director'].includes(me.role)
     if (userId !== user.id && !isManager) {
       return NextResponse.json({ error: 'Không có quyền xem KPI của người khác' }, { status: 403 })
     }

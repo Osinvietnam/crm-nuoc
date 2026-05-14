@@ -23,23 +23,41 @@ const formatMoney = (n: number) =>
 // ─── Excel column mapping ─────────────────────────────────────────────────────
 
 const EXCEL_COLS: Record<string, string> = {
-  'Họ tên KH':        'ho_ten',
-  'SĐT':              'sdt',
-  'Email':            'email',
-  'Địa chỉ HĐ':       'dia_chi_hd',
-  'Địa chỉ CT':       'dia_chi_ct',
-  'Pipeline':         'pipeline',
-  'Nguồn KH':         'nguon_kh',
-  'Loại hình nhà':    'loai_hinh_nha',
-  'Nguồn nước':       'nguon_nuoc',
-  'Mức ưu tiên':      'muc_uu_tien',
-  'Báo giá (VNĐ)':    'bao_gia',
-  'Nội dung':         'noi_dung',
-  'Người phụ trách':  'nguoi_phu_trach',
-  'Loại KH':          'loai_kh',
+  'Họ tên KH':           'ho_ten',
+  'SĐT':                 'sdt',
+  'SĐT phụ':             'sdt_khac',
+  'Email':               'email',
+  'Địa chỉ HĐ':          'dia_chi_hd',
+  'Địa chỉ CT':          'dia_chi_ct',
+  'Pipeline':            'pipeline',
+  'Nguồn KH':            'nguon_kh',
+  'Loại hình nhà':       'loai_hinh_nha',
+  'Nguồn nước':          'nguon_nuoc',
+  'Mức ưu tiên':         'muc_uu_tien',
+  'Báo giá (VNĐ)':       'bao_gia',
+  'Nội dung':            'noi_dung',
+  'Người phụ trách':     'nguoi_phu_trach',
+  'Loại KH':             'loai_kh',
+  'Khu vực':             'khu_vuc',
+  'Nhóm dịch vụ':        'nhom_dv',
+  'Ngày liên hệ đầu':    'ngay_lien_he_dau',
 }
 
 const TEMPLATE_HEADERS = Object.keys(EXCEL_COLS)
+
+// Hướng dẫn cho sheet 2
+const PIPELINE_GUIDE = [
+  ['Lead mới',   'Mới tiếp cận, chưa qualify'],
+  ['Tiềm năng',  'Đã qualify, đang theo dõi'],
+  ['Báo giá',    'Đã gửi báo giá'],
+  ['Đàm phán',   'Đang thương lượng giá'],
+  ['Chốt HĐ',   'Đã ký hợp đồng'],
+  ['Giao hàng',  'Đang giao / lắp đặt'],
+  ['Nghiệm thu', 'Đã lắp xong, đang nghiệm thu'],
+  ['Bảo hành',   'Đang trong thời hạn bảo hành → KH cũ còn BH'],
+  ['Bảo trì',    'Đang có HĐ bảo trì định kỳ → KH cũ đang BT'],
+  ['Lost',       'Không chốt được, ngừng liên hệ'],
+]
 
 // ─── Import Sheet ─────────────────────────────────────────────────────────────
 
@@ -48,18 +66,87 @@ interface ImportSheetProps {
   onDone: () => void
 }
 
+interface ImportResult {
+  created:           number
+  skipped_invalid:   number
+  skipped_duplicate: number
+  unassigned:        number
+  details: {
+    invalid_rows:    number[]
+    duplicate_sdts:  string[]
+    unassigned_names: string[]
+  }
+}
+
 function ImportSheet({ onClose, onDone }: ImportSheetProps) {
   const fileRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<Record<string, string>[]>([])
+  const [preview, setPreview]   = useState<{ row: Record<string, string>; warnings: string[] }[]>([])
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null)
-  const [error, setError] = useState('')
+  const [result, setResult]     = useState<ImportResult | null>(null)
+  const [error, setError]       = useState('')
+  const [staffList, setStaffList] = useState<string[]>([])
+
+  // Load danh sách nhân viên để hiển thị trong template hướng dẫn
+  useEffect(() => {
+    fetch('/api/admin/users')
+      .then(r => r.json())
+      .then(d => {
+        const names = (d.data ?? [])
+          .filter((u: { role: string; is_active: boolean }) =>
+            ['sales','tech','logistics','admin','ceo','director'].includes(u.role) && u.is_active
+          )
+          .map((u: { full_name: string }) => u.full_name)
+          .filter(Boolean)
+        setStaffList(names)
+      })
+      .catch(() => {})
+  }, [])
 
   function downloadTemplate() {
     const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
-    XLSX.utils.book_append_sheet(wb, ws, 'Khách hàng')
+
+    // ── Sheet 1: Dữ liệu ─────────────────────────────────────────────────────
+    const ws1 = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
+    ws1['!cols'] = TEMPLATE_HEADERS.map(h =>
+      ({ wch: h === 'Họ tên KH' ? 25 : h.includes('Địa') ? 35 : h === 'Nội dung' ? 30 : 18 })
+    )
+    XLSX.utils.book_append_sheet(wb, ws1, 'Khách hàng')
+
+    // ── Sheet 2: Hướng dẫn ───────────────────────────────────────────────────
+    const guide: (string | number)[][] = [
+      ['HƯỚNG DẪN ĐIỀN FILE IMPORT KHÁCH HÀNG'],
+      [],
+      ['── PIPELINE (cột "Pipeline") ──', '', 'Dùng khi nào?'],
+      ...PIPELINE_GUIDE.map(([val, desc]) => ['', val, desc]),
+      [],
+      ['── LOẠI KH (cột "Loại KH") ──'],
+      ['', 'B2C',    'Khách dân dụng / cá nhân'],
+      ['', 'Đại lý', 'Đại lý phân phối / bán lại'],
+      ['', 'Dự án',  'Công trình / quy mô lớn'],
+      [],
+      ['── KHU VỰC (cột "Khu vực") ──'],
+      ['', 'Miền Nam'],
+      ['', 'Miền Bắc'],
+      ['', 'Miền Trung'],
+      [],
+      ['── NHÓM DỊCH VỤ (cột "Nhóm dịch vụ") ──'],
+      ['', 'BL1 — Lắp đặt trọn gói'],
+      ['', 'BL1 + BL3 — Lắp đặt + Định kỳ'],
+      ['', 'BL2 — Thương mại'],
+      ['', 'BL3 — Dịch vụ định kỳ'],
+      [],
+      ['── NGÀY LIÊN HỆ (cột "Ngày liên hệ đầu") ──'],
+      ['', 'Format: dd/mm/yyyy (ví dụ: 15/03/2024)'],
+      ['', 'Để trống = dùng ngày import hôm nay'],
+      [],
+      ['── NGƯỜI PHỤ TRÁCH — copy chính xác tên bên dưới ──'],
+      ...staffList.map(name => ['', name]),
+    ]
+    const ws2 = XLSX.utils.aoa_to_sheet(guide)
+    ws2['!cols'] = [{ wch: 5 }, { wch: 35 }, { wch: 40 }]
+    XLSX.utils.book_append_sheet(wb, ws2, 'Hướng dẫn')
+
     XLSX.writeFile(wb, 'template_khach_hang.xlsx')
   }
 
@@ -82,7 +169,19 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
         }
         return mapped
       })
-      setPreview(rows.slice(0, 5))
+      // Preview 5 dòng đầu + cảnh báo
+      const VALID_PL = new Set(['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì','Lost'])
+      const VALID_LKH = new Set(['B2C','Đại lý','Dự án'])
+      const previewed = rows.slice(0, 5).map(r => {
+        const warnings: string[] = []
+        if (!r.ho_ten?.trim()) warnings.push('Thiếu họ tên → sẽ bỏ qua')
+        if (!r.sdt?.trim())    warnings.push('Thiếu SĐT → sẽ bỏ qua')
+        if (r.pipeline && !VALID_PL.has(r.pipeline)) warnings.push(`Pipeline "${r.pipeline}" không hợp lệ → về "Lead mới"`)
+        if (r.loai_kh && !VALID_LKH.has(r.loai_kh)) warnings.push(`Loại KH "${r.loai_kh}" không hợp lệ → bỏ qua`)
+        if (r.nguoi_phu_trach && !staffList.includes(r.nguoi_phu_trach)) warnings.push(`NV "${r.nguoi_phu_trach}" không tìm thấy → chưa phân công`)
+        return { row: r, warnings }
+      })
+      setPreview(previewed)
     }
     reader.readAsArrayBuffer(file)
   }
@@ -115,7 +214,7 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
         })
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'Lỗi import'); return }
-        setResult(data)
+        setResult(data as ImportResult)
         onDone()
       } catch {
         setError('Lỗi xử lý file')
@@ -176,11 +275,19 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
             <div>
               <p className="text-xs font-semibold text-gray-500 mb-2">XEM TRƯỚC (5 dòng đầu)</p>
               <div className="bg-gray-50 rounded-xl overflow-hidden">
-                {preview.map((row, i) => (
-                  <div key={i} className={`px-3 py-2 text-xs border-b border-gray-100 last:border-0 ${!row.ho_ten ? 'opacity-40' : ''}`}>
-                    <span className="font-semibold text-gray-700">{row.ho_ten || '(trống)'}</span>
-                    <span className="text-gray-400 ml-2">{row.sdt}</span>
-                    {row.pipeline && <span className="text-blue-500 ml-2">· {row.pipeline}</span>}
+                {preview.map(({ row, warnings }, i) => (
+                  <div key={i} className={`px-3 py-2 text-xs border-b border-gray-100 last:border-0 ${!row.ho_ten ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={warnings.some(w => w.includes('bỏ qua')) ? 'text-red-400' : 'text-green-500'}>
+                        {warnings.some(w => w.includes('bỏ qua')) ? '❌' : '✅'}
+                      </span>
+                      <span className="font-semibold text-gray-700">{row.ho_ten || '(trống)'}</span>
+                      <span className="text-gray-400">{row.sdt}</span>
+                      {row.pipeline && <span className="text-blue-500">· {row.pipeline}</span>}
+                    </div>
+                    {warnings.map((w, wi) => (
+                      <p key={wi} className="text-orange-500 mt-0.5 pl-5">⚠ {w}</p>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -188,9 +295,31 @@ function ImportSheet({ onClose, onDone }: ImportSheetProps) {
           )}
 
           {result && (
-            <div className="bg-green-50 rounded-xl px-4 py-3 text-sm text-green-700 font-medium">
-              Đã tạo {result.created} khách hàng
-              {result.skipped > 0 && ` · bỏ qua ${result.skipped} dòng thiếu thông tin`}
+            <div className="rounded-xl overflow-hidden border border-gray-100 text-sm">
+              <div className="bg-green-50 px-4 py-2.5 flex items-center gap-2 font-medium text-green-700">
+                <span>✅</span> Đã tạo: <strong>{result.created}</strong> khách hàng
+              </div>
+              {result.unassigned > 0 && (
+                <div className="bg-yellow-50 px-4 py-2 text-yellow-700">
+                  ⚠️ Chưa có người phụ trách: <strong>{result.unassigned}</strong> KH
+                  {result.details.unassigned_names.length > 0 && (
+                    <p className="text-xs mt-0.5 text-yellow-600">{result.details.unassigned_names.slice(0,3).join(', ')}{result.details.unassigned_names.length > 3 ? ` +${result.details.unassigned_names.length - 3}` : ''}</p>
+                  )}
+                </div>
+              )}
+              {result.skipped_duplicate > 0 && (
+                <div className="bg-blue-50 px-4 py-2 text-blue-700">
+                  🔁 Trùng SĐT, bỏ qua: <strong>{result.skipped_duplicate}</strong> KH
+                </div>
+              )}
+              {result.skipped_invalid > 0 && (
+                <div className="bg-red-50 px-4 py-2 text-red-600">
+                  ❌ Thiếu thông tin bắt buộc: <strong>{result.skipped_invalid}</strong> dòng
+                  {result.details.invalid_rows.length > 0 && (
+                    <span className="text-xs ml-1">(dòng {result.details.invalid_rows.join(', ')})</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -880,7 +1009,7 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {['admin', 'ceo', 'director', 'sales'].includes(role) && (
+            {['admin', 'ceo', 'director'].includes(role) && (
               <button
                 onClick={() => setShowImport(true)}
                 className="border border-gray-200 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl flex items-center gap-1.5"

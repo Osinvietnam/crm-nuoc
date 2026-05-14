@@ -124,7 +124,7 @@ export default function FinancePage() {
     })
   }, [])
 
-  const isManager = ['admin', 'ceo', 'accountant'].includes(role)
+  const isManager = ['admin', 'ceo', 'director', 'accountant'].includes(role)
 
   const fetchReport = useCallback(async () => {
     if (!role) return
@@ -323,7 +323,7 @@ export default function FinancePage() {
     { id: 'assets',       label: 'Tài sản',   adminOnly: true },
   ]
   const visibleTabs = tabs.filter(t => {
-    if (t.adminOnly)   return ['admin', 'ceo', 'accountant'].includes(role)
+    if (t.adminOnly)   return ['admin', 'ceo', 'director', 'accountant'].includes(role)
     if (t.managerOnly) return isManager
     return true
   })

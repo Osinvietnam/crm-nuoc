@@ -1206,12 +1206,15 @@ export default function OrdersPage() {
               {loading ? 'Đang tải...' : tab === 'quotes' ? `${quotesHook.total} báo giá` : `${data.length} đơn`}
             </p>
           </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
-          >
-            <span className="text-base leading-none">+</span> Thêm mới
-          </button>
+          {/* Director không tạo báo giá/HĐ B2C — ẩn nút ở 2 tab đó */}
+          {!(role === 'director' && (tab === 'quotes' || tab === 'b2c')) && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
+            >
+              <span className="text-base leading-none">+</span> Thêm mới
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
