@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/Toast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,8 @@ const STATUS_ORDER = ['dang_lam', 'kiem_tra', 'blocked', 'chua_lam']
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MyTasksPage() {
-  const router = useRouter()
+  const router    = useRouter()
+  const showToast = useToast()
   const [tasks,    setTasks]   = useState<MyTask[]>([])
   const [loading,  setLoading] = useState(true)
   const [filter,   setFilter]  = useState<string>('all')
@@ -71,14 +73,20 @@ export default function MyTasksPage() {
   const updateStatus = async (completionId: number, newStatus: string) => {
     setUpdating(completionId)
     try {
-      await fetch('/api/tasks', {
+      const res = await fetch('/api/tasks', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: completionId, status: newStatus }),
       })
+      if (!res.ok) {
+        showToast('Không thể cập nhật trạng thái', true)
+        return
+      }
       setTasks(prev => prev.map(t =>
         t.completion_id === completionId ? { ...t, status: newStatus as MyTask['status'] } : t
       ))
+    } catch {
+      showToast('Lỗi kết nối', true)
     } finally {
       setUpdating(null)
     }

@@ -103,6 +103,11 @@ export default function CustomerDetailPage() {
   const [userRole, setUserRole]           = useState('')
   const [userFullName, setUserFullName]   = useState('')
   const [successMsg, setSuccessMsg]       = useState('')
+  const [editingInfo, setEditingInfo]     = useState(false)
+  const [infoForm, setInfoForm]           = useState({ ho_ten: '', sdt: '', dia_chi_hd: '', dia_chi_ct: '', noi_dung: '' })
+  const [infoSaving, setInfoSaving]       = useState(false)
+  const [infoError, setInfoError]         = useState('')
+  const [pipelineWarnings, setPipelineWarnings] = useState<string[]>([])
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
 
@@ -187,6 +192,14 @@ export default function CustomerDetailPage() {
         if (!res.ok) throw new Error()
         // API now returns flat { customer } — no field mapping needed
         setCustomer(data.customer)
+        const c = data.customer
+        setInfoForm({
+          ho_ten:     c.ho_ten     ?? '',
+          sdt:        c.sdt        ?? '',
+          dia_chi_hd: c.dia_chi_hd ?? '',
+          dia_chi_ct: c.dia_chi_ct ?? '',
+          noi_dung:   c.noi_dung   ?? '',
+        })
       } catch {
         // silently fail — user can go back
       } finally {
@@ -206,14 +219,47 @@ export default function CustomerDetailPage() {
         body: JSON.stringify({ pipeline: newStage }),
       })
       if (!res.ok) throw new Error()
+      const data = await res.json()
       setCustomer(prev => prev ? { ...prev, pipeline: newStage } : prev)
-      setSuccessMsg('Đã cập nhật pipeline')
-      setTimeout(() => setSuccessMsg(''), 2000)
+      if (data.warnings?.length) {
+        setPipelineWarnings(data.warnings)
+      } else {
+        setSuccessMsg('Đã cập nhật pipeline')
+        setTimeout(() => setSuccessMsg(''), 2000)
+      }
     } catch {
-      // silent fail
+      setSuccessMsg('Lỗi cập nhật pipeline')
+      setTimeout(() => setSuccessMsg(''), 2000)
     } finally {
       setUpdating(false)
     }
+  }
+
+  const saveInfoForm = async () => {
+    if (!infoForm.ho_ten.trim() || !infoForm.sdt.trim()) {
+      setInfoError('Họ tên và SĐT không được để trống')
+      return
+    }
+    setInfoSaving(true); setInfoError('')
+    try {
+      const res = await fetch(`/api/lark/customers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ho_ten:     infoForm.ho_ten.trim(),
+          sdt:        infoForm.sdt.trim(),
+          dia_chi_hd: infoForm.dia_chi_hd || null,
+          dia_chi_ct: infoForm.dia_chi_ct || null,
+          noi_dung:   infoForm.noi_dung   || null,
+        }),
+      })
+      if (!res.ok) { setInfoError('Lỗi lưu thông tin'); return }
+      setCustomer(prev => prev ? { ...prev, ...infoForm } : prev)
+      setEditingInfo(false)
+      setSuccessMsg('Đã cập nhật thông tin')
+      setTimeout(() => setSuccessMsg(''), 2000)
+    } catch { setInfoError('Lỗi kết nối') }
+    finally { setInfoSaving(false) }
   }
 
   if (loading) {
@@ -257,6 +303,18 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Pipeline warnings */}
+        {pipelineWarnings.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ Đã cập nhật pipeline — Lưu ý:</p>
+            {pipelineWarnings.map((w, i) => (
+              <p key={i} className="text-sm text-amber-800 leading-relaxed">{w}</p>
+            ))}
+            <button onClick={() => setPipelineWarnings([])}
+              className="text-xs text-gray-400 mt-2">Đóng</button>
+          </div>
+        )}
+
         {/* Pipeline card */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">TRẠNG THÁI PIPELINE</p>
@@ -343,13 +401,61 @@ export default function CustomerDetailPage() {
 
         {/* Contact info */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 mb-3">THÔNG TIN LIÊN HỆ</p>
-          <InfoRow label="Họ tên" value={customer.ho_ten} />
-          <InfoRow label="SĐT di động" value={formatPhone(customer.sdt)} />
-          <InfoRow label="SĐT khác" value={formatPhone(customer.sdt_khac)} />
-          <InfoRow label="Email" value={customer.email} />
-          <InfoRow label="Địa chỉ ký HĐ" value={customer.dia_chi_hd} />
-          <InfoRow label="Địa chỉ công trình" value={customer.dia_chi_ct} />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400">THÔNG TIN LIÊN HỆ</p>
+            {['admin', 'ceo', 'director', 'sales'].includes(userRole) && !editingInfo && (
+              <button onClick={() => setEditingInfo(true)}
+                className="text-xs text-blue-600 font-medium">Sửa</button>
+            )}
+          </div>
+
+          {editingInfo ? (
+            <div className="space-y-3">
+              {[
+                { label: 'Họ tên *', key: 'ho_ten',     placeholder: 'Nguyễn Văn A' },
+                { label: 'SĐT *',    key: 'sdt',        placeholder: '0901234567' },
+                { label: 'Địa chỉ ký HĐ', key: 'dia_chi_hd', placeholder: '' },
+                { label: 'Địa chỉ CT',    key: 'dia_chi_ct', placeholder: '' },
+              ].map(({ label, key, placeholder }) => (
+                <div key={key}>
+                  <p className="text-xs text-gray-400 mb-1">{label}</p>
+                  <input
+                    value={infoForm[key as keyof typeof infoForm]}
+                    onChange={e => setInfoForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              ))}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Nội dung trao đổi</p>
+                <textarea
+                  value={infoForm.noi_dung}
+                  onChange={e => setInfoForm(f => ({ ...f, noi_dung: e.target.value }))}
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"
+                />
+              </div>
+              {infoError && <p className="text-xs text-red-500">{infoError}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setEditingInfo(false); setInfoError('') }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600">Huỷ</button>
+                <button onClick={saveInfoForm} disabled={infoSaving}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+                  {infoSaving ? 'Đang lưu...' : 'Lưu'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <InfoRow label="Họ tên" value={customer.ho_ten} />
+              <InfoRow label="SĐT di động" value={formatPhone(customer.sdt)} />
+              <InfoRow label="SĐT khác" value={formatPhone(customer.sdt_khac)} />
+              <InfoRow label="Email" value={customer.email} />
+              <InfoRow label="Địa chỉ ký HĐ" value={customer.dia_chi_hd} />
+              <InfoRow label="Địa chỉ công trình" value={customer.dia_chi_ct} />
+            </>
+          )}
         </div>
 
         {/* Sales info */}
@@ -392,13 +498,15 @@ export default function CustomerDetailPage() {
           <InfoRow label="Ngày liên hệ đầu" value={formatDate(customer.ngay_lien_he_dau)} />
         </div>
 
-        {/* Notes */}
-        {customer.noi_dung && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 mb-2">NỘI DUNG TRAO ĐỔI</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{customer.noi_dung}</p>
-          </div>
-        )}
+        {/* Notes — luôn hiển thị nếu có nội dung hoặc đang edit */}
+        {(customer.noi_dung || editingInfo) ? (
+          !editingInfo && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <p className="text-xs font-semibold text-gray-400 mb-2">NỘI DUNG TRAO ĐỔI</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{customer.noi_dung}</p>
+            </div>
+          )
+        ) : null}
 
         {/* Lịch sử Báo giá */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

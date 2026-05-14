@@ -143,6 +143,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Họ tên và SĐT là bắt buộc' }, { status: 400 })
     }
 
+    // Check trùng SĐT
+    const { data: existing } = await supabase
+      .from('customers')
+      .select('id, ho_ten')
+      .eq('sdt', sdt.trim())
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json(
+        { error: `SĐT đã tồn tại (${existing.ho_ten})`, duplicate: true, existing_id: existing.id },
+        { status: 409 }
+      )
+    }
+
     // Sales/partner: always assign to themselves
     const assigneeId = (profile.role === 'sales' || profile.role === 'partner')
       ? profile.id

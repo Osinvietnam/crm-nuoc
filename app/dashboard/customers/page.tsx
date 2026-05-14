@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/Toast'
 import * as XLSX from 'xlsx'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import { PIPELINE_STAGES, PIPELINE_COLORS, PRIORITY_COLORS, NGUON_KH_OPTIONS, LOAI_HINH_NHA_OPTIONS } from '@/lib/lark/tables'
@@ -558,6 +559,7 @@ const NHOM_DV_OPTIONS = [
 ]
 
 function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
+  const router = useRouter()
   const [form, setForm] = useState({
     ho_ten: '', sdt: '', email: '', dia_chi_hd: '',
     pipeline: 'Lead mới', nguon_kh: '', loai_hinh_nha: '',
@@ -566,6 +568,7 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [duplicateId, setDuplicateId] = useState<number | null>(null)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -574,19 +577,31 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
       setError('Vui lòng nhập họ tên và số điện thoại')
       return
     }
+    const sdtClean = form.sdt.replace(/\s/g, '')
+    if (!/^[0-9]{9,11}$/.test(sdtClean)) {
+      setError('SĐT không hợp lệ (9–11 chữ số)')
+      return
+    }
     ;(document.activeElement as HTMLElement)?.blur()
     setSaving(true)
     setError('')
+    setDuplicateId(null)
     try {
       const res = await fetch('/api/lark/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          sdt: sdtClean,
           bao_gia: form.bao_gia ? Number(form.bao_gia.replace(/\D/g, '')) : 0,
         }),
       })
       const data = await res.json()
+      if (res.status === 409 && data.duplicate) {
+        setDuplicateId(data.existing_id)
+        setError(data.error)
+        return
+      }
       if (!res.ok) { setError(data.error || 'Lỗi tạo khách hàng'); return }
       onCreated(data.customer)
     } catch {
@@ -789,7 +804,18 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
             />
           </div>
 
-          {error && (
+          {duplicateId && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              ⚠️ {error} —{' '}
+              <button
+                onClick={() => { onClose(); router.push(`/dashboard/customers/${duplicateId}`) }}
+                className="text-blue-600 font-semibold underline"
+              >
+                Xem khách hàng này
+              </button>
+            </div>
+          )}
+          {!duplicateId && error && (
             <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
           )}
         </div>
@@ -931,6 +957,7 @@ function presetRange(p: TimePreset, customY: number, customM: number): [number,n
 
 export default function CustomersPage() {
   const router = useRouter()
+  const showToast = useToast()
   const [customers, setCustomers]       = useState<Customer[]>([])
   const [loading, setLoading]           = useState(true)
   const [search, setSearch]             = useState('')
@@ -965,7 +992,7 @@ export default function CustomersPage() {
       // Set default time preset once based on role
       if (!roleLoaded.current) {
         roleLoaded.current = true
-        setTimePreset(['sales', 'partner'].includes(r) ? 'month' : 'all')
+        setTimePreset('all')
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -998,6 +1025,7 @@ export default function CustomersPage() {
   const handleCreated = (c: Customer) => {
     setCustomers(prev => [c, ...prev])
     setShowForm(false)
+    showToast('Đã tạo khách hàng thành công')
   }
 
   return (

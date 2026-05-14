@@ -418,7 +418,7 @@ export default function DashboardPage() {
   const role    = profile?.role ?? 'sales'
   const cards   = stats ? buildCards(role, stats, profile?.target_thang ?? null) : []
   const alerts  = stats ? buildAlerts(role, stats) : []
-  const showRevChart   = ['admin', 'ceo', 'director', 'accountant'].includes(role)
+  const showRevChart   = ['admin', 'ceo', 'director', 'accountant', 'sales'].includes(role)
   const showPipeline   = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)
 
   // Target progress bar cho sales
