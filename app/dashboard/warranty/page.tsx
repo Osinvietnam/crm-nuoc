@@ -30,6 +30,7 @@ export default function WarrantyPage() {
   const [loading,  setLoading]   = useState(true)
   const [filter,   setFilter]    = useState('Tất cả')
   const [myRole,   setMyRole]    = useState('')
+  const [myId,     setMyId]      = useState('')
   const [techList, setTechList]  = useState<{ id: string; full_name: string }[]>([])
   const [assigning, setAssigning] = useState<number | null>(null)
 
@@ -48,7 +49,7 @@ export default function WarrantyPage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
+    fetch('/api/auth/me').then(r => r.json()).then(d => { setMyRole(d?.role ?? ''); setMyId(d?.id ?? '') }).catch(() => {})
     fetch('/api/staff?role=tech').then(r => r.json()).then(d => setTechList(d.data ?? [])).catch(() => {})
   }, [])
 
@@ -81,7 +82,11 @@ export default function WarrantyPage() {
     setAssigning(null)
   }
 
-  const isManager = ['admin', 'ceo', 'director'].includes(myRole)
+  const isManager    = ['admin', 'ceo', 'director'].includes(myRole)
+  const isTechLead   = myRole === 'tech_lead'
+  // tech chỉ thao tác ticket được giao cho mình; tech_lead/manager thao tác tất cả
+  const canActTicket = (t: WarrantyTicket) =>
+    isManager || isTechLead || t.nguoi_xu_ly === myId
   const counts    = STATUS_OPTIONS.slice(1).reduce<Record<string, number>>((acc, s) => {
     acc[s] = tickets.filter(t => t.trang_thai === s).length
     return acc
@@ -169,14 +174,14 @@ export default function WarrantyPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Status transitions */}
-              {t.trang_thai === 'Chờ xử lý' && (
+              {/* Status transitions — tech chỉ thao tác ticket được giao */}
+              {t.trang_thai === 'Chờ xử lý' && canActTicket(t) && (
                 <button onClick={() => updateStatus(t.id, 'Đang xử lý')}
                   className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-semibold">
                   Bắt đầu xử lý
                 </button>
               )}
-              {t.trang_thai === 'Đang xử lý' && (
+              {t.trang_thai === 'Đang xử lý' && canActTicket(t) && (
                 <button onClick={() => updateStatus(t.id, 'Hoàn thành')}
                   className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-xl font-semibold">
                   Hoàn thành

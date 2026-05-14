@@ -1206,8 +1206,8 @@ export default function OrdersPage() {
               {loading ? 'Đang tải...' : tab === 'quotes' ? `${quotesHook.total} báo giá` : `${data.length} đơn`}
             </p>
           </div>
-          {/* Director không tạo BG/HĐ B2C; Accountant chỉ xem */}
-          {!(role === 'accountant') && !(role === 'director' && (tab === 'quotes' || tab === 'b2c')) && (
+          {/* Chỉ sales/admin/ceo tạo BG; director/tech_lead/accountant chỉ xem */}
+          {!(['accountant', 'tech_lead'].includes(role)) && !(role === 'director' && (tab === 'quotes' || tab === 'b2c')) && (
             <button
               onClick={() => setShowForm(true)}
               className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"

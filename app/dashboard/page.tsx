@@ -12,6 +12,7 @@ const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
   director:   'Giám đốc / Quản lý',
+  tech_lead:  'Trưởng phòng KT',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật',
@@ -166,6 +167,7 @@ function QuickActions({ role }: { role: string }) {
     director:   [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }],
     accountant: [{ label: 'Ghi thu', icon: '💵', href: '/dashboard/finance' }, { label: 'Xem công nợ', icon: '📊', href: '/dashboard/finance' }],
     sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
+    tech_lead:  [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     tech:       [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     partner:    [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }],
@@ -256,7 +258,7 @@ function MyTasksWidget({ role }: { role: string }) {
       .catch(() => {})
   }, [])
 
-  const SHOW_ROLES = ['tech', 'logistics', 'sales', 'partner']
+  const SHOW_ROLES = ['tech_lead', 'tech', 'logistics', 'sales', 'partner']
   if (!SHOW_ROLES.includes(role) || tasks.length === 0) return null
 
   const STATUS_DOT: Record<string, string> = {
@@ -326,6 +328,13 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
     ]
   }
 
+  if (role === 'tech_lead') return [
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,        sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600',  icon: '🔧', href: '/dashboard/maintenance' },
+    { label: 'Đang thi công',    value: s.construction_ongoing,     sub: 'Công trình',          color: 'bg-blue-50 text-blue-600',      icon: '🏗️', href: '/dashboard/maintenance' },
+    { label: 'Tuần này',         value: s.maintenance_week,         sub: 'CT + Định kỳ',        color: 'bg-amber-50 text-amber-600',    icon: '📅', href: '/dashboard/calendar' },
+    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending, sub: 'Yêu cầu chờ xử lý',  color: 'bg-purple-50 text-purple-600',  icon: '🛡️', href: '/dashboard/warranty' },
+  ]
+
   if (role === 'tech') return [
     { label: 'Bảo trì hôm nay', value: s.maintenance_today,   sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
     { label: 'Tuần này',         value: s.maintenance_week,    sub: 'CT + Định kỳ',       color: 'bg-amber-50 text-amber-600',   icon: '📅', href: '/dashboard/calendar' },
@@ -352,7 +361,7 @@ function buildAlerts(role: string, s: DashboardStats) {
     { label: `${s.kh_no_contact_30d} KH chưa liên hệ > 30 ngày`,  count: s.kh_no_contact_30d, href: '/dashboard/customers', color: 'bg-amber-50 text-amber-700 border border-amber-200' },
   ]
 
-  if (['admin', 'ceo', 'director', 'tech'].includes(role)) {
+  if (['admin', 'ceo', 'director', 'tech_lead', 'tech'].includes(role)) {
     base.push({ label: `${s.maintenance_overdue} bảo trì định kỳ quá hạn`, count: s.maintenance_overdue, href: '/dashboard/maintenance', color: 'bg-red-50 text-red-700 border border-red-200' })
     if (s.warranty_tickets_pending > 0) {
       base.push({ label: `${s.warranty_tickets_pending} yêu cầu bảo hành chờ xử lý`, count: s.warranty_tickets_pending, href: '/dashboard/warranty', color: 'bg-purple-50 text-purple-700 border border-purple-200' })

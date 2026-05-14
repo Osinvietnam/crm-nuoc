@@ -1020,7 +1020,7 @@ export default function CustomersPage() {
                 Import
               </button>
             )}
-            {role !== 'accountant' && (
+            {['admin', 'ceo', 'director', 'sales'].includes(role) && (
               <button
                 onClick={() => setShowForm(true)}
                 className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
@@ -1191,7 +1191,7 @@ export default function CustomersPage() {
               customer={c}
               onClick={() => router.push(`/dashboard/customers/${c.record_id}`)}
               onCreateQuote={c => setQuoteFor(c)}
-              canCreateQuote={role !== 'accountant'}
+              canCreateQuote={['admin', 'ceo', 'director', 'sales'].includes(role)}
             />
           ))
         )}
