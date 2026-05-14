@@ -8,7 +8,7 @@ const ROLE_OPTIONS = [
   { value: 'sales',      label: 'Kinh doanh'         },
   { value: 'tech',       label: 'Kỹ thuật'            },
   { value: 'logistics',  label: 'Hậu cần'             },
-  { value: 'director',   label: 'Phó Giám đốc / KT'   },
+  { value: 'director',   label: 'Giám đốc / Quản lý'   },
   { value: 'accountant', label: 'Kế toán'              },
   { value: 'ceo',        label: 'Giám đốc'             },
   { value: 'admin',      label: 'Quản trị viên'        },
@@ -512,7 +512,7 @@ export default function StaffPage() {
                     <KpiCard
                       data={kpiData[s.id]}
                       loading={kpiLoading.has(s.id)}
-                      isAdmin={isAdmin}
+                      isAdmin={isAdmin || isManager}
                       month={kpiMonth}
                       year={kpiYear}
                       onSetTarget={() => {

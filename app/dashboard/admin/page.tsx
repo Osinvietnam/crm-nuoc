@@ -30,7 +30,7 @@ const ROLE_OPTIONS = [
   { value: 'sales',      label: 'Kinh doanh'         },
   { value: 'tech',       label: 'Kỹ thuật'            },
   { value: 'logistics',  label: 'Hậu cần'             },
-  { value: 'director',   label: 'Phó Giám đốc / KT'   },
+  { value: 'director',   label: 'Giám đốc / Quản lý'   },
   { value: 'accountant', label: 'Kế toán'              },
   { value: 'ceo',        label: 'Giám đốc'             },
   { value: 'admin',      label: 'Quản trị viên'        },
@@ -51,7 +51,7 @@ const ROLE_COLOR: Record<string, string> = {
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  director:   'Phó Giám đốc / KT',
+  director:   'Giám đốc / Quản lý',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật',

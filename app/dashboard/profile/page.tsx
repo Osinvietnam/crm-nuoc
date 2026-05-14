@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  director:   'Phó Giám đốc / KT',
+  director:   'Giám đốc / Quản lý',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật viên',
@@ -355,11 +355,8 @@ export default function ProfilePage() {
             <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tài chính & Giấy tờ</p>
-                {!['admin','ceo'].includes(profile.role) && (
-                  <p className="text-[10px] text-gray-400 mt-0.5">Chỉ admin/CEO có thể cập nhật mục này</p>
-                )}
-              </div>
-              {['admin','ceo'].includes(profile.role) && !editingFinance && (
+                </div>
+              {!editingFinance && (
                 <button onClick={() => setEditingFinance(true)} className="text-xs text-blue-600 font-medium">Sửa</button>
               )}
             </div>

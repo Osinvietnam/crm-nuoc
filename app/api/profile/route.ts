@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 
-const SELF_EDITABLE       = ['phone', 'dia_chi', 'ngay_sinh'] as const
-const ADMIN_SELF_EDITABLE = ['cccd', 'ngan_hang', 'so_tk_nh'] as const
+// Mọi nhân viên đều được tự cập nhật thông tin cá nhân của mình
+const SELF_EDITABLE = ['phone', 'dia_chi', 'ngay_sinh', 'cccd', 'ngan_hang', 'so_tk_nh'] as const
 
 // ─── GET /api/profile — Hồ sơ cá nhân của user đang đăng nhập ────────────────
 
@@ -41,16 +41,10 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json()
 
     const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-    const isPrivileged = ['admin', 'ceo'].includes(me?.role ?? '')
 
     const updates: Record<string, unknown> = {}
     for (const key of SELF_EDITABLE) {
       if (key in body) updates[key] = body[key] || null
-    }
-    if (isPrivileged) {
-      for (const key of ADMIN_SELF_EDITABLE) {
-        if (key in body) updates[key] = body[key] || null
-      }
     }
 
     if (Object.keys(updates).length === 0) {

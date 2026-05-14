@@ -3,8 +3,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 
 const ALLOWED_CATEGORIES = ['luong', 'hang_hoa', 'van_chuyen', 'marketing', 'thue_van_phong', 'khac'] as const
-const CAN_WRITE = ['admin', 'ceo', 'accountant']
-const CAN_READ  = ['admin', 'ceo', 'accountant']
+const CAN_WRITE = ['admin', 'ceo', 'director', 'accountant']
+const CAN_READ  = ['admin', 'ceo', 'director', 'accountant']
 
 // ─── GET /api/finance/expenses?thang=4&nam=2026 ───────────────────────────────
 

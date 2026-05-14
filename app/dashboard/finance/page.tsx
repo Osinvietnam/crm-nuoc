@@ -323,7 +323,7 @@ export default function FinancePage() {
     { id: 'assets',       label: 'Tài sản',   adminOnly: true },
   ]
   const visibleTabs = tabs.filter(t => {
-    if (t.adminOnly)   return ['admin', 'ceo', 'director', 'accountant'].includes(role)
+    if (t.adminOnly)   return ['admin', 'ceo', 'director'].includes(role)
     if (t.managerOnly) return isManager
     return true
   })

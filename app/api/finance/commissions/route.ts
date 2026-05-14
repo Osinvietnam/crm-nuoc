@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo', 'accountant'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'director', 'accountant'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo', 'accountant'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'director', 'accountant'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 

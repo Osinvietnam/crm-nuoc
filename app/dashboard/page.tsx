@@ -11,7 +11,7 @@ import type { DashboardStats, MonthRevenue } from '@/app/api/dashboard/stats/rou
 const ROLE_LABEL: Record<string, string> = {
   admin:      'Quản trị viên',
   ceo:        'Giám đốc',
-  director:   'Phó Giám đốc',
+  director:   'Giám đốc / Quản lý',
   accountant: 'Kế toán',
   sales:      'Kinh doanh',
   tech:       'Kỹ thuật',

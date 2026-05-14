@@ -330,13 +330,15 @@ export default function CustomerDetailPage() {
               <span className="text-xs text-gray-500 font-medium">Email</span>
             </div>
           )}
-          <button
-            onClick={() => setShowQuoteForm(true)}
-            className="bg-blue-50 rounded-2xl p-3 border border-blue-100 flex flex-col items-center gap-1.5 active:bg-blue-100"
-          >
-            <span className="text-xl">📋</span>
-            <span className="text-xs text-blue-600 font-medium">Báo giá</span>
-          </button>
+          {!['director', 'accountant'].includes(userRole) && (
+            <button
+              onClick={() => setShowQuoteForm(true)}
+              className="bg-blue-50 rounded-2xl p-3 border border-blue-100 flex flex-col items-center gap-1.5 active:bg-blue-100"
+            >
+              <span className="text-xl">📋</span>
+              <span className="text-xs text-blue-600 font-medium">Báo giá</span>
+            </button>
+          )}
         </div>
 
         {/* Contact info */}
@@ -402,10 +404,12 @@ export default function CustomerDetailPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-4 pt-4 pb-3 flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-400">LỊCH SỬ BÁO GIÁ</p>
-            <button onClick={() => setShowQuoteForm(true)}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
-              + Tạo mới
-            </button>
+            {!['director', 'accountant'].includes(userRole) && (
+              <button onClick={() => setShowQuoteForm(true)}
+                className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
+                + Tạo mới
+              </button>
+            )}
           </div>
 
           {quotesLoading ? (

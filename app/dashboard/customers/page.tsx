@@ -818,10 +818,11 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
 
 // ─── Customer Card ────────────────────────────────────────────────────────────
 
-function CustomerCard({ customer, onClick, onCreateQuote }: {
+function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true }: {
   customer: Customer
   onClick: () => void
   onCreateQuote: (c: Customer) => void
+  canCreateQuote?: boolean
 }) {
   const pipeline = customer.pipeline || 'Lead mới'
   const pc = PIPELINE_COLORS[pipeline] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
@@ -873,15 +874,17 @@ function CustomerCard({ customer, onClick, onCreateQuote }: {
         </div>
       </button>
 
-      {/* Quick action: Tạo báo giá */}
-      <div className="border-t border-gray-50 px-4 py-2 flex justify-end">
-        <button
-          onClick={e => { e.stopPropagation(); onCreateQuote(customer) }}
-          className="text-xs text-blue-600 font-semibold flex items-center gap-1 px-2 py-1 rounded-lg active:bg-blue-50"
-        >
-          <span>📋</span> Tạo báo giá
-        </button>
-      </div>
+      {/* Quick action: Tạo báo giá — ẩn với accountant */}
+      {canCreateQuote && (
+        <div className="border-t border-gray-50 px-4 py-2 flex justify-end">
+          <button
+            onClick={e => { e.stopPropagation(); onCreateQuote(customer) }}
+            className="text-xs text-blue-600 font-semibold flex items-center gap-1 px-2 py-1 rounded-lg active:bg-blue-50"
+          >
+            <span>📋</span> Tạo báo giá
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1188,6 +1191,7 @@ export default function CustomersPage() {
               customer={c}
               onClick={() => router.push(`/dashboard/customers/${c.record_id}`)}
               onCreateQuote={c => setQuoteFor(c)}
+              canCreateQuote={role !== 'accountant'}
             />
           ))
         )}
