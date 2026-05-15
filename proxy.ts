@@ -86,8 +86,8 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
-// Next.js 16+: file = proxy.ts, function = proxy(), config = proxyConfig
-export const proxyConfig = {
+// Next.js 16+: file = proxy.ts, function = proxy(), config export name = 'config' (unchanged from middleware)
+export const config = {
   // Exclude static assets and API routes (API routes protect themselves via getUser())
   matcher: ['/((?!_next/static|_next/image|favicon\\.ico|fonts/|icons/|images/|api).*)'],
 }
