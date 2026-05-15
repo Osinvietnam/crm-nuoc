@@ -13,12 +13,18 @@ const B2C_SELECT = `
   customers!customer_id(id, ho_ten, sdt)
 `
 const COMMERCIAL_SELECT = `
-  *,
+  id, type, quote_id, ma_don, nguoi_phu_trach, customer_id,
+  trang_thai, ghi_chu, loai_khach, ten_kh_tm, tinh_thanh,
+  san_pham_text, ma_sp_text, so_luong, don_vi, don_gia, tong_tien,
+  phuong_thuc_tt, ngay_dat, ngay_giao_dk, ngay_giao_thuc,
   staff:nguoi_phu_trach(id, full_name),
   customers!customer_id(id, ho_ten, sdt, dia_chi_ct)
 `
 const PROJECT_SELECT = `
-  *,
+  id, type, quote_id, ma_da, nguoi_phu_trach, customer_id,
+  trang_thai, ghi_chu, ten_da, chu_dau_tu, tong_thau, loai_da, quy_mo,
+  tinh_thanh, giai_doan, gia_tri_dt, gia_tri_hd, ty_le_thang, cong_no,
+  doi_tac_da, ngay_bao_gia, ngay_du_kien_ky, ngay_bt_tc, ngay_hoan_thanh,
   staff:nguoi_phu_trach(id, full_name),
   customers!customer_id(id, ho_ten, sdt)
 `
@@ -240,15 +246,17 @@ export async function POST(req: NextRequest) {
 
     // ── Commercial (Thương mại / Đại lý) ─────────────────────────────────────
     if (tab === 'commercial') {
-      const { ten_kh, san_pham, so_luong, don_gia, loai_khach, tinh_thanh, phuong_thuc_tt, ghi_chu, customer_id } = body
+      const { ten_kh, san_pham, so_luong, don_gia, loai_khach, tinh_thanh, phuong_thuc_tt, ghi_chu, customer_id, quote_record_id } = body
       if (!ten_kh || !san_pham || !so_luong || !don_gia) {
         return NextResponse.json({ error: 'Tên KH, sản phẩm, số lượng và đơn giá là bắt buộc' }, { status: 400 })
       }
+      const quoteId: number | null = quote_record_id ? (parseInt(quote_record_id) || null) : null
       const { data, error } = await supabase.from('orders').insert({
         type:            'commercial',
         ma_don:          genCode('DH'),
         nguoi_phu_trach: profile.id,
         customer_id:     customer_id ? parseInt(customer_id) : null,
+        quote_id:        quoteId,
         trang_thai:      'Chờ xác nhận',
         ten_kh_tm:       ten_kh,
         tinh_thanh:      tinh_thanh || null,
@@ -262,20 +270,31 @@ export async function POST(req: NextRequest) {
         ghi_chu:         ghi_chu || null,
       }).select(COMMERCIAL_SELECT).single()
       if (error) throw error
-      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Đơn TM ${data.ma_don} — ${ten_kh}` })
+
+      // Ghi ngược mã đơn vào BG gốc (fire-and-forget)
+      if (quoteId && data.ma_don) {
+        void supabase.from('quotes')
+          .update({ ma_hd_tham_chieu: data.ma_don })
+          .eq('id', quoteId)
+          .is('ma_hd_tham_chieu', null)  // idempotent: không ghi đè
+      }
+
+      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Đơn TM ${data.ma_don} — ${ten_kh}${quoteId ? ` (từ BG #${quoteId})` : ''}` })
       return NextResponse.json({ data: mapCommercial(data) }, { status: 201 })
     }
 
     // ── Project (Dự án) ───────────────────────────────────────────────────────
     if (tab === 'projects') {
-      const { ten_da, chu_dau_tu, loai_da, quy_mo, tinh_thanh, gia_tri_dt, ty_le_thang, ghi_chu } = body
+      const { ten_da, chu_dau_tu, loai_da, quy_mo, tinh_thanh, gia_tri_dt, ty_le_thang, ghi_chu, quote_record_id } = body
       if (!ten_da || !chu_dau_tu) {
         return NextResponse.json({ error: 'Tên dự án và chủ đầu tư là bắt buộc' }, { status: 400 })
       }
+      const quoteId: number | null = quote_record_id ? (parseInt(quote_record_id) || null) : null
       const { data, error } = await supabase.from('orders').insert({
         type:            'project',
         ma_da:           genCode('DA'),
         nguoi_phu_trach: profile.id,
+        quote_id:        quoteId,
         ten_da,
         chu_dau_tu,
         giai_doan:       'Tìm hiểu',
@@ -289,7 +308,16 @@ export async function POST(req: NextRequest) {
         ghi_chu:         ghi_chu || null,
       }).select(PROJECT_SELECT).single()
       if (error) throw error
-      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Dự án ${data.ma_da} — ${ten_da}` })
+
+      // Ghi ngược mã dự án vào BG gốc (fire-and-forget)
+      if (quoteId && data.ma_da) {
+        void supabase.from('quotes')
+          .update({ ma_hd_tham_chieu: data.ma_da })
+          .eq('id', quoteId)
+          .is('ma_hd_tham_chieu', null)  // idempotent: không ghi đè
+      }
+
+      void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Dự án ${data.ma_da} — ${ten_da}${quoteId ? ` (từ BG #${quoteId})` : ''}` })
       return NextResponse.json({ data: mapProject(data) }, { status: 201 })
     }
 

@@ -399,9 +399,19 @@ function AddContractForm({
   )
 }
 
-function AddCommercialForm({ onClose, onCreated }: { onClose: () => void; onCreated: (c: CommercialOrder) => void }) {
+function AddCommercialForm({
+  onClose, onCreated,
+  fromQuoteRecordId = '', initialTenKh = '', initialSdt = '', initialGiaTri = '',
+}: {
+  onClose:             () => void
+  onCreated:           (c: CommercialOrder) => void
+  fromQuoteRecordId?:  string
+  initialTenKh?:       string
+  initialSdt?:         string
+  initialGiaTri?:      string
+}) {
   const [form, setForm] = useState({
-    ten_kh: '', sdt: '', san_pham: '', so_luong: '', don_gia: '',
+    ten_kh: initialTenKh, sdt: initialSdt, san_pham: '', so_luong: '', don_gia: initialGiaTri,
     loai_khach: 'Đại lý cấp 1', tinh_thanh: '', phuong_thuc_tt: 'Chuyển khoản', ghi_chu: '',
   })
   const [selectedProduct,   setSelectedProduct]   = useState<Product | null>(null)
@@ -435,7 +445,12 @@ function AddCommercialForm({ onClose, onCreated }: { onClose: () => void; onCrea
     try {
       const res = await fetch('/api/lark/orders?tab=commercial', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, so_luong: Number(form.so_luong), don_gia: Number(form.don_gia) }),
+        body: JSON.stringify({
+          ...form,
+          so_luong:         Number(form.so_luong),
+          don_gia:          Number(form.don_gia),
+          quote_record_id:  fromQuoteRecordId || undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi tạo đơn'); return }
@@ -484,10 +499,20 @@ function AddCommercialForm({ onClose, onCreated }: { onClose: () => void; onCrea
   )
 }
 
-function AddProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
+function AddProjectForm({
+  onClose, onCreated,
+  fromQuoteRecordId = '', initialTenDa = '', initialChuDauTu = '', initialGiaTri = '',
+}: {
+  onClose:             () => void
+  onCreated:           (p: Project) => void
+  fromQuoteRecordId?:  string
+  initialTenDa?:       string
+  initialChuDauTu?:    string
+  initialGiaTri?:      string
+}) {
   const [form, setForm] = useState({
-    ten_da: '', chu_dau_tu: '', loai_da: '', quy_mo: '',
-    tinh_thanh: '', gia_tri_dt: '', ty_le_thang: '50', ghi_chu: '',
+    ten_da: initialTenDa, chu_dau_tu: initialChuDauTu, loai_da: '', quy_mo: '',
+    tinh_thanh: '', gia_tri_dt: initialGiaTri, ty_le_thang: '50', ghi_chu: '',
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
@@ -500,7 +525,12 @@ function AddProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated
     try {
       const res = await fetch('/api/lark/orders?tab=projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, gia_tri_dt: Number(form.gia_tri_dt), ty_le_thang: Number(form.ty_le_thang) }),
+        body: JSON.stringify({
+          ...form,
+          gia_tri_dt:       Number(form.gia_tri_dt),
+          ty_le_thang:      Number(form.ty_le_thang),
+          quote_record_id:  fromQuoteRecordId || undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi tạo dự án'); return }
@@ -668,10 +698,11 @@ export default function ContractsPage() {
     fetch('/api/auth/me').then(r => r.json()).then(d => setRole(d?.role ?? '')).catch(() => {})
   }, [])
 
-  // from_quote: navigate từ BG detail → tự mở form tạo HĐ B2C với data pre-filled
+  // from_quote: navigate từ BG detail → tự mở form đúng tab với data pre-filled
   useEffect(() => {
     if (searchParams.get('from_quote')) {
-      setTab('b2c')
+      const targetTab = (searchParams.get('tab') as Tab) ?? 'b2c'
+      if (validTabs.includes(targetTab)) setTab(targetTab)
       setShowForm(true)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -852,10 +883,24 @@ export default function ContractsPage() {
         />
       )}
       {showForm && tab === 'commercial' && (
-        <AddCommercialForm onClose={() => setShowForm(false)} onCreated={item => handleCreated(item as CommercialOrder)} />
+        <AddCommercialForm
+          onClose={() => setShowForm(false)}
+          onCreated={item => handleCreated(item as CommercialOrder)}
+          fromQuoteRecordId={searchParams.get('from_quote')   ?? undefined}
+          initialTenKh=     {searchParams.get('khach_hang')   ?? undefined}
+          initialSdt=       {searchParams.get('sdt')          ?? undefined}
+          initialGiaTri=    {searchParams.get('gia_tri')      ?? undefined}
+        />
       )}
       {showForm && tab === 'projects' && (
-        <AddProjectForm onClose={() => setShowForm(false)} onCreated={item => handleCreated(item as Project)} />
+        <AddProjectForm
+          onClose={() => setShowForm(false)}
+          onCreated={item => handleCreated(item as Project)}
+          fromQuoteRecordId={searchParams.get('from_quote')   ?? undefined}
+          initialTenDa=     {searchParams.get('ten_da')       ?? undefined}
+          initialChuDauTu=  {searchParams.get('chu_dau_tu')   ?? undefined}
+          initialGiaTri=    {searchParams.get('gia_tri')      ?? undefined}
+        />
       )}
 
       {/* Quick delivery status sheet — logistics */}

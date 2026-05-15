@@ -35,10 +35,11 @@ export default function CommercialDetailPage() {
   const { id } = useParams() as { id: string }
   const [order, setOrder]     = useState<CommercialOrder | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showStatus, setShowStatus] = useState(false)
-  const [updating, setUpdating]     = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [myRole, setMyRole]         = useState('')
+  const [showStatus, setShowStatus]     = useState(false)
+  const [updating, setUpdating]         = useState(false)
+  const [successMsg, setSuccessMsg]     = useState('')
+  const [myRole, setMyRole]             = useState('')
+  const [savingDelivery, setSavingDelivery] = useState(false)
 
   useEffect(() => {
     fetch(`/api/lark/orders/commercial/${id}`)
@@ -154,6 +155,21 @@ export default function CommercialDetailPage() {
           </button>
         )}
 
+        {/* Báo giá gốc */}
+        {order.source_quote_id && (
+          <button onClick={() => router.push(`/dashboard/quotes/${order.source_quote_id}`)}
+            className="w-full bg-blue-50 rounded-2xl p-3.5 shadow-sm border border-blue-100 flex items-center gap-3 text-left">
+            <span className="text-xl">📋</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-blue-700">Xem báo giá gốc</p>
+              <p className="text-xs text-blue-400">BG #{order.source_quote_id} · Thương mại</p>
+            </div>
+            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
         {/* Details */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">CHI TIẾT ĐƠN HÀNG</p>
@@ -164,7 +180,30 @@ export default function CommercialDetailPage() {
           <InfoRow label="Mã SP/VT" value={order.ma_sp} />
           <InfoRow label="Phương thức TT" value={order.phuong_thuc_tt} />
           <InfoRow label="Ngày giao DK" value={fmtDate(order.ngay_giao_dk)} />
-          <InfoRow label="Ngày giao thực" value={fmtDate(order.ngay_giao_thuc)} />
+          <div className="flex items-center gap-3 py-2.5 border-b border-gray-50">
+            <span className="text-xs text-gray-400 w-36 flex-shrink-0">Ngày giao thực</span>
+            {canUpdate ? (
+              <input type="date"
+                defaultValue={order.ngay_giao_thuc ? new Date(order.ngay_giao_thuc).toISOString().split('T')[0] : ''}
+                onChange={async e => {
+                  setSavingDelivery(true)
+                  try {
+                    await fetch(`/api/lark/orders/commercial/${id}`, {
+                      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ngay_giao_thuc: e.target.value ? new Date(e.target.value).getTime() : null }),
+                    })
+                    setOrder(prev => prev ? { ...prev, ngay_giao_thuc: e.target.value ? new Date(e.target.value).getTime() : null } : prev)
+                    setSuccessMsg('Đã lưu')
+                    setTimeout(() => setSuccessMsg(''), 2000)
+                  } catch {} finally { setSavingDelivery(false) }
+                }}
+                className="text-sm text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            ) : (
+              <span className="text-sm text-gray-700">{fmtDate(order.ngay_giao_thuc)}</span>
+            )}
+            {savingDelivery && <span className="text-xs text-gray-400">Đang lưu...</span>}
+          </div>
           <InfoRow label="Người phụ trách" value={order.nguoi_phu_trach} />
           {order.ghi_chu && <InfoRow label="Ghi chú" value={order.ghi_chu} />}
         </div>

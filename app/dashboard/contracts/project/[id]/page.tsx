@@ -86,7 +86,7 @@ export default function ProjectDetailPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-bold text-gray-800 truncate">{project.ten_da}</h1>
-          <p className="text-xs text-gray-400">{project.ma_da}</p>
+          <p className="text-xs text-gray-400">{project.ma_da}{project.khach_hang ? ` · ${project.khach_hang}` : ''}</p>
         </div>
         {successMsg && <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-lg">{successMsg}</span>}
       </div>
@@ -166,6 +166,21 @@ export default function ProjectDetailPage() {
               <p className="text-xs text-gray-400 truncate">{project.khach_hang || project.chu_dau_tu}</p>
             </div>
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Báo giá gốc */}
+        {project.source_quote_id && (
+          <button onClick={() => router.push(`/dashboard/quotes/${project.source_quote_id}`)}
+            className="w-full bg-blue-50 rounded-2xl p-3.5 shadow-sm border border-blue-100 flex items-center gap-3 text-left">
+            <span className="text-xl">📋</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-blue-700">Xem báo giá gốc</p>
+              <p className="text-xs text-blue-400">BG #{project.source_quote_id} · Dự án</p>
+            </div>
+            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>

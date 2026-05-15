@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { QUOTE_STATUSES, QUOTE_STATUS_COLORS, NGUON_KH_OPTIONS } from '@/lib/lark/tables'
 import type { Quote, QuoteType } from '@/app/api/lark/quotes/_mappers'
-import { STATUSES_BY_TYPE, TERMINAL_POSITIVE, TERMINAL_NEGATIVE } from '@/app/api/lark/quotes/_mappers'
+import { STATUSES_BY_TYPE, TERMINAL_POSITIVE, TERMINAL_NEGATIVE, ALLOWED_TRANSITIONS_BY_TYPE } from '@/app/api/lark/quotes/_mappers'
 import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 import type { Product } from '@/app/api/lark/products/_mapper'
 async function fetchCompany() {
@@ -100,14 +100,14 @@ function StatusSheet({ current, role, type, onSelect, onClose }: {
   const isManager = MANAGER_ROLES.includes(role)
   const allStatuses = STATUSES_BY_TYPE[type]
 
-  // B2C: sales có thể thay đổi một số trạng thái; manager toàn quyền
-  // Commercial/Project: sales và manager đều được thay đổi, trừ terminal positive (cần manager)
   const termPos = TERMINAL_POSITIVE[type]
   const termNeg = TERMINAL_NEGATIVE[type]
 
+  // Manager: thấy tất cả statuses
+  // Sales: chỉ thấy transitions hợp lệ từ trạng thái hiện tại (theo state machine)
   const allowedStatuses = isManager
     ? allStatuses
-    : allStatuses.filter(s => s !== termPos)
+    : (ALLOWED_TRANSITIONS_BY_TYPE[type]?.[current] ?? [])
 
   const handleSelect = (s: string) => {
     if (termNeg.includes(s)) { setPending(s); return }
@@ -834,6 +834,7 @@ export default function QuoteDetailPage() {
             <InfoRow label="Tỉnh / Thành"    value={quote.tinh_thanh} />
             <InfoRow label="Phương thức TT"  value={quote.phuong_thuc_tt} />
             <InfoRow label="Ngày lập"        value={fmtDate(quote.ngay_lap)} />
+            {quote.ma_hd_tham_chieu && <InfoRow label="Mã đơn TM" value={quote.ma_hd_tham_chieu} />}
           </>}
           {quoteType === 'project' && <>
             <InfoRow label="Tên dự án"      value={quote.ten_da} />
@@ -843,8 +844,22 @@ export default function QuoteDetailPage() {
             <InfoRow label="Tỉnh / Thành"   value={quote.tinh_thanh} />
             <InfoRow label="Đối tác"        value={quote.doi_tac_da} />
             <InfoRow label="Ngày nộp thầu"  value={fmtDate(quote.ngay_nop_thau)} />
+            {quote.ma_hd_tham_chieu && <InfoRow label="Mã dự án" value={quote.ma_hd_tham_chieu} />}
           </>}
         </div>
+
+        {/* Banner: BG đã được liên kết với HĐ/đơn */}
+        {quote.ma_hd_tham_chieu && (
+          <div className="bg-green-50 rounded-2xl p-4 shadow-sm border border-green-100 flex items-center gap-3">
+            <span className="text-2xl">✅</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-green-700">
+                {quoteType === 'b2c' ? 'Đã tạo hợp đồng' : quoteType === 'commercial' ? 'Đã tạo đơn thương mại' : 'Đã tạo dự án'}
+              </p>
+              <p className="text-xs text-green-600 font-mono">{quote.ma_hd_tham_chieu}</p>
+            </div>
+          </div>
+        )}
 
         {/* Notes */}
         {(quote.ghi_chu_ky_thuat || quote.ghi_chu_thuong_mai) && (

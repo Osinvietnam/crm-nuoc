@@ -51,6 +51,7 @@ export interface CommercialOrder {
   ghi_chu:         string
   dia_chi:         string
   customer_id:     number | null
+  source_quote_id: number | null  // BG gốc tạo ra đơn này
 }
 
 export interface Project {
@@ -77,6 +78,7 @@ export interface Project {
   customer_id:     number | null
   khach_hang:      string
   sdt:             string
+  source_quote_id: number | null  // BG gốc tạo ra dự án này
 }
 
 export function mapContract(r: any): Contract {
@@ -126,6 +128,7 @@ export function mapCommercial(r: any): CommercialOrder {
     ghi_chu:         r.ghi_chu                        ?? '',
     dia_chi:         r.customers?.dia_chi_ct          ?? '',
     customer_id:     r.customer_id                    ?? null,
+    source_quote_id: r.quote_id                       ?? null,
   }
 }
 
@@ -154,6 +157,7 @@ export function mapProject(r: any): Project {
     customer_id:     r.customer_id            ?? null,
     khach_hang:      r.customers?.ho_ten      ?? '',
     sdt:             r.customers?.sdt         ?? '',
+    source_quote_id: r.quote_id               ?? null,
   }
 }
 
