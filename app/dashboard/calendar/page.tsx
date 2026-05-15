@@ -64,19 +64,53 @@ function buildGrid(year: number, month: number) {
 // ─── Event dot ────────────────────────────────────────────────────────────────
 
 const TYPE_DOT: Record<string, string> = {
-  quote:        'bg-blue-500',
-  construction: 'bg-orange-500',
-  periodic:     'bg-purple-500',
-  contract:     'bg-green-500',
-  project:      'bg-teal-500',
+  // ── Báo giá ────────────────────────────────────────────
+  quote:         'bg-blue-500',
+  quote_expire:  'bg-red-500',
+  quote_submit:  'bg-orange-400',
+  // ── Hợp đồng / giao hàng ───────────────────────────────
+  contract:      'bg-green-500',
+  contract_sign: 'bg-emerald-500',
+  delivery_tm:   'bg-green-400',
+  // ── Bảo trì ────────────────────────────────────────────
+  construction:  'bg-orange-500',
+  acceptance:    'bg-yellow-500',
+  periodic:      'bg-purple-500',
+  // ── Bảo hành ───────────────────────────────────────────
+  warranty:      'bg-red-400',
+  // ── Dự án ──────────────────────────────────────────────
+  project:       'bg-teal-500',
+  project_sign:  'bg-teal-500',
+  project_start: 'bg-cyan-500',
+  project_end:   'bg-teal-600',
+  // ── Tài vụ / Task ──────────────────────────────────────
+  payment_due:   'bg-violet-500',
+  task_due:      'bg-gray-600',
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  quote:        '📋 Báo giá',
-  construction: '🔧 Bảo trì CT',
-  periodic:     '🔄 Bảo dưỡng',
-  contract:     '📦 Giao hàng',
-  project:      '🏗️ Dự án',
+  // ── Báo giá ────────────────────────────────────────────
+  quote:         '📋 BG Follow-up',
+  quote_expire:  '⚠️ BG hết hạn',
+  quote_submit:  '📤 Nộp thầu',
+  // ── Hợp đồng / giao hàng ───────────────────────────────
+  contract:      '📦 Giao hàng B2C',
+  contract_sign: '✍️ Ký hợp đồng',
+  delivery_tm:   '📦 Giao hàng TM',
+  // ── Bảo trì ────────────────────────────────────────────
+  construction:  '🔧 Bảo trì CT',
+  acceptance:    '✅ Nghiệm thu',
+  periodic:      '🔄 Bảo dưỡng ĐK',
+  // ── Bảo hành ───────────────────────────────────────────
+  warranty:      '🛠️ Bảo hành',
+  // ── Dự án ──────────────────────────────────────────────
+  project:       '🏗️ Dự án',
+  project_sign:  '🏗️ DK ký HĐ DA',
+  project_start: '🏗️ Khởi công',
+  project_end:   '🏁 Hoàn thành DA',
+  // ── Tài vụ / Task ──────────────────────────────────────
+  payment_due:   '💰 Đến hạn TT',
+  task_due:      '📋 Task deadline',
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ export async function PATCH(
     const body   = await req.json()
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-    for (const k of ['trang_thai', 'mo_ta', 'priority']) {
-      if (k in body) updates[k] = body[k]
+    for (const k of ['trang_thai', 'mo_ta', 'priority', 'scheduled_date', 'scheduled_note']) {
+      if (k in body) updates[k] = body[k] ?? null
     }
     if ('nguoi_xu_ly' in body) {
       updates.nguoi_xu_ly = body.nguoi_xu_ly || null

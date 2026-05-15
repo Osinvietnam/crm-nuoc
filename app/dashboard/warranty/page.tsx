@@ -172,6 +172,37 @@ export default function WarrantyPage() {
               <span className="text-gray-400 ml-auto">{new Date(t.created_at).toLocaleDateString('vi-VN')}</span>
             </div>
 
+            {/* Lịch hẹn (scheduled_date) — KTV và Manager được lên lịch */}
+            {(canActTicket(t) || isManager) && !['Hoàn thành', 'Đóng'].includes(t.trang_thai) && (
+              <div className="flex items-center gap-2 mb-3 bg-blue-50 rounded-xl px-3 py-2">
+                <span className="text-[10px] text-blue-500 font-semibold flex-shrink-0">📅 Lịch xử lý</span>
+                <input
+                  type="date"
+                  defaultValue={t.scheduled_date ?? ''}
+                  onChange={async e => {
+                    const val = e.target.value || null
+                    await fetch(`/api/warranty-tickets/${t.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ scheduled_date: val }),
+                    })
+                    setTickets(prev => prev.map(x => x.id === t.id ? { ...x, scheduled_date: val } : x))
+                  }}
+                  className="text-xs border-none bg-transparent text-blue-700 font-medium focus:outline-none flex-1"
+                />
+                {t.scheduled_date && (
+                  <span className="text-[10px] text-blue-400">→ lịch đã đặt</span>
+                )}
+              </div>
+            )}
+            {/* Hiển thị lịch (read-only) nếu không có quyền sửa */}
+            {!canActTicket(t) && !isManager && t.scheduled_date && (
+              <div className="flex items-center gap-2 mb-3 text-[10px] text-blue-500">
+                <span>📅</span>
+                <span>Lịch xử lý: {new Date(t.scheduled_date).toLocaleDateString('vi-VN')}</span>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Status transitions — tech chỉ thao tác ticket được giao */}

@@ -10,6 +10,8 @@ export interface WarrantyTicket {
   mo_ta:            string | null
   priority:         string
   trang_thai:       string
+  scheduled_date:   string | null   // YYYY-MM-DD — ngày KTV lên lịch xử lý
+  scheduled_note:   string | null   // ghi chú lịch hẹn (thời gian, địa chỉ...)
   nguoi_xu_ly:      string | null
   nguoi_xu_ly_name: string | null
   created_by:       string | null
@@ -31,6 +33,8 @@ function mapTicket(r: any): WarrantyTicket {
     mo_ta:            r.mo_ta            ?? null,
     priority:         r.priority         ?? 'Bình thường',
     trang_thai:       r.trang_thai       ?? 'Chờ xử lý',
+    scheduled_date:   r.scheduled_date   ?? null,
+    scheduled_note:   r.scheduled_note   ?? null,
     nguoi_xu_ly:      r.nguoi_xu_ly      ?? null,
     nguoi_xu_ly_name: r.nguoi_xu_ly_name ?? null,
     created_by:       r.created_by       ?? null,
