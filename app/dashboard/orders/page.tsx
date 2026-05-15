@@ -8,17 +8,14 @@ import {
   CONTRACT_STATUS_COLORS,
   COMMERCIAL_STATUS_COLORS,
   PROJECT_STAGE_COLORS,
-  QUOTE_STATUS_COLORS,
   NGUON_KH_OPTIONS,
   LOAI_KHACH_OPTIONS,
   LOAI_DU_AN_OPTIONS,
   PHUONG_THUC_TT_OPTIONS,
 } from '@/lib/lark/tables'
 import type { Contract, CommercialOrder, Project } from '@/app/api/lark/orders/route'
-import type { Quote } from '@/app/api/lark/quotes/_mappers'
 import type { Customer } from '@/app/api/lark/customers/route'
 import type { Product } from '@/app/api/lark/products/_mapper'
-import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -715,316 +712,11 @@ function ProjectCard({ p, onClick }: { p: Project; onClick: () => void }) {
   )
 }
 
-// ─── Follow-up Reminder Banner ───────────────────────────────────────────────
-
-function isDueForFollowUp(q: Quote): boolean {
-  if (!q.ngay_follow_up) return false
-  if (['Chấp nhận', 'Từ chối'].includes(q.trang_thai)) return false
-  // Tính đến cuối ngày hôm nay
-  const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
-  return q.ngay_follow_up <= endOfToday.getTime()
-}
-
-function FollowUpBanner({ quotes, onClickQuote }: {
-  quotes: Quote[]
-  onClickQuote: (id: string) => void
-}) {
-  const [open, setOpen] = useState(true)
-  const due = quotes.filter(isDueForFollowUp)
-  if (due.length === 0) return null
-
-  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-
-  return (
-    <div className="bg-orange-50 border border-orange-200 rounded-2xl overflow-hidden mb-1">
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 active:bg-orange-100">
-        <div className="flex items-center gap-2">
-          <span>⏰</span>
-          <span className="text-sm font-bold text-orange-700">Cần follow-up hôm nay</span>
-          <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            {due.length}
-          </span>
-        </div>
-        <span className="text-orange-400 text-xs font-medium">{open ? '▲' : '▼'}</span>
-      </button>
-
-      {open && (
-        <div className="border-t border-orange-100 divide-y divide-orange-100">
-          {due.map(q => {
-            const isOverdue = q.ngay_follow_up! < startOfToday.getTime()
-            const daysLate  = isOverdue
-              ? Math.floor((startOfToday.getTime() - q.ngay_follow_up!) / 86400000)
-              : 0
-            return (
-              <button key={q.record_id} onClick={() => onClickQuote(q.record_id)}
-                className="w-full px-4 py-3 text-left flex items-center justify-between gap-3 active:bg-orange-100">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{q.khach_hang}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {q.ma_bao_gia}
-                    {q.nguoi_phu_trach ? ` · ${q.nguoi_phu_trach}` : ''}
-                  </p>
-                  {q.ket_qua_follow_up && (
-                    <p className="text-xs text-gray-500 truncate mt-0.5">💬 {q.ket_qua_follow_up}</p>
-                  )}
-                </div>
-                <span className={`text-xs font-semibold flex-shrink-0 ${isOverdue ? 'text-red-500' : 'text-orange-500'}`}>
-                  {isOverdue ? `Trễ ${daysLate}n` : 'Hôm nay'}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Quote Card ───────────────────────────────────────────────────────────────
-
-function QuoteCard({ q, onClick }: { q: Quote; onClick: () => void }) {
-  const now = Date.now()
-  const isExpired = q.ngay_het_han && now > q.ngay_het_han && q.trang_thai !== 'Chấp nhận' && q.trang_thai !== 'Từ chối'
-  const displayStatus = isExpired ? 'Hết hạn' : q.trang_thai
-  const isPending = q.trang_thai === 'Chờ duyệt'
-  return (
-    <button onClick={onClick} className={`w-full bg-white rounded-2xl shadow-sm border p-4 text-left active:scale-[0.98] transition-transform ${isPending ? 'border-amber-300 bg-amber-50' : 'border-gray-100'}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 text-sm truncate">{q.khach_hang}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{q.ma_bao_gia} · v{q.phien_ban}</p>
-          {isPending && <p className="text-xs text-amber-700 font-semibold mt-0.5">⏳ Chờ CEO/Manager duyệt</p>}
-          {q.san_pham.length > 0 && (
-            <p className="text-xs text-gray-500 mt-1 truncate">{q.san_pham.join(', ')}</p>
-          )}
-        </div>
-        <StatusBadge label={displayStatus} colors={QUOTE_STATUS_COLORS} />
-      </div>
-      <div className="flex items-center gap-3 mt-3 flex-wrap">
-        <span className="text-sm font-bold text-blue-600">{fmtMoney(q.gia_tri_sau_ck || q.tong_gia_tri)}</span>
-        {q.chiet_khau > 0 && (
-          <span className="text-xs text-orange-500 font-medium">-{q.chiet_khau}%</span>
-        )}
-        {q.nguoi_phu_trach && <span className="text-xs text-gray-400">👤 {q.nguoi_phu_trach}</span>}
-        {q.ngay_het_han && (
-          <span className={`text-xs ml-auto ${isExpired ? 'text-red-400' : 'text-gray-300'}`}>
-            HH: {fmtDate(q.ngay_het_han)}
-          </span>
-        )}
-      </div>
-    </button>
-  )
-}
-
-// ─── Add Quote Form ───────────────────────────────────────────────────────────
-
-function AddQuoteForm({ onClose, onCreated, prefilledCustomer }: {
-  onClose: () => void
-  onCreated: (q: Quote) => void
-  prefilledCustomer?: Customer
-}) {
-  const DRAFT_KEY = 'quote_draft_orders'
-  const { items, total, addItem, addBlank, removeItem, changeItem, clear } = useQuoteItems(DRAFT_KEY)
-
-  const [form, setForm] = useState({
-    khach_hang:         prefilledCustomer?.ho_ten ?? '',
-    sdt:                prefilledCustomer?.sdt    ?? '',
-    chiet_khau:         '0',
-    ghi_chu_ky_thuat:   '',
-    ghi_chu_thuong_mai: '',
-    kenh_tiep_nhan:     '',
-    ngay_gui_kh:        '',   // YYYY-MM-DD string
-  })
-  const [customerRecordId,    setCustomerRecordId]    = useState(prefilledCustomer?.record_id ?? '')
-  const [selectedCustomer,    setSelectedCustomer]    = useState<Customer | null>(prefilledCustomer ?? null)
-  const [showCustomerPicker,  setShowCustomerPicker]  = useState(false)
-  const [showProductPicker,   setShowProductPicker]   = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState('')
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
-
-  const ck      = Number(form.chiet_khau) || 0
-  const afterCK = Math.round(total * (1 - ck / 100))
-
-  const handleSelectCustomer = (c: Customer) => {
-    setSelectedCustomer(c); setCustomerRecordId(c.record_id)
-    setForm(f => ({ ...f, khach_hang: c.ho_ten, sdt: c.sdt }))
-    setShowCustomerPicker(false)
-  }
-  const clearCustomer = () => {
-    setSelectedCustomer(null); setCustomerRecordId('')
-    setForm(f => ({ ...f, khach_hang: '', sdt: '' }))
-  }
-
-  const handleSelectProduct = (p: Product) => {
-    addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null })
-    setShowProductPicker(false)
-  }
-
-  const submit = async () => {
-    if (!form.khach_hang) { setError('Tên khách hàng là bắt buộc'); return }
-    if (items.length === 0) { setError('Vui lòng thêm ít nhất 1 sản phẩm'); return }
-    ;(document.activeElement as HTMLElement)?.blur()
-    setSaving(true); setError('')
-    try {
-      const { san_pham } = itemsToLarkFields(items)
-      const res = await fetch('/api/lark/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          khach_hang:         form.khach_hang,
-          sdt:                form.sdt,
-          chiet_khau:         ck,
-          ghi_chu_ky_thuat:   form.ghi_chu_ky_thuat,
-          ghi_chu_thuong_mai: form.ghi_chu_thuong_mai,
-          kenh_tiep_nhan:     form.kenh_tiep_nhan   || undefined,
-          ngay_gui_kh:        form.ngay_gui_kh ? new Date(form.ngay_gui_kh).getTime() : undefined,
-          san_pham,
-          tong_gia_tri:       total,
-          customer_record_id: customerRecordId || undefined,
-          items: items.map(i => ({ ten_sp: i.ten_sp, don_gia: i.don_gia, so_luong: i.so_luong, product_id: i.product_id ?? null })),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Lỗi tạo báo giá'); return }
-      clear()
-      onCreated(data.data)
-    } catch { setError('Lỗi kết nối') }
-    finally { setSaving(false) }
-  }
-
-  const fmtMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '0₫'
-
-  return (
-    <>
-      {showCustomerPicker && (
-        <CustomerPicker onSelect={handleSelectCustomer} onClose={() => setShowCustomerPicker(false)} />
-      )}
-      {showProductPicker && (
-        <ProductPicker onSelect={handleSelectProduct} onClose={() => setShowProductPicker(false)} />
-      )}
-
-      <BottomSheet title="Tạo báo giá" onClose={onClose} error={error}
-        footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
-
-        {/* Customer */}
-        <div>
-          <label className="text-sm font-semibold text-gray-600 mb-1 block">KHÁCH HÀNG *</label>
-          {selectedCustomer ? (
-            <PickerChip label={`${selectedCustomer.ho_ten} · ${selectedCustomer.sdt}`} onClear={clearCustomer} />
-          ) : (
-            <button onClick={() => setShowCustomerPicker(true)}
-              className="w-full border-2 border-dashed border-blue-300 rounded-xl py-3 text-sm text-blue-600 font-medium">
-              + Chọn từ danh sách khách hàng
-            </button>
-          )}
-        </div>
-        {!selectedCustomer && (
-          <Field label="TÊN KHÁCH HÀNG *" value={form.khach_hang} onChange={v => set('khach_hang', v)}
-            placeholder="Hoặc nhập tay nếu chưa có trong hệ thống" />
-        )}
-        <Field label="SỐ ĐIỆN THOẠI" value={form.sdt} onChange={v => set('sdt', v)}
-          placeholder="0901234567" type="tel" />
-
-        <SelectField label="NGUỒN KH"
-          value={form.kenh_tiep_nhan} onChange={v => set('kenh_tiep_nhan', v)}
-          options={['', ...NGUON_KH_OPTIONS]} />
-
-        <div>
-          <label className="text-sm font-semibold text-gray-600 mb-1 block">NGÀY GỬI KH</label>
-          <input type="date" value={form.ngay_gui_kh} onChange={e => set('ngay_gui_kh', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        {/* Line items */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold text-gray-500">SẢN PHẨM ĐỀ XUẤT</label>
-            {items.length > 0 && (
-              <button onClick={clear} className="text-xs text-red-400 font-medium">Xoá tất cả</button>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            {items.map(item => (
-              <div key={item.id} className="bg-gray-50 rounded-xl p-3 space-y-2">
-                <div className="flex gap-2">
-                  <input value={item.ten_sp} onChange={e => changeItem(item.id, 'ten_sp', e.target.value)}
-                    placeholder="Tên sản phẩm"
-                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                  <button onClick={() => removeItem(item.id)}
-                    className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 flex-shrink-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-0.5">
-                    <button onClick={() => changeItem(item.id, 'so_luong', Math.max(1, item.so_luong - 1))}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">−</button>
-                    <span className="text-sm font-semibold text-gray-700 w-6 text-center">{item.so_luong}</span>
-                    <button onClick={() => changeItem(item.id, 'so_luong', item.so_luong + 1)}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 rounded-md hover:bg-gray-100">+</button>
-                  </div>
-                  <span className="text-gray-300 text-sm">×</span>
-                  <input type="number" value={item.don_gia || ''}
-                    onChange={e => changeItem(item.id, 'don_gia', Number(e.target.value) || 0)}
-                    placeholder="Đơn giá"
-                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                  <span className="text-xs font-semibold text-blue-600 flex-shrink-0 min-w-[72px] text-right">
-                    {fmtMoney(item.so_luong * item.don_gia)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2 mt-2">
-            <button onClick={() => setShowProductPicker(true)}
-              className="flex-1 border-2 border-dashed border-blue-200 rounded-xl py-2.5 text-xs text-blue-600 font-semibold">
-              + Chọn từ danh mục
-            </button>
-            <button onClick={addBlank}
-              className="flex-1 border-2 border-dashed border-gray-200 rounded-xl py-2.5 text-xs text-gray-500 font-semibold">
-              + Nhập thủ công
-            </button>
-          </div>
-
-          {items.length > 0 && (
-            <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-2">
-              <span className="text-xs text-gray-400">{items.length} sản phẩm</span>
-              <span className="text-sm font-bold text-gray-800">{fmtMoney(total)}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Discount */}
-        <Field label="CHIẾT KHẤU TỔNG (%)" value={form.chiet_khau}
-          onChange={v => set('chiet_khau', v)} placeholder="0" type="number" />
-
-        {total > 0 && ck > 0 && (
-          <div className="bg-green-50 rounded-xl px-4 py-3 flex justify-between items-center">
-            <span className="text-xs text-gray-500">Giá sau chiết khấu</span>
-            <span className="text-sm font-bold text-green-600">{fmtMoney(afterCK)}</span>
-          </div>
-        )}
-
-        <TextArea label="GHI CHÚ KỸ THUẬT" value={form.ghi_chu_ky_thuat}
-          onChange={v => set('ghi_chu_ky_thuat', v)} placeholder="Thông số, yêu cầu lắp đặt..." />
-        <TextArea label="GHI CHÚ THƯƠNG MẠI" value={form.ghi_chu_thuong_mai}
-          onChange={v => set('ghi_chu_thuong_mai', v)} placeholder="Điều kiện thanh toán, giao hàng..." />
-      </BottomSheet>
-    </>
-  )
-}
-
 // ─── Data hook ────────────────────────────────────────────────────────────────
 
-type Tab = 'quotes' | 'b2c' | 'commercial' | 'projects'
+type Tab = 'b2c' | 'commercial' | 'projects'
 
-function useOrderData(tab: Exclude<Tab, 'quotes'>) {
+function useOrderData(tab: Tab) {
   const [data, setData]       = useState<(Contract | CommercialOrder | Project)[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -1048,50 +740,14 @@ function useOrderData(tab: Exclude<Tab, 'quotes'>) {
   return { data, loading, error, reload: load, setData }
 }
 
-function useQuoteData() {
-  const [data,    setData]    = useState<Quote[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState('')
-  const [page,    setPage]    = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [total,   setTotal]   = useState(0)
-
-  const fetchPage = useCallback(async (pg: number) => {
-    if (pg === 1) setLoading(true)
-    setError('')
-    try {
-      const res  = await fetch(`/api/lark/quotes?pageSize=30&page=${pg}`)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      const newData = json.data ?? []
-      setData(prev => pg === 1 ? newData : [...prev, ...newData])
-      setHasMore(json.meta?.hasMore ?? false)
-      setTotal(json.meta?.total ?? 0)
-      setPage(pg)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lỗi tải dữ liệu')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchPage(1) }, [fetchPage])
-
-  const reload   = useCallback(() => fetchPage(1), [fetchPage])
-  const loadMore = useCallback(() => { if (hasMore) fetchPage(page + 1) }, [fetchPage, hasMore, page])
-
-  return { data, setData, loading, error, reload, loadMore, hasMore, total }
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const [tab, setTab]           = useState<Tab>('quotes')
+  const [tab, setTab]           = useState<Tab>('b2c')
   const [search, setSearch]     = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [statusFilter, setStatusFilter]   = useState<string>('all')
   const [deliveryFilter, setDeliveryFilter] = useState<string>('all')
   const [role, setRole]         = useState<string>('')
   const [quickStatusId, setQuickStatusId]     = useState<string | null>(null)
@@ -1103,7 +759,6 @@ export default function OrdersPage() {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       const r = d?.role ?? ''
       setRole(r)
-      if (r === 'logistics' || r === 'partner') setTab('b2c')
     }).catch(() => {})
   }, [])
 
@@ -1115,49 +770,29 @@ export default function OrdersPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Quotes tab có hook riêng; các tab còn lại dùng chung
-  const orderTab = tab !== 'quotes' ? tab : 'b2c'
-  const orderHook  = useOrderData(orderTab as Exclude<Tab, 'quotes'>)
-  const quotesHook = useQuoteData()
-
-  const activeHook = tab === 'quotes' ? quotesHook : orderHook
-  const { data, loading, error, reload, setData } = activeHook
+  const orderHook = useOrderData(tab)
+  const { data, loading, error, reload, setData } = orderHook
 
   const ptr = usePullToRefresh(async () => { reload() })
 
   const filtered = data.filter(item => {
     const q = search.toLowerCase()
     const textMatch = !q || JSON.stringify(item).toLowerCase().includes(q)
-    if (tab === 'quotes' && statusFilter !== 'all') {
-      const quote = item as Quote
-      const now = Date.now()
-      const isExpired = quote.ngay_het_han && now > quote.ngay_het_han
-        && !['Chấp nhận', 'Từ chối'].includes(quote.trang_thai)
-      const displayStatus = isExpired ? 'Hết hạn' : quote.trang_thai
-      if (displayStatus !== statusFilter) return false
-    }
     if (tab === 'b2c' && deliveryFilter !== 'all') {
       if ((item as Contract).trang_thai !== deliveryFilter) return false
     }
     return textMatch
   })
 
-  const followUpCount = quotesHook.data.filter(isDueForFollowUp).length
-
   const allTabs: { key: Tab; label: string; icon: string; roles?: string[] }[] = [
-    { key: 'quotes',     label: 'Báo giá', icon: '📋', roles: ['admin','ceo','director','sales','accountant'] },
     { key: 'b2c',        label: 'B2C',     icon: '🏠' },
     { key: 'commercial', label: 'Đại lý',  icon: '🏪', roles: ['admin','ceo','director','sales','accountant'] },
     { key: 'projects',   label: 'Dự án',   icon: '🏗️', roles: ['admin','ceo','director','sales','accountant'] },
   ]
   const tabs = role ? allTabs.filter(t => !t.roles || t.roles.includes(role)) : allTabs
 
-  const handleCreated = (item: Quote | Contract | CommercialOrder | Project) => {
-    if (tab === 'quotes') {
-      quotesHook.setData(prev => [item as Quote, ...prev])
-    } else {
-      orderHook.setData(prev => [item as Contract | CommercialOrder | Project, ...prev])
-    }
+  const handleCreated = (item: Contract | CommercialOrder | Project) => {
+    orderHook.setData(prev => [item, ...prev])
     setShowForm(false)
   }
 
@@ -1190,7 +825,6 @@ export default function OrdersPage() {
   }
 
   const searchPlaceholder =
-    tab === 'quotes'     ? 'Tìm tên KH, mã BG, sản phẩm...'    :
     tab === 'b2c'        ? 'Tìm tên KH, mã HĐ, sản phẩm...'    :
     tab === 'commercial' ? 'Tìm tên đại lý, mã đơn, sản phẩm...' :
     'Tìm tên dự án, chủ đầu tư...'
@@ -1203,7 +837,7 @@ export default function OrdersPage() {
           <div>
             <h1 className="text-lg font-bold text-gray-800">Đơn hàng</h1>
             <p className="text-xs text-gray-400">
-              {loading ? 'Đang tải...' : tab === 'quotes' ? `${quotesHook.total} báo giá` : `${data.length} đơn`}
+              {loading ? 'Đang tải...' : `${data.length} đơn`}
             </p>
           </div>
           {/* Chỉ sales/admin/ceo/director tạo BG; logistics/partner/tech_lead/accountant chỉ xem */}
@@ -1222,18 +856,13 @@ export default function OrdersPage() {
           {tabs.map(t => (
             <button
               key={t.key}
-              onClick={() => { setTab(t.key); setSearch(''); setStatusFilter('all'); setDeliveryFilter('all') }}
+              onClick={() => { setTab(t.key); setSearch(''); setDeliveryFilter('all') }}
               className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all relative ${
                 tab === t.key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
               }`}
             >
               <span>{t.icon}</span>
               <span>{t.label}</span>
-              {t.key === 'quotes' && followUpCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                  {followUpCount > 9 ? '9+' : followUpCount}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -1251,25 +880,6 @@ export default function OrdersPage() {
             <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">✕</button>
           )}
         </div>
-
-        {/* Status filter — tab Báo giá */}
-        {tab === 'quotes' && (
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-            {['all', 'Chờ duyệt', 'Nháp', 'Đã gửi', 'Đàm phán', 'Chấp nhận', 'Từ chối', 'Hết hạn'].map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
-                  statusFilter === s
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-500 border-gray-200'
-                }`}
-              >
-                {s === 'all' ? 'Tất cả' : s}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* UX-23: Delivery filter — tab B2C cho logistics */}
         {tab === 'b2c' && role === 'logistics' && (
@@ -1307,44 +917,11 @@ export default function OrdersPage() {
             <p className="text-red-500 text-sm mb-3">{error}</p>
             <button onClick={reload} className="text-blue-600 text-sm font-semibold">Thử lại</button>
           </div>
-        ) : tab === 'quotes' && filtered.length === 0 ? (
-          <>
-            {!search && (
-              <FollowUpBanner
-                quotes={quotesHook.data}
-                onClickQuote={id => router.push(`/dashboard/orders/quote/${id}`)}
-              />
-            )}
-            <div className="flex flex-col items-center py-10 gap-2">
-              <span className="text-4xl">{search ? '🔍' : '📄'}</span>
-              <p className="text-sm font-medium text-gray-500">{search ? 'Không tìm thấy kết quả' : 'Chưa có báo giá nào'}</p>
-            </div>
-          </>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-16 gap-2">
             <span className="text-4xl">{search ? '🔍' : '📦'}</span>
             <p className="text-sm font-medium text-gray-500">{search ? 'Không tìm thấy kết quả' : 'Chưa có dữ liệu'}</p>
           </div>
-        ) : tab === 'quotes' ? (
-          <>
-            {!search && (
-              <FollowUpBanner
-                quotes={quotesHook.data}
-                onClickQuote={id => router.push(`/dashboard/orders/quote/${id}`)}
-              />
-            )}
-            {(filtered as Quote[]).map(q => (
-              <QuoteCard key={q.record_id} q={q}
-                onClick={() => router.push(`/dashboard/orders/quote/${q.record_id}`)} />
-            ))}
-            {tab === 'quotes' && quotesHook.hasMore && !search && statusFilter === 'all' && (
-              <button
-                onClick={quotesHook.loadMore}
-                className="w-full py-3 text-sm text-blue-600 font-semibold text-center border border-blue-100 rounded-2xl bg-blue-50 active:bg-blue-100">
-                Tải thêm ({quotesHook.total - quotesHook.data.length} còn lại)
-              </button>
-            )}
-          </>
         ) : tab === 'b2c' ? (
           (filtered as Contract[]).map(c => (
             <ContractCard
@@ -1367,9 +944,6 @@ export default function OrdersPage() {
       </div>
 
       {/* Add forms */}
-      {showForm && tab === 'quotes' && (
-        <AddQuoteForm onClose={() => setShowForm(false)} onCreated={q => handleCreated(q)} />
-      )}
       {showForm && tab === 'b2c' && (
         <AddContractForm
           onClose={() => setShowForm(false)}

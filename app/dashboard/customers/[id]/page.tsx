@@ -935,7 +935,7 @@ export default function CustomerDetailPage() {
                 const sc      = QUOTE_STATUS_COLORS[status] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
                 return (
                   <button key={q.record_id}
-                    onClick={() => router.push(`/dashboard/orders/quote/${q.record_id}`)}
+                    onClick={() => router.push(`/dashboard/quotes/${q.record_id}`)}
                     className="w-full px-4 py-3 text-left flex items-center gap-3 active:bg-gray-50">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-blue-600">v{q.phien_ban}</span>
