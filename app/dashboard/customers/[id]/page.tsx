@@ -109,6 +109,119 @@ function LostReasonSheet({
   )
 }
 
+// ─── Contact Log Sheet ────────────────────────────────────────────────────────
+
+const LOG_TYPES = [
+  { value: 'Gọi điện', icon: '📞' },
+  { value: 'Gặp mặt',  icon: '🤝' },
+  { value: 'Zalo',     icon: '💬' },
+  { value: 'Email',    icon: '✉️' },
+] as const
+
+const LOG_RESULTS = ['Liên hệ được', 'Không bắt máy', 'Để lại lời nhắn', 'Hẹn lại'] as const
+
+function ContactLogSheet({
+  customerPhone,
+  onSave,
+  onClose,
+}: {
+  customerPhone: string
+  onSave: (log: { type: string; result: string; note: string }) => void
+  onClose: () => void
+}) {
+  const [logType,   setLogType]   = useState<string>('Gọi điện')
+  const [logResult, setLogResult] = useState<string>('')
+  const [note,      setNote]      = useState('')
+
+  const canSave = logResult !== ''
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-3xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+        <div className="px-5 py-3 border-b border-gray-100 flex-shrink-0">
+          <h2 className="text-base font-bold text-gray-800">Ghi nhận liên hệ</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{formatPhone(customerPhone)}</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Loại liên hệ */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 mb-2">HÌNH THỨC</p>
+            <div className="grid grid-cols-4 gap-2">
+              {LOG_TYPES.map(t => (
+                <button key={t.value} type="button"
+                  onClick={() => setLogType(t.value)}
+                  className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                    logType === t.value
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'border-gray-200 text-gray-600'
+                  }`}
+                >
+                  <span className="text-lg">{t.icon}</span>
+                  {t.value}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Kết quả */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 mb-2">KẾT QUẢ *</p>
+            <div className="space-y-1.5">
+              {LOG_RESULTS.map(r => (
+                <button key={r} type="button"
+                  onClick={() => setLogResult(r)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium border transition-all ${
+                    logResult === r
+                      ? 'bg-green-50 border-green-300 text-green-700'
+                      : 'border-gray-100 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${logResult === r ? 'border-green-500 bg-green-500' : 'border-gray-300'}`} />
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Ghi chú */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 mb-2">GHI CHÚ</p>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Nội dung trao đổi, hẹn lịch, yêu cầu KH..."
+              rows={3}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"
+            />
+          </div>
+          {/* Gọi nhanh */}
+          {logType === 'Gọi điện' && (
+            <a href={`tel:${customerPhone}`}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-green-200 text-green-700 text-sm font-medium bg-green-50">
+              <span>📞</span> Gọi ngay {formatPhone(customerPhone)}
+            </a>
+          )}
+        </div>
+        <div className="px-4 pb-8 pt-2 flex gap-2 border-t border-gray-50 flex-shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600">Huỷ</button>
+          <button
+            onClick={() => canSave && onSave({ type: logType, result: logResult, note: note.trim() })}
+            disabled={!canSave}
+            className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-40"
+          >
+            Lưu ghi nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Pipeline Stage Selector ──────────────────────────────────────────────────
 
 function PipelineSheet({
@@ -191,7 +304,9 @@ export default function CustomerDetailPage() {
   const [infoSaving, setInfoSaving]       = useState(false)
   const [infoError, setInfoError]         = useState('')
   const [pipelineWarnings, setPipelineWarnings] = useState<string[]>([])
-  const [showLostSheet, setShowLostSheet]       = useState(false)
+  const [showLostSheet, setShowLostSheet]         = useState(false)
+  const [showContactLog, setShowContactLog]       = useState(false)
+  const [logSaving, setLogSaving]                 = useState(false)
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
 
@@ -382,6 +497,34 @@ export default function CustomerDetailPage() {
     finally { setInfoSaving(false) }
   }
 
+  const handleSaveLog = async ({ type, result, note }: { type: string; result: string; note: string }) => {
+    if (!customer) return
+    setLogSaving(true)
+    const now = new Date()
+    const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`
+    const entry = `[${dateStr} – ${userFullName || 'NV'}] ${type}: ${result}${note ? '. ' + note : ''}`
+    const newNoidung = customer.noi_dung
+      ? `${entry}\n---\n${customer.noi_dung}`
+      : entry
+    try {
+      const res = await fetch(`/api/lark/customers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noi_dung: newNoidung }),
+      })
+      if (!res.ok) throw new Error()
+      setCustomer(prev => prev ? { ...prev, noi_dung: newNoidung } : prev)
+      setInfoForm(f => ({ ...f, noi_dung: newNoidung }))
+      setShowContactLog(false)
+      setSuccessMsg('Đã ghi nhận liên hệ')
+      setTimeout(() => setSuccessMsg(''), 2500)
+    } catch {
+      // silent fail — log still useful
+    } finally {
+      setLogSaving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -478,13 +621,13 @@ export default function CustomerDetailPage() {
 
         {/* Quick actions */}
         <div className="grid grid-cols-4 gap-2">
-          <a
-            href={`tel:${customer.sdt}`}
-            className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5"
+          <button
+            onClick={() => setShowContactLog(true)}
+            className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex flex-col items-center gap-1.5 active:bg-gray-50"
           >
             <span className="text-xl">📞</span>
             <span className="text-xs text-gray-600 font-medium">Gọi điện</span>
-          </a>
+          </button>
           <a
             href={`https://zalo.me/${customer.sdt.replace(/^0/, '84')}`}
             target="_blank"
@@ -794,6 +937,14 @@ export default function CustomerDetailPage() {
         <LostReasonSheet
           onConfirm={reason => { setShowLostSheet(false); void updatePipeline('Lost', reason) }}
           onClose={() => setShowLostSheet(false)}
+        />
+      )}
+
+      {showContactLog && customer && (
+        <ContactLogSheet
+          customerPhone={customer.sdt}
+          onSave={handleSaveLog}
+          onClose={() => setShowContactLog(false)}
         />
       )}
 
