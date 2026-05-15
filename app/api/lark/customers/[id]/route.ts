@@ -37,6 +37,8 @@ function mapRow(c: any) {
     nhom_dv:            c.nhom_dv           ?? '',
     tien_do_ct:         c.tien_do_ct        ?? '',
     khu_vuc:            c.khu_vuc           ?? '',
+    loai_kh:            c.loai_kh           ?? '',
+    doi_tac_id:         c.doi_tac_id        ?? null,
   }
 }
 
@@ -110,6 +112,11 @@ export async function PATCH(
         : supabase.from('customers').select('id, pipeline, nguoi_phu_trach').eq('lark_record_id', id).single(),
       supabase.from('profiles').select('role, full_name').eq('id', user.id).single(),
     ])
+
+    // KH-A3: Chỉ admin/ceo/director mới được reassign nguoi_phu_trach
+    if ('nguoi_phu_trach' in updates && !['admin', 'ceo', 'director'].includes(profile?.role ?? '')) {
+      return NextResponse.json({ error: 'Không có quyền chuyển người phụ trách' }, { status: 403 })
+    }
 
     const updateQuery = supabase
       .from('customers')

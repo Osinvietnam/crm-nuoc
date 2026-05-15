@@ -29,6 +29,86 @@ function ProductThumb({ p }: { p: Product }) {
   return <img src={src} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 bg-gray-100" onError={() => setShow(false)} />
 }
 
+// ─── Lost Reason Sheet ───────────────────────────────────────────────────────
+
+const LY_DO_LOST_OPTIONS = [
+  'Giá cao hơn đối thủ',
+  'Chọn sản phẩm / thương hiệu khác',
+  'Không đủ ngân sách',
+  'Thay đổi nhu cầu / hoãn kế hoạch',
+  'Không liên hệ được',
+  'Khác',
+]
+
+function LostReasonSheet({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: (reason: string) => void
+  onClose: () => void
+}) {
+  const [selected, setSelected] = useState('')
+  const [other, setOther]       = useState('')
+
+  const reason = selected === 'Khác' ? other.trim() : selected
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-3xl">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+        <div className="px-5 py-3 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-800">Lý do không chốt được</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Bắt buộc khi chuyển sang Lost</p>
+        </div>
+        <div className="p-4 space-y-2">
+          {LY_DO_LOST_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setSelected(opt)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all ${
+                selected === opt
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : 'text-gray-700 border border-transparent hover:bg-gray-50'
+              }`}
+            >
+              <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${selected === opt ? 'border-red-500 bg-red-500' : 'border-gray-300'}`} />
+              {opt}
+            </button>
+          ))}
+          {selected === 'Khác' && (
+            <textarea
+              value={other}
+              onChange={e => setOther(e.target.value)}
+              placeholder="Nhập lý do cụ thể..."
+              rows={2}
+              autoFocus
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-red-400 resize-none"
+            />
+          )}
+        </div>
+        <div className="px-4 pb-8 flex gap-2">
+          <button onClick={onClose}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-sm text-gray-600">
+            Huỷ
+          </button>
+          <button
+            onClick={() => reason && onConfirm(reason)}
+            disabled={!reason}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-semibold disabled:opacity-40"
+          >
+            Xác nhận Lost
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Pipeline Stage Selector ──────────────────────────────────────────────────
 
 function PipelineSheet({
@@ -108,6 +188,7 @@ export default function CustomerDetailPage() {
   const [infoSaving, setInfoSaving]       = useState(false)
   const [infoError, setInfoError]         = useState('')
   const [pipelineWarnings, setPipelineWarnings] = useState<string[]>([])
+  const [showLostSheet, setShowLostSheet]       = useState(false)
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
 
@@ -209,18 +290,32 @@ export default function CustomerDetailPage() {
     load()
   }, [id])
 
-  const updatePipeline = async (newStage: string) => {
+  const handlePipelineSelect = (newStage: string) => {
+    if (newStage === 'Lost') {
+      setShowLostSheet(true)
+    } else {
+      void updatePipeline(newStage)
+    }
+  }
+
+  const updatePipeline = async (newStage: string, lyDoTuChoi?: string) => {
     if (!customer) return
     setUpdating(true)
     try {
+      const body: Record<string, unknown> = { pipeline: newStage }
+      if (lyDoTuChoi) body.ly_do_tu_choi = lyDoTuChoi
       const res = await fetch(`/api/lark/customers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipeline: newStage }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
-      setCustomer(prev => prev ? { ...prev, pipeline: newStage } : prev)
+      setCustomer(prev => prev ? {
+        ...prev,
+        pipeline: newStage,
+        ...(lyDoTuChoi ? { ly_do_tu_choi: lyDoTuChoi } : {}),
+      } : prev)
       if (data.warnings?.length) {
         setPipelineWarnings(data.warnings)
       } else {
@@ -388,7 +483,7 @@ export default function CustomerDetailPage() {
               <span className="text-xs text-gray-500 font-medium">Email</span>
             </div>
           )}
-          {!['director', 'accountant'].includes(userRole) && (
+          {['admin', 'ceo', 'director', 'sales'].includes(userRole) && (
             <button
               onClick={() => setShowQuoteForm(true)}
               className="bg-blue-50 rounded-2xl p-3 border border-blue-100 flex flex-col items-center gap-1.5 active:bg-blue-100"
@@ -512,7 +607,7 @@ export default function CustomerDetailPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-4 pt-4 pb-3 flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-400">LỊCH SỬ BÁO GIÁ</p>
-            {!['director', 'accountant'].includes(userRole) && (
+            {['admin', 'ceo', 'director', 'sales'].includes(userRole) && (
               <button onClick={() => setShowQuoteForm(true)}
                 className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
                 + Tạo mới
@@ -576,8 +671,15 @@ export default function CustomerDetailPage() {
       {showPipeline && (
         <PipelineSheet
           current={pipeline}
-          onSelect={updatePipeline}
+          onSelect={stage => { setShowPipeline(false); handlePipelineSelect(stage) }}
           onClose={() => setShowPipeline(false)}
+        />
+      )}
+
+      {showLostSheet && (
+        <LostReasonSheet
+          onConfirm={reason => { setShowLostSheet(false); void updatePipeline('Lost', reason) }}
+          onClose={() => setShowLostSheet(false)}
         />
       )}
 

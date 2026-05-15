@@ -886,6 +886,9 @@ function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true 
               {customer.muc_uu_tien}
             </span>
           )}
+          {customer.khu_vuc && (
+            <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">📍 {customer.khu_vuc}</span>
+          )}
           {customer.nguoi_phu_trach && (
             <span className="text-xs text-gray-400">👤 {customer.nguoi_phu_trach}</span>
           )}
