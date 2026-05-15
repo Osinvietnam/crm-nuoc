@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { STAGE_TASKS } from '@/lib/tasks/checklist'
 import { logAudit } from '@/lib/audit'
+import { logActivity } from '@/lib/activity'
 
 function toMs(d: string | null | undefined): number | null {
   if (!d) return null
@@ -138,6 +139,22 @@ export async function PATCH(
       detail:    `KH #${numericId ?? id}: ${Object.keys(updates).join(', ')}`,
       after:     updates as Record<string, unknown>,
     })
+
+    // Activity: pipeline change
+    if ('pipeline' in updates && updates.pipeline !== current?.pipeline) {
+      void logActivity(supabase, {
+        customer_id: (data as any).id ?? current?.id,
+        user_id:     user.id,
+        user_name:   profile?.full_name ?? '',
+        type:        'pipeline_change',
+        content:     `Chuyển pipeline: ${current?.pipeline ?? '?'} → ${updates.pipeline as string}`,
+        meta: {
+          from: current?.pipeline,
+          to:   updates.pipeline as string,
+          ...(updates.ly_do_tu_choi ? { reason: updates.ly_do_tu_choi } : {}),
+        },
+      })
+    }
 
     // LOG-A11: Log riêng khi nguoi_phu_trach thay đổi
     if ('nguoi_phu_trach' in updates && updates.nguoi_phu_trach !== current?.nguoi_phu_trach) {

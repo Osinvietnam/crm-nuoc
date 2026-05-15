@@ -9,6 +9,7 @@ import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 import type { Product } from '@/app/api/lark/products/_mapper'
 import { TaskChecklist } from '@/components/TaskChecklist'
 import { PaymentSection } from '@/components/PaymentSection'
+import { ACTIVITY_ICONS, ACTIVITY_LABELS, type ActivityRecord } from '@/lib/activity'
 
 const formatPhone = (p: string) => p?.replace(/^84/, '0') ?? ''
 const formatMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
@@ -307,6 +308,8 @@ export default function CustomerDetailPage() {
   const [showLostSheet, setShowLostSheet]         = useState(false)
   const [showContactLog, setShowContactLog]       = useState(false)
   const [logSaving, setLogSaving]                 = useState(false)
+  const [activities, setActivities]               = useState<ActivityRecord[]>([])
+  const [activitiesLoading, setActivitiesLoading] = useState(false)
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
 
@@ -372,6 +375,16 @@ export default function CustomerDetailPage() {
       .then(d => { setUserRole(d.role ?? ''); setUserFullName(d.full_name ?? '') })
       .catch(() => {})
   }, [])
+
+  // Load activity timeline
+  useEffect(() => {
+    setActivitiesLoading(true)
+    fetch(`/api/lark/customers/${id}/activities`)
+      .then(r => r.json())
+      .then(d => setActivities(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setActivitiesLoading(false))
+  }, [id])
 
   // Load lịch sử báo giá của KH
   useEffect(() => {
@@ -515,6 +528,17 @@ export default function CustomerDetailPage() {
       if (!res.ok) throw new Error()
       setCustomer(prev => prev ? { ...prev, noi_dung: newNoidung } : prev)
       setInfoForm(f => ({ ...f, noi_dung: newNoidung }))
+      // Also POST to activities API (fire-and-forget, table may not exist yet)
+      void fetch(`/api/lark/customers/${id}/activities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'contact_log', content: entry, meta: { result: '', note } }),
+      }).then(r => r.ok ? r.json() : null).then(d => {
+        if (d?.ok) {
+          // Refresh activities
+          fetch(`/api/lark/customers/${id}/activities`).then(r => r.json()).then(d2 => setActivities(d2.data ?? []))
+        }
+      })
       setShowContactLog(false)
       setSuccessMsg('Đã ghi nhận liên hệ')
       setTimeout(() => setSuccessMsg(''), 2500)
@@ -901,6 +925,55 @@ export default function CustomerDetailPage() {
             userRole={userRole}
           />
         )}
+
+        {/* Activity Timeline */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-4 pt-4 pb-3">
+            <p className="text-xs font-semibold text-gray-400">LỊCH SỬ HOẠT ĐỘNG</p>
+          </div>
+          {activitiesLoading ? (
+            <div className="flex items-center justify-center gap-2 py-5 text-gray-400 text-xs">
+              <span className="crm-spinner" style={{width:16,height:16,borderWidth:2}} /><span>Đang tải...</span>
+            </div>
+          ) : activities.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-5 pb-6">Chưa có hoạt động nào</p>
+          ) : (
+            <div className="px-4 pb-4">
+              {(() => {
+                // Group by date
+                const groups: Record<string, ActivityRecord[]> = {}
+                activities.forEach(a => {
+                  const day = new Date(a.created_at).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' })
+                  ;(groups[day] ??= []).push(a)
+                })
+                return Object.entries(groups).map(([day, acts]) => (
+                  <div key={day} className="mb-4 last:mb-0">
+                    <p className="text-xs text-gray-300 font-medium mb-2">{day}</p>
+                    <div className="space-y-2 pl-2 border-l-2 border-gray-100">
+                      {acts.map(a => (
+                        <div key={a.id} className="relative pl-4">
+                          <span className="absolute -left-[9px] top-1 w-4 h-4 bg-white border-2 border-gray-200 rounded-full flex items-center justify-center text-[9px]">
+                            {ACTIVITY_ICONS[a.type as keyof typeof ACTIVITY_ICONS] ?? '•'}
+                          </span>
+                          <p className="text-xs text-gray-500">
+                            <span className="font-medium text-gray-700">{a.user_name}</span>
+                            {' · '}
+                            {ACTIVITY_LABELS[a.type as keyof typeof ACTIVITY_LABELS] ?? a.type}
+                            {' · '}
+                            {new Date(a.created_at).toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' })}
+                          </p>
+                          {a.content && (
+                            <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">{a.content}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+        </div>
 
         {pipeline === 'Lost' && (
           <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
