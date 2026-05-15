@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
       if (data.customer_id) {
         void supabase.from('customers')
           .update({ pipeline: 'Chốt HĐ' })
-          .in('pipeline', ['Tiềm năng', 'Báo giá', 'Đàm phán'])
+          .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá', 'Đàm phán'])
           .eq('id', data.customer_id)
       }
 
