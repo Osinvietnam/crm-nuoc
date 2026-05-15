@@ -11,6 +11,7 @@ import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 import { useQuoteData, isDueForFollowUp } from '@/lib/hooks/useQuoteData'
 import { QuoteFollowUpBanner } from '@/components/QuoteFollowUpBanner'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
+import CustomerPicker from '@/components/CustomerPicker'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -225,55 +226,6 @@ function PickerChip({ label, onClear }: { label: string; onClear: () => void }) 
     <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
       <span className="text-xs text-blue-700 font-medium flex-1 truncate">{label}</span>
       <button onClick={onClear} className="text-blue-400 text-base leading-none flex-shrink-0">×</button>
-    </div>
-  )
-}
-
-// ─── Customer Picker ──────────────────────────────────────────────────────────
-
-function CustomerPicker({ onSelect, onClose }: { onSelect: (c: Customer) => void; onClose: () => void }) {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [q, setQ]                 = useState('')
-
-  useEffect(() => {
-    fetch('/api/lark/customers').then(r => r.json()).then(d => setCustomers(d.customers ?? [])).catch(() => {}).finally(() => setLoading(false))
-  }, [])
-
-  const filtered = customers.filter(c => !q || (c.ho_ten + c.sdt + c.ma_kh).toLowerCase().includes(q.toLowerCase()))
-
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-        <button onClick={onClose} className="text-gray-500 p-2.5 -ml-2">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h2 className="text-base font-bold text-gray-800">Chọn khách hàng</h2>
-      </div>
-      <div className="px-4 py-3 border-b border-gray-100">
-        <input autoFocus type="search" placeholder="Tìm tên, SĐT, mã KH..."
-          value={q} onChange={e => setQ(e.target.value)}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-4 text-sm outline-none focus:border-blue-400" />
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        {loading && <div className="flex items-center justify-center gap-2 py-12 text-gray-400 text-sm"><span className="crm-spinner" /><span>Đang tải...</span></div>}
-        {!loading && filtered.length === 0 && <p className="text-center text-gray-400 text-sm py-12">Không tìm thấy</p>}
-        {filtered.map(c => (
-          <button key={c.record_id} onClick={() => onSelect(c)}
-            className="w-full px-4 py-3.5 border-b border-gray-50 text-left flex items-center gap-3 active:bg-blue-50">
-            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-bold text-blue-600">{c.ho_ten?.[0] ?? '?'}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{c.ho_ten}</p>
-              <p className="text-xs text-gray-400">{c.sdt}{c.ma_kh ? ` · ${c.ma_kh}` : ''}</p>
-            </div>
-            <span className="text-xs text-blue-600">Chọn</span>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

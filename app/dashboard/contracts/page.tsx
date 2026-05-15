@@ -16,6 +16,7 @@ import {
 import type { Contract, CommercialOrder, Project } from '@/app/api/lark/orders/route'
 import type { Customer } from '@/app/api/lark/customers/route'
 import type { Product } from '@/app/api/lark/products/_mapper'
+import CustomerPicker from '@/components/CustomerPicker'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -118,66 +119,6 @@ function SheetActions({ onClose, onSubmit, saving }: { onClose: () => void; onSu
         className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white font-medium py-3 rounded-xl text-sm">
         {saving ? 'Đang lưu...' : 'Lưu'}
       </button>
-    </div>
-  )
-}
-
-// ─── Customer Picker ──────────────────────────────────────────────────────────
-
-function CustomerPicker({ onSelect, onClose }: {
-  onSelect: (c: Customer) => void
-  onClose: () => void
-}) {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [q, setQ]                 = useState('')
-
-  useEffect(() => {
-    fetch('/api/lark/customers')
-      .then(r => r.json())
-      .then(d => setCustomers(d.customers ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  const filtered = customers.filter(c => {
-    if (!q) return true
-    const s = (c.ho_ten + c.sdt + c.ma_kh).toLowerCase()
-    return s.includes(q.toLowerCase())
-  })
-
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-        <button onClick={onClose} className="text-gray-500 p-2.5 -ml-2">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h2 className="text-base font-bold text-gray-800">Chọn khách hàng</h2>
-      </div>
-      <div className="px-4 py-3 border-b border-gray-100">
-        <input autoFocus type="search" placeholder="Tìm tên, SĐT, mã KH..."
-          value={q} onChange={e => setQ(e.target.value)}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-4 text-sm outline-none focus:border-blue-400" />
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        {loading && <div className="flex items-center justify-center gap-2 py-12 text-gray-400 text-sm"><span className="crm-spinner" /><span>Đang tải...</span></div>}
-        {!loading && filtered.length === 0 && <p className="text-center text-gray-400 text-sm py-12">Không tìm thấy</p>}
-        {filtered.map(c => (
-          <button key={c.record_id} onClick={() => onSelect(c)}
-            className="w-full px-4 py-3.5 border-b border-gray-50 text-left flex items-center gap-3 active:bg-blue-50">
-            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-bold text-blue-600">{c.ho_ten?.[0] ?? '?'}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 truncate">{c.ho_ten}</p>
-              <p className="text-xs text-gray-400">{c.sdt}{c.ma_kh ? ` · ${c.ma_kh}` : ''}</p>
-            </div>
-            <span className="text-xs text-blue-600">Chọn</span>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -416,9 +357,19 @@ function AddCommercialForm({
   })
   const [selectedProduct,   setSelectedProduct]   = useState<Product | null>(null)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [selectedCustomer,  setSelectedCustomer]  = useState<Customer | null>(null)
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  const [customerId, setCustomerId] = useState<number | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSelectCustomer = (c: Customer) => {
+    setSelectedCustomer(c)
+    setCustomerId(c.id)
+    setForm(f => ({ ...f, ten_kh: c.ho_ten, sdt: c.sdt || f.sdt }))
+    setShowCustomerPicker(false)
+  }
 
   const handleSelectProduct = (p: Product) => {
     setSelectedProduct(p)
@@ -449,6 +400,7 @@ function AddCommercialForm({
           ...form,
           so_luong:         Number(form.so_luong),
           don_gia:          Number(form.don_gia),
+          customer_id:      customerId,
           quote_record_id:  fromQuoteRecordId || undefined,
         }),
       })
@@ -464,9 +416,24 @@ function AddCommercialForm({
       {showProductPicker && (
         <ProductPicker onSelect={handleSelectProduct} onClose={() => setShowProductPicker(false)} priceLabel={priceKeyLabel(form.loai_khach)} />
       )}
+      {showCustomerPicker && (
+        <CustomerPicker onSelect={handleSelectCustomer} onClose={() => setShowCustomerPicker(false)} />
+      )}
       <BottomSheet title="Tạo đơn thương mại" onClose={onClose} error={error}
         footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
         <SelectField label="LOẠI KHÁCH" value={form.loai_khach} onChange={handleLoaiKhach} options={[...LOAI_KHACH_OPTIONS]} />
+        {/* Liên kết KH (tuỳ chọn) */}
+        <div>
+          <label className="text-sm font-semibold text-gray-600 mb-1 block">LIÊN KẾT KHÁCH HÀNG <span className="font-normal text-gray-400">(tuỳ chọn)</span></label>
+          {selectedCustomer ? (
+            <PickerChip label={`${selectedCustomer.ho_ten} · ${selectedCustomer.sdt}`} onClear={() => { setSelectedCustomer(null); setCustomerId(undefined) }} />
+          ) : (
+            <button onClick={() => setShowCustomerPicker(true)}
+              className="w-full border-2 border-dashed border-gray-300 rounded-xl py-2.5 text-sm text-gray-500 font-medium">
+              👤 Chọn hoặc tạo khách hàng
+            </button>
+          )}
+        </div>
         <Field label="TÊN KHÁCH HÀNG / ĐẠI LÝ *" value={form.ten_kh} onChange={v => set('ten_kh', v)} placeholder="Cửa hàng Minh Đức" />
         <Field label="SỐ ĐIỆN THOẠI" value={form.sdt} onChange={v => set('sdt', v)} placeholder="0901234567" type="tel" />
         <Field label="TỈNH / THÀNH PHỐ" value={form.tinh_thanh} onChange={v => set('tinh_thanh', v)} placeholder="Hà Nội" />
@@ -516,7 +483,17 @@ function AddProjectForm({
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
+  const [selectedCustomer,   setSelectedCustomer]   = useState<Customer | null>(null)
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  const [customerId, setCustomerId] = useState<number | undefined>(undefined)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSelectCustomer = (c: Customer) => {
+    setSelectedCustomer(c)
+    setCustomerId(c.id)
+    setForm(f => ({ ...f, chu_dau_tu: c.ho_ten }))
+    setShowCustomerPicker(false)
+  }
 
   const submit = async () => {
     if (!form.ten_da || !form.chu_dau_tu) { setError('Tên dự án và chủ đầu tư là bắt buộc'); return }
@@ -529,6 +506,7 @@ function AddProjectForm({
           ...form,
           gia_tri_dt:       Number(form.gia_tri_dt),
           ty_le_thang:      Number(form.ty_le_thang),
+          customer_id:      customerId,
           quote_record_id:  fromQuoteRecordId || undefined,
         }),
       })
@@ -540,9 +518,25 @@ function AddProjectForm({
   }
 
   return (
-    <BottomSheet title="Tạo dự án B2B" onClose={onClose} error={error}
-      footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
+    <>
+      {showCustomerPicker && (
+        <CustomerPicker onSelect={handleSelectCustomer} onClose={() => setShowCustomerPicker(false)} />
+      )}
+      <BottomSheet title="Tạo dự án B2B" onClose={onClose} error={error}
+        footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
       <Field label="TÊN DỰ ÁN *" value={form.ten_da} onChange={v => set('ten_da', v)} placeholder="Hệ thống lọc nước Resort..." />
+      {/* Liên kết KH (tuỳ chọn) */}
+      <div>
+        <label className="text-sm font-semibold text-gray-600 mb-1 block">LIÊN KẾT KHÁCH HÀNG <span className="font-normal text-gray-400">(tuỳ chọn)</span></label>
+        {selectedCustomer ? (
+          <PickerChip label={`${selectedCustomer.ho_ten} · ${selectedCustomer.sdt}`} onClear={() => { setSelectedCustomer(null); setCustomerId(undefined) }} />
+        ) : (
+          <button onClick={() => setShowCustomerPicker(true)}
+            className="w-full border-2 border-dashed border-gray-300 rounded-xl py-2.5 text-sm text-gray-500 font-medium">
+            👤 Chọn hoặc tạo khách hàng
+          </button>
+        )}
+      </div>
       <Field label="CHỦ ĐẦU TƯ *" value={form.chu_dau_tu} onChange={v => set('chu_dau_tu', v)} placeholder="Tên cá nhân / công ty" />
       <SelectField label="LOẠI DỰ ÁN" value={form.loai_da} onChange={v => set('loai_da', v)} options={['', ...LOAI_DU_AN_OPTIONS]} />
       <Field label="QUY MÔ" value={form.quy_mo} onChange={v => set('quy_mo', v)} placeholder="30 phòng + hồ bơi" />
@@ -558,6 +552,7 @@ function AddProjectForm({
       </div>
       <TextArea label="GHI CHÚ" value={form.ghi_chu} onChange={v => set('ghi_chu', v)} placeholder="Tình hình đàm phán, ghi chú thêm..." />
     </BottomSheet>
+    </>
   )
 }
 
