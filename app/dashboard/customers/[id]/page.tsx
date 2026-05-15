@@ -184,7 +184,10 @@ export default function CustomerDetailPage() {
   const [userFullName, setUserFullName]   = useState('')
   const [successMsg, setSuccessMsg]       = useState('')
   const [editingInfo, setEditingInfo]     = useState(false)
-  const [infoForm, setInfoForm]           = useState({ ho_ten: '', sdt: '', dia_chi_hd: '', dia_chi_ct: '', noi_dung: '' })
+  const [infoForm, setInfoForm]           = useState({
+    ho_ten: '', sdt: '', dia_chi_hd: '', dia_chi_ct: '', noi_dung: '',
+    khu_vuc: '', loai_kh: '', nhom_dv: '', nguon_kh: '', muc_uu_tien: '',
+  })
   const [infoSaving, setInfoSaving]       = useState(false)
   const [infoError, setInfoError]         = useState('')
   const [pipelineWarnings, setPipelineWarnings] = useState<string[]>([])
@@ -280,6 +283,11 @@ export default function CustomerDetailPage() {
           dia_chi_hd: c.dia_chi_hd ?? '',
           dia_chi_ct: c.dia_chi_ct ?? '',
           noi_dung:   c.noi_dung   ?? '',
+          khu_vuc:    c.khu_vuc    ?? '',
+          loai_kh:    c.loai_kh    ?? '',
+          nhom_dv:    c.nhom_dv    ?? '',
+          nguon_kh:   c.nguon_kh   ?? '',
+          muc_uu_tien: c.muc_uu_tien ?? '',
         })
       } catch {
         // silently fail — user can go back
@@ -346,10 +354,27 @@ export default function CustomerDetailPage() {
           dia_chi_hd: infoForm.dia_chi_hd || null,
           dia_chi_ct: infoForm.dia_chi_ct || null,
           noi_dung:   infoForm.noi_dung   || null,
+          khu_vuc:    infoForm.khu_vuc    || null,
+          loai_kh:    infoForm.loai_kh    || null,
+          nhom_dv:    infoForm.nhom_dv    || null,
+          nguon_kh:   infoForm.nguon_kh   || null,
+          muc_uu_tien: infoForm.muc_uu_tien || null,
         }),
       })
       if (!res.ok) { setInfoError('Lỗi lưu thông tin'); return }
-      setCustomer(prev => prev ? { ...prev, ...infoForm } : prev)
+      setCustomer(prev => prev ? {
+        ...prev,
+        ho_ten:     infoForm.ho_ten,
+        sdt:        infoForm.sdt,
+        dia_chi_hd: infoForm.dia_chi_hd,
+        dia_chi_ct: infoForm.dia_chi_ct,
+        noi_dung:   infoForm.noi_dung,
+        khu_vuc:    infoForm.khu_vuc,
+        loai_kh:    infoForm.loai_kh,
+        nhom_dv:    infoForm.nhom_dv,
+        nguon_kh:   infoForm.nguon_kh,
+        muc_uu_tien: infoForm.muc_uu_tien,
+      } : prev)
       setEditingInfo(false)
       setSuccessMsg('Đã cập nhật thông tin')
       setTimeout(() => setSuccessMsg(''), 2000)
@@ -531,6 +556,80 @@ export default function CustomerDetailPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"
                 />
               </div>
+              {/* Loại KH */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Loại KH</p>
+                <div className="flex gap-2">
+                  {(['B2C', 'Đại lý', 'Dự án'] as const).map(opt => (
+                    <button key={opt} type="button"
+                      onClick={() => setInfoForm(f => ({ ...f, loai_kh: opt }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                        infoForm.loai_kh === opt
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                      }`}
+                    >{opt}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Khu vực */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Khu vực</p>
+                <div className="flex gap-2">
+                  {(['Miền Nam', 'Miền Bắc', 'Miền Trung'] as const).map(opt => (
+                    <button key={opt} type="button"
+                      onClick={() => setInfoForm(f => ({ ...f, khu_vuc: f.khu_vuc === opt ? '' : opt }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                        infoForm.khu_vuc === opt
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'border-gray-200 text-gray-600 hover:border-indigo-300'
+                      }`}
+                    >{opt}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Nguồn KH */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Nguồn KH</p>
+                <select
+                  value={infoForm.nguon_kh}
+                  onChange={e => setInfoForm(f => ({ ...f, nguon_kh: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
+                >
+                  <option value="">— Chọn nguồn —</option>
+                  {NGUON_KH_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              {/* Nhóm DV */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Nhóm dịch vụ</p>
+                <select
+                  value={infoForm.nhom_dv}
+                  onChange={e => setInfoForm(f => ({ ...f, nhom_dv: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
+                >
+                  <option value="">— Chọn nhóm DV —</option>
+                  {['BL1 — Lắp đặt trọn gói','BL1 + BL3 — Lắp đặt + Định kỳ','BL2 — Thương mại','BL3 — Dịch vụ định kỳ'].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              {/* Mức ưu tiên */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Mức ưu tiên</p>
+                <div className="flex gap-2">
+                  {(['Cao', 'Trung bình', 'Thấp'] as const).map((opt, i) => (
+                    <button key={opt} type="button"
+                      onClick={() => setInfoForm(f => ({ ...f, muc_uu_tien: f.muc_uu_tien === opt ? '' : opt }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                        infoForm.muc_uu_tien === opt
+                          ? i === 0 ? 'bg-red-500 text-white border-red-500'
+                            : i === 1 ? 'bg-yellow-400 text-white border-yellow-400'
+                            : 'bg-gray-400 text-white border-gray-400'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >{opt}</button>
+                  ))}
+                </div>
+              </div>
               {infoError && <p className="text-xs text-red-500">{infoError}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => { setEditingInfo(false); setInfoError('') }}
@@ -660,10 +759,25 @@ export default function CustomerDetailPage() {
           />
         )}
 
-        {customer.ly_do_tu_choi && (
+        {pipeline === 'Lost' && (
           <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
-            <p className="text-xs font-semibold text-red-400 mb-2">LÝ DO TỪ CHỐI</p>
-            <p className="text-sm text-red-700 leading-relaxed">{customer.ly_do_tu_choi}</p>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs font-semibold text-red-400">LÝ DO TỪ CHỐI</p>
+              {['admin', 'ceo', 'director'].includes(userRole) && (
+                <button
+                  onClick={() => void updatePipeline('Tiềm năng')}
+                  disabled={updating}
+                  className="text-xs text-blue-600 font-semibold bg-white border border-blue-200 px-3 py-1 rounded-lg shrink-0 disabled:opacity-50"
+                >
+                  🔄 Mở lại
+                </button>
+              )}
+            </div>
+            {customer.ly_do_tu_choi ? (
+              <p className="text-sm text-red-700 leading-relaxed">{customer.ly_do_tu_choi}</p>
+            ) : (
+              <p className="text-xs text-red-400 italic">Chưa ghi lý do</p>
+            )}
           </div>
         )}
       </div>
