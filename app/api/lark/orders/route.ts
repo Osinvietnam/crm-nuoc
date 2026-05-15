@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { logAudit } from '@/lib/audit'
 import { createClient } from '@/lib/supabase/server'
 import { mapContract, mapCommercial, mapProject } from './_mappers'
+import { advanceCustomerPipeline } from '@/lib/pipeline'
 
 export type { Contract, CommercialOrder, Project } from './_mappers'
 
@@ -187,12 +188,9 @@ export async function POST(req: NextRequest) {
       }).select(B2C_SELECT).single()
       if (error) throw error
 
-      // Sync customer pipeline → "Chốt HĐ" (guard: không kéo lùi KH đã ≥ Chốt HĐ)
+      // Sync customer pipeline → "Chốt HĐ" (forward-only)
       if (data.customer_id) {
-        void supabase.from('customers')
-          .update({ pipeline: 'Chốt HĐ' })
-          .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá', 'Đàm phán'])
-          .eq('id', data.customer_id)
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Chốt HĐ')
       }
 
       // CJ-07: Auto-tạo 3 đợt thanh toán (60/35/5%) khi ký HĐ
@@ -296,6 +294,11 @@ export async function POST(req: NextRequest) {
           .update({ ma_hd_tham_chieu: data.ma_don })
           .eq('id', quoteId)
           .is('ma_hd_tham_chieu', null)  // idempotent: không ghi đè
+      }
+
+      // Sync pipeline KH → "Chốt HĐ" khi tạo đơn commercial (forward-only)
+      if (data.customer_id) {
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Chốt HĐ')
       }
 
       void logAudit(supabase, { user_id: profile.id, user_name: profile.full_name, action: 'order_created', entity: 'order', detail: `Đơn TM ${data.ma_don} — ${ten_kh}${quoteId ? ` (từ BG #${quoteId})` : ''}` })

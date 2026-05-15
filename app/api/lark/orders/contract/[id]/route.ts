@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mapContract } from '../../_mappers'
 import { logAudit } from '@/lib/audit'
+import { advanceCustomerPipeline } from '@/lib/pipeline'
 
 const SELECT = `
   *,
@@ -145,9 +146,7 @@ export async function PATCH(
       })()
     }
 
-    // C6: Tự động cập nhật pipeline KH theo trạng thái hợp đồng
-    // Giao hàng (thi công) → Nghiệm thu → Bảo hành
-    // Mapping contract.trang_thai → customer.pipeline (đúng với CONTRACT_STATUS_COLORS)
+    // C6: Tự động cập nhật pipeline KH theo trạng thái hợp đồng (dùng advanceCustomerPipeline — forward-only)
     const PIPELINE_BY_CONTRACT_STATUS: Record<string, string> = {
       'Đang thi công':  'Giao hàng',
       'Chờ nghiệm thu': 'Nghiệm thu',
@@ -156,16 +155,40 @@ export async function PATCH(
     if (body.trang_thai && data.customer_id) {
       const newPipeline = PIPELINE_BY_CONTRACT_STATUS[body.trang_thai]
       if (newPipeline) {
-        const PIPELINE_ORDER = ['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì']
-        const idx = PIPELINE_ORDER.indexOf(newPipeline)
-        const stagesBelow = idx > 0 ? PIPELINE_ORDER.slice(0, idx) : []
-        if (stagesBelow.length > 0) {
-          void supabase.from('customers')
-            .update({ pipeline: newPipeline })
-            .eq('id', data.customer_id)
-            .in('pipeline', stagesBelow)
-        }
+        void advanceCustomerPipeline(supabase, data.customer_id, newPipeline)
       }
+    }
+
+    // Fix: HĐ B2C "Hủy" → rollback pipeline KH về Đàm phán/Tiềm năng
+    if (body.trang_thai === 'Hủy' && data.customer_id) {
+      void (async () => {
+        // Còn HĐ B2C active khác không?
+        const { data: otherContracts } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('type', 'b2c')
+          .eq('customer_id', data.customer_id)
+          .neq('id', data.id)
+          .neq('trang_thai', 'Hủy')
+          .limit(1)
+        if (otherContracts?.length) return  // còn HĐ khác → giữ nguyên
+
+        // Còn BG active không?
+        const TERMINAL_STATUSES = ['Chấp nhận', 'Xác nhận', 'Thắng thầu', 'Từ chối', 'Thua thầu', 'Hết hạn']
+        const { data: activeQuotes } = await supabase
+          .from('quotes')
+          .select('id')
+          .eq('customer_id', data.customer_id)
+          .not('trang_thai', 'in', `(${TERMINAL_STATUSES.map(s => `"${s}"`).join(',')})`)
+          .limit(1)
+
+        const rollbackStage = activeQuotes?.length ? 'Đàm phán' : 'Tiềm năng'
+        // Chỉ rollback nếu KH đang ở "Chốt HĐ" (không roll back KH đã ở giai đoạn sau)
+        await supabase.from('customers')
+          .update({ pipeline: rollbackStage })
+          .eq('id', data.customer_id)
+          .eq('pipeline', 'Chốt HĐ')
+      })()
     }
 
     void logAudit(supabase, { user_id: user.id, user_name: profile.full_name ?? '', action: 'order_updated', entity: 'order', detail: `HĐ #${id}: ${Object.keys(updates).join(', ')}` })

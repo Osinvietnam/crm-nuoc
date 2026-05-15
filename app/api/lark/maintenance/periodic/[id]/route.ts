@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mappers } from '../../_mappers'
 import { logAudit } from '@/lib/audit'
+import { advanceCustomerPipeline } from '@/lib/pipeline'
 
 const SELECT = `
   *,
@@ -76,13 +77,7 @@ export async function PATCH(
 
     // H3: Bảo trì định kỳ active → advance pipeline KH → "Bảo trì" (forward-only)
     if (body.trang_thai === 'Đang hoạt động' && data.customer_id) {
-      const PIPELINE_ORDER = ['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì']
-      const idx = PIPELINE_ORDER.indexOf('Bảo trì')
-      const stagesBelow = PIPELINE_ORDER.slice(0, idx)
-      void supabase.from('customers')
-        .update({ pipeline: 'Bảo trì' })
-        .eq('id', data.customer_id)
-        .in('pipeline', stagesBelow)
+      void advanceCustomerPipeline(supabase, data.customer_id, 'Bảo trì')
     }
     void logAudit(supabase, { user_id: user.id, user_name: profile?.full_name ?? '', action: 'task_updated', entity: 'maintenance', detail: `Bảo dưỡng #${id}: ${Object.keys(updates).join(', ')}` })
     return NextResponse.json({ data: mappers.periodic(data) })

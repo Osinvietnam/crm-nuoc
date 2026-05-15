@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { mapQuote, ALLOWED_TRANSITIONS_BY_TYPE, TERMINAL_POSITIVE, type QuoteType } from '../_mappers'
 import { logAudit } from '@/lib/audit'
 import { notifyManagers } from '@/lib/notifications'
+import { advanceCustomerPipeline } from '@/lib/pipeline'
 
 const SELECT = `
   *,
@@ -151,20 +152,29 @@ export async function PATCH(
 
     if (error) throw error
 
-    // Automation: terminal positive → KH pipeline "Chốt HĐ" (tất cả loại BG)
-    if (body.trang_thai === terminalPositive && data.customer_id) {
-      void supabase.from('customers')
-        .update({ pipeline: 'Chốt HĐ' })
-        .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá', 'Đàm phán'])
-        .eq('id', data.customer_id)
-    }
+    // Automation: pipeline sync theo trạng thái BG (dùng advanceCustomerPipeline — forward-only)
+    if (body.trang_thai && data.customer_id) {
+      const newStatus = body.trang_thai as string
 
-    // Automation: Từ chối / Thua thầu → KH pipeline "Đàm phán" (tất cả loại BG)
-    if (['Từ chối', 'Thua thầu'].includes(body.trang_thai ?? '') && data.customer_id) {
-      void supabase.from('customers')
-        .update({ pipeline: 'Đàm phán' })
-        .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá'])
-        .eq('id', data.customer_id)
+      // BG được gửi lần đầu → KH lên "Báo giá"
+      if (newStatus === 'Đã gửi' && current.trang_thai !== 'Đã gửi') {
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Báo giá')
+      }
+
+      // BG vào giai đoạn đàm phán → KH lên "Đàm phán"
+      if (newStatus === 'Đàm phán') {
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Đàm phán')
+      }
+
+      // BG chốt thành công → KH lên "Chốt HĐ"
+      if (newStatus === terminalPositive) {
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Chốt HĐ')
+      }
+
+      // BG từ chối / thua thầu → KH lên "Đàm phán" (nếu chưa đến Đàm phán)
+      if (['Từ chối', 'Thua thầu'].includes(newStatus)) {
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Đàm phán')
+      }
     }
 
     // H3: Audit log khi thay đổi trạng thái quan trọng

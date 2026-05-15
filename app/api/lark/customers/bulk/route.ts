@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
+import { PIPELINE_ORDER } from '@/lib/pipeline'
 
 // ─── POST /api/lark/customers/bulk ───────────────────────────────────────────
 // Body: { ids: number[], action: 'assign' | 'pipeline' | 'khu_vuc', value: string }
@@ -38,7 +39,12 @@ export async function POST(req: NextRequest) {
 
     let updates: Record<string, unknown> = {}
     if (action === 'assign')   updates = { nguoi_phu_trach: value }
-    if (action === 'pipeline') updates = { pipeline: value }
+    if (action === 'pipeline') {
+      if (!(PIPELINE_ORDER as readonly string[]).includes(value)) {
+        return NextResponse.json({ error: `Pipeline stage "${value}" không hợp lệ` }, { status: 400 })
+      }
+      updates = { pipeline: value }
+    }
     if (action === 'khu_vuc')  updates = { khu_vuc: value }
 
     if (Object.keys(updates).length === 0) {

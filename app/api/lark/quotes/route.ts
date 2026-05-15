@@ -222,14 +222,7 @@ export async function POST(req: NextRequest) {
       detail:    `Tạo ${typeLabel} ${data.ma_bao_gia} cho KH ${data.customers?.ho_ten ?? 'N/A'} (v${data.phien_ban})`,
     })
 
-    // Pipeline KH — chỉ B2C mới push pipeline "Báo giá"
-    if (type === 'b2c' && customerId) {
-      void supabase
-        .from('customers')
-        .update({ pipeline: 'Báo giá' })
-        .eq('id', customerId)
-        .in('pipeline', ['Lead mới', 'Tiềm năng'])
-    }
+    // Pipeline KH: chỉ advance khi BG đã gửi (PATCH → "Đã gửi"), không advance khi mới tạo Nháp
 
     return NextResponse.json({ data: mapQuote(data) }, { status: 201 })
   } catch (err) {

@@ -40,7 +40,7 @@ export async function GET(req: Request) {
           .from('customers')
           .update({ pipeline: 'Tiềm năng' })
           .eq('id', cid)
-          .eq('pipeline', 'Báo giá')
+          .in('pipeline', ['Báo giá', 'Đàm phán'])  // cover cả KH đang ở "Đàm phán"
         if (!rollbackErr) pipelineRolledBack++
       }
     }

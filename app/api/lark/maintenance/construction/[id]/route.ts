@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { mappers } from '../../_mappers'
 import { logAudit } from '@/lib/audit'
+import { advanceCustomerPipeline } from '@/lib/pipeline'
 
 const SELECT = `
   *,
@@ -113,13 +114,7 @@ export async function PATCH(
     if (body.trang_thai === 'Nghiệm thu hoàn thành') {
       void autoCreatePeriodic(supabase, data).catch((e: unknown) => console.error('autoCreatePeriodic:', e))
       if (data.customer_id) {
-        const PIPELINE_ORDER = ['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì']
-        const idx = PIPELINE_ORDER.indexOf('Bảo hành')
-        const stagesBelow = PIPELINE_ORDER.slice(0, idx)
-        void supabase.from('customers')
-          .update({ pipeline: 'Bảo hành' })
-          .eq('id', data.customer_id)
-          .in('pipeline', stagesBelow)
+        void advanceCustomerPipeline(supabase, data.customer_id, 'Bảo hành')
       }
     }
 
