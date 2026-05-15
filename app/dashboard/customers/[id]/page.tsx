@@ -10,6 +10,7 @@ import type { Product } from '@/app/api/lark/products/_mapper'
 import { TaskChecklist } from '@/components/TaskChecklist'
 import { PaymentSection } from '@/components/PaymentSection'
 import { ACTIVITY_ICONS, ACTIVITY_LABELS, type ActivityRecord } from '@/lib/activity'
+import { computeHealthScore } from '@/lib/health'
 
 const formatPhone = (p: string) => p?.replace(/^84/, '0') ?? ''
 const formatMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
@@ -571,6 +572,7 @@ export default function CustomerDetailPage() {
   const pc = PIPELINE_COLORS[pipeline] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
   const prc = PRIORITY_COLORS[customer.muc_uu_tien]
   const currentStageIdx = PIPELINE_STAGES.indexOf(pipeline as any)
+  const health = computeHealthScore({ ngay_cap_nhat: customer.ngay_cap_nhat ?? null, pipeline })
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -583,7 +585,12 @@ export default function CustomerDetailPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-bold text-gray-800 truncate">{customer.ho_ten}</h1>
-          <p className="text-xs text-gray-500">{customer.ma_kh || 'Chưa có mã KH'}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-gray-500">{customer.ma_kh || 'Chưa có mã KH'}</p>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${health.bgColor} ${health.color}`}>
+              {health.label}
+            </span>
+          </div>
         </div>
         {successMsg && (
           <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-lg">{successMsg}</span>

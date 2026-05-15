@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast'
 import * as XLSX from 'xlsx'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import { PIPELINE_STAGES, PIPELINE_COLORS, PRIORITY_COLORS, NGUON_KH_OPTIONS, LOAI_HINH_NHA_OPTIONS } from '@/lib/lark/tables'
+import { computeHealthScore } from '@/lib/health'
 import type { Customer } from '@/app/api/lark/customers/route'
 import type { Quote } from '@/app/api/lark/quotes/_mappers'
 import type { Product } from '@/app/api/lark/products/_mapper'
@@ -851,8 +852,12 @@ function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true 
   canCreateQuote?: boolean
 }) {
   const pipeline = customer.pipeline || 'Lead mới'
-  const pc = PIPELINE_COLORS[pipeline] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+  const pc  = PIPELINE_COLORS[pipeline] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
   const prc = PRIORITY_COLORS[customer.muc_uu_tien] ?? null
+  const health = computeHealthScore({
+    ngay_cap_nhat:  customer.ngay_cap_nhat ?? null,
+    pipeline,
+  })
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -886,6 +891,9 @@ function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true 
               {customer.muc_uu_tien}
             </span>
           )}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${health.bgColor} ${health.color}`}>
+            {health.label}
+          </span>
           {customer.khu_vuc && (
             <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">📍 {customer.khu_vuc}</span>
           )}
