@@ -12,10 +12,11 @@ function calcDepreciation(asset: {
 }) {
   const khau_hao_thang = Math.round(asset.gia_tri_ban_dau / asset.thoi_gian_kh_thang)
   const purchaseDate   = new Date(asset.ngay_mua)
-  const now            = new Date()
+  // Dùng UTC+7 để khớp với timezone Việt Nam (tránh sai ±1 tháng tại ranh giới ngày)
+  const nowUtc7        = new Date(Date.now() + 7 * 60 * 60 * 1000)
   const so_thang_da_qua = Math.max(0,
-    (now.getFullYear() - purchaseDate.getFullYear()) * 12 +
-    (now.getMonth() - purchaseDate.getMonth())
+    (nowUtc7.getUTCFullYear() - purchaseDate.getFullYear()) * 12 +
+    (nowUtc7.getUTCMonth() - purchaseDate.getMonth())
   )
   const is_fully_depreciated = so_thang_da_qua >= asset.thoi_gian_kh_thang
   const gia_tri_con_lai = Math.max(0, asset.gia_tri_ban_dau - so_thang_da_qua * khau_hao_thang)
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (!me || !['admin', 'ceo', 'accountant'].includes(me.role)) {
+    if (!me || !['admin', 'ceo', 'director', 'accountant'].includes(me.role)) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 

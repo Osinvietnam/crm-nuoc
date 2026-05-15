@@ -86,7 +86,9 @@ export async function PATCH(req: NextRequest) {
         .in('id', order_ids)
 
       const invalid = (ordersToCheck ?? []).filter(o => {
-        const maxAllowed = Math.round((o.gia_tri_hd ?? 0) * (o.hh_phan_tram ?? 0) / 100)
+        // Bỏ qua validation khi hh_phan_tram = null (không đặt hạn mức hoa hồng)
+        if (o.hh_phan_tram == null) return false
+        const maxAllowed = Math.round((o.gia_tri_hd ?? 0) * o.hh_phan_tram / 100)
         return (o.hh_kinh_doanh ?? 0) > maxAllowed
       })
 
@@ -97,7 +99,7 @@ export async function PATCH(req: NextRequest) {
             id:            o.id,
             ma_hd:         o.ma_hd,
             hh_kinh_doanh: o.hh_kinh_doanh,
-            max_allowed:   Math.round((o.gia_tri_hd ?? 0) * (o.hh_phan_tram ?? 0) / 100),
+            max_allowed:   o.hh_phan_tram != null ? Math.round((o.gia_tri_hd ?? 0) * o.hh_phan_tram / 100) : null,
           })),
         }, { status: 422 })
       }

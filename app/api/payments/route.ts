@@ -15,23 +15,60 @@ export async function GET(req: NextRequest) {
     if (!me) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
 
     const customer_record_id = req.nextUrl.searchParams.get('customer_record_id')
-    if (!customer_record_id) {
-      return NextResponse.json({ error: 'Thiếu customer_record_id' }, { status: 400 })
+    const overdue = req.nextUrl.searchParams.get('overdue')
+    const q       = req.nextUrl.searchParams.get('q')
+
+    if (!customer_record_id && !overdue && !q) {
+      return NextResponse.json({ error: 'Thiếu tham số: customer_record_id, overdue hoặc q' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from('payment_records')
-      .select('*')
-      .eq('customer_record_id', customer_record_id)
-      .is('deleted_at', null)
-      .order('installment', { ascending: true })
+    // Không cho sales xem tất cả đợt TT (chỉ cho xem của KH cụ thể)
+    if ((overdue || q) && me.role === 'sales') {
+      return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
+    }
+
+    const SELECT_COLS = 'id, customer_record_id, customer_name, nguoi_phu_trach, installment, percent, amount, due_date, paid_date, is_paid, notes'
+
+    let data: unknown[] | null = null
+    let error: unknown = null
+
+    if (customer_record_id) {
+      const result = await supabase
+        .from('payment_records')
+        .select(SELECT_COLS)
+        .eq('customer_record_id', customer_record_id)
+        .is('deleted_at', null)
+        .order('installment', { ascending: true })
+      data = result.data;  error = result.error
+    } else if (overdue === 'true') {
+      const today = new Date().toISOString().split('T')[0]
+      const result = await supabase
+        .from('payment_records')
+        .select(SELECT_COLS)
+        .eq('is_paid', false)
+        .lt('due_date', today)
+        .is('deleted_at', null)
+        .order('due_date')
+      data = result.data;  error = result.error
+    } else if (q) {
+      const result = await supabase
+        .from('payment_records')
+        .select(SELECT_COLS)
+        .ilike('customer_name', `%${q}%`)
+        .is('deleted_at', null)
+        .order('is_paid', { ascending: true })
+        .order('installment', { ascending: true })
+        .limit(50)
+      data = result.data;  error = result.error
+    }
 
     if (error) throw error
 
     // Sales chỉ thấy trạng thái, không thấy số tiền
+    const rows = (data ?? []) as Record<string, unknown>[]
     const sanitized = me.role === 'sales'
-      ? (data ?? []).map(r => ({ ...r, amount: null }))
-      : (data ?? [])
+      ? rows.map(r => ({ ...r, amount: null }))
+      : rows
 
     return NextResponse.json({ data: sanitized })
   } catch (err) {
@@ -72,53 +109,69 @@ export async function POST(req: NextRequest) {
     // FIN-12: chỉ accountant/admin/ceo/director mới được set amount
     const amount = CAN_WRITE_PAYMENT.includes(me.role) ? body.amount : undefined
 
-    if (!customer_record_id || !installment) {
-      return NextResponse.json({ error: 'Thiếu customer_record_id hoặc installment' }, { status: 400 })
+    if (!installment) {
+      return NextResponse.json({ error: 'Thiếu installment' }, { status: 400 })
     }
     if (![1, 2, 3].includes(Number(installment))) {
       return NextResponse.json({ error: 'installment phải là 1, 2 hoặc 3' }, { status: 400 })
     }
 
-    // FIN-02: idempotency — reject nếu cùng (customer_record_id, installment) được upsert trong 30s
-    const thirtySecsAgo = new Date(Date.now() - 30_000).toISOString()
-    const { data: recent } = await supabase
-      .from('payment_records')
-      .select('updated_at')
-      .eq('customer_record_id', customer_record_id)
-      .eq('installment', Number(installment))
-      .is('deleted_at', null)
-      .gt('updated_at', thirtySecsAgo)
-      .maybeSingle()
-    if (recent) {
-      return NextResponse.json({ error: 'Yêu cầu vừa được xử lý, vui lòng đợi 30 giây' }, { status: 429 })
+    // FIN-02: idempotency — reject nếu cùng (customer_record_id, installment) upsert trong 30s
+    // Chỉ check khi có customer_record_id
+    if (customer_record_id) {
+      const thirtySecsAgo = new Date(Date.now() - 30_000).toISOString()
+      const { data: recent } = await supabase
+        .from('payment_records')
+        .select('updated_at')
+        .eq('customer_record_id', customer_record_id)
+        .eq('installment', Number(installment))
+        .is('deleted_at', null)
+        .gt('updated_at', thirtySecsAgo)
+        .maybeSingle()
+      if (recent) {
+        return NextResponse.json({ error: 'Yêu cầu vừa được xử lý, vui lòng đợi 30 giây' }, { status: 429 })
+      }
     }
 
-    // Lookup customer: lấy id + nguoi_phu_trach (UUID của sales phụ trách)
-    const { data: cust } = await supabase
-      .from('customers').select('id, nguoi_phu_trach').eq('id', Number(customer_record_id)).maybeSingle()
-    const customerId         = cust?.id               ?? null
-    const nguoi_phu_trach_id = cust?.nguoi_phu_trach  ?? null  // UUID — dùng cho KPI queries
+    // Lookup customer (chỉ khi có customer_record_id)
+    let customerId: number | null = null
+    let nguoi_phu_trach_id: string | null = null
+    if (customer_record_id) {
+      const { data: cust } = await supabase
+        .from('customers').select('id, nguoi_phu_trach').eq('id', Number(customer_record_id)).maybeSingle()
+      customerId         = cust?.id              ?? null
+      nguoi_phu_trach_id = cust?.nguoi_phu_trach ?? null
+    }
 
-    const { data: record, error } = await supabase
-      .from('payment_records')
-      .upsert({
-        customer_record_id,
-        customer_id:          customerId,
-        customer_name:        customer_name      ?? null,
-        nguoi_phu_trach:      nguoi_phu_trach    ?? null,
-        nguoi_phu_trach_id,
-        contract_record_id:   contract_record_id ?? null,
-        installment:        Number(installment),
-        percent:            percent != null ? Number(percent) : null,
-        amount:             amount  != null ? Number(amount)  : null,
-        due_date:           due_date ?? null,
-        is_paid:            false,
-        notes:              notes ?? null,
-        created_by:         user.id,
-        updated_at:         new Date().toISOString(),
-      }, { onConflict: 'customer_record_id,installment' })
-      .select()
-      .single()
+    const insertData = {
+      customer_record_id: customer_record_id ? Number(customer_record_id) : null,
+      customer_id:          customerId,
+      customer_name:        customer_name      ?? null,
+      nguoi_phu_trach:      nguoi_phu_trach    ?? null,
+      nguoi_phu_trach_id,
+      contract_record_id:   contract_record_id ?? null,
+      installment:        Number(installment),
+      percent:            percent != null ? Number(percent) : null,
+      amount:             amount  != null ? Number(amount)  : null,
+      due_date:           due_date ?? null,
+      is_paid:            false,
+      notes:              notes ?? null,
+      created_by:         user.id,
+      updated_at:         new Date().toISOString(),
+    }
+
+    // Dùng upsert nếu có customer_record_id, insert nếu không
+    const { data: record, error } = customer_record_id
+      ? await supabase
+          .from('payment_records')
+          .upsert(insertData, { onConflict: 'customer_record_id,installment' })
+          .select()
+          .single()
+      : await supabase
+          .from('payment_records')
+          .insert(insertData)
+          .select()
+          .single()
 
     if (error) throw error
 
@@ -169,6 +222,7 @@ export async function PATCH(req: NextRequest) {
       .from('payment_records')
       .update(updates)
       .eq('id', id)
+      .is('deleted_at', null)
       .select()
       .single()
 

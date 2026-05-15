@@ -112,7 +112,7 @@ export default function FinancePage() {
   const [payMarkingId, setPayMarkingId] = useState<number | null>(null)
   const [payPaidDate, setPayPaidDate] = useState(new Date().toISOString().split('T')[0])
   const [showPayForm, setShowPayForm] = useState(false)
-  const [payForm, setPayForm] = useState({ customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
+  const [payForm, setPayForm] = useState({ customer_record_id: '', customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
   const [payFormSaving, setPayFormSaving] = useState(false)
 
   // Fetch role once
@@ -163,14 +163,9 @@ export default function FinancePage() {
 
   const fetchReceivables = useCallback(async () => {
     if (!isManager) return
-    const supa = createClient()
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supa.from('payment_records' as never)
-      .select('amount, due_date, customer_name, installment')
-      .eq('is_paid', false)
-      .lt('due_date', today)
-      .order('due_date')
-    setReceivables((data as Receivable[] | null) ?? [])
+    const res = await fetch('/api/payments?overdue=true')
+    const json = await res.json()
+    setReceivables(json.data ?? [])
   }, [isManager])
 
   useEffect(() => { if (role) fetchReport() }, [fetchReport])
@@ -252,16 +247,13 @@ export default function FinancePage() {
   async function searchPayments(q: string) {
     if (!q.trim()) { setPayRecords([]); return }
     setPayLoading(true)
-    const supa = createClient()
-    const { data } = await supa
-      .from('payment_records' as never)
-      .select('id, customer_record_id, customer_name, nguoi_phu_trach, installment, percent, amount, due_date, paid_date, is_paid, notes')
-      .ilike('customer_name', `%${q}%`)
-      .order('is_paid', { ascending: true })
-      .order('installment', { ascending: true })
-      .limit(50)
-    setPayRecords((data as PayRecord[] | null) ?? [])
-    setPayLoading(false)
+    try {
+      const res = await fetch(`/api/payments?q=${encodeURIComponent(q)}`)
+      const json = await res.json()
+      setPayRecords(json.data ?? [])
+    } finally {
+      setPayLoading(false)
+    }
   }
 
   async function markAsPaid(id: number) {
@@ -282,10 +274,11 @@ export default function FinancePage() {
     if (!payForm.customer_name || !payForm.amount) return
     setPayFormSaving(true)
     try {
-      await fetch('/api/payments', {
+      const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          customer_record_id: payForm.customer_record_id || undefined,
           customer_name:      payForm.customer_name,
           installment:        Number(payForm.installment),
           amount:             Number(payForm.amount.replace(/\D/g, '')),
@@ -293,7 +286,12 @@ export default function FinancePage() {
           notes:              payForm.notes || null,
         }),
       })
-      setPayForm({ customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
+      if (!res.ok) {
+        const json = await res.json()
+        alert(json.error ?? 'Lưu thất bại')
+        return
+      }
+      setPayForm({ customer_record_id: '', customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
       setShowPayForm(false)
       if (paySearch) searchPayments(paySearch)
     } finally {
