@@ -10,6 +10,103 @@ const VI_WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const VI_MONTHS   = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
                      'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
+// ─── Lịch âm (Vietnamese Lunar Calendar) ─────────────────────────────────────
+// Thuật toán: Ho Ngoc Duc — UTC+7 (giờ Việt Nam)
+
+const TZ = 7
+
+function _jdFromDate(d: number, m: number, y: number): number {
+  const a = Math.floor((14 - m) / 12)
+  const yr = y + 4800 - a
+  const mo = m + 12 * a - 3
+  let jd = d + Math.floor((153 * mo + 2) / 5) + 365 * yr + Math.floor(yr / 4) - Math.floor(yr / 100) + Math.floor(yr / 400) - 32045
+  if (jd < 2299161) jd = d + Math.floor((153 * mo + 2) / 5) + 365 * yr + Math.floor(yr / 4) - 32083
+  return jd
+}
+
+function _newMoonDay(k: number): number {
+  const dr = Math.PI / 180
+  const T = k / 1236.85, T2 = T * T, T3 = T2 * T
+  let Jde = 2415020.75933 + 29.53058868 * k + 0.0001178 * T2 - 0.000000155 * T3
+  Jde += 0.00033 * Math.sin((166.56 + 132.87 * T - 0.009173 * T2) * dr)
+  const M   = 359.2242  + 29.10535608  * k - 0.0000333  * T2 - 0.00000347  * T3
+  const Mpr = 306.0253  + 385.81691806 * k + 0.0107306  * T2 + 0.00001236  * T3
+  const F   = 21.2964   + 390.67050646 * k - 0.0016528  * T2 - 0.00000239  * T3
+  let C1 = (0.1734 - 0.000393 * T) * Math.sin(M * dr) + 0.0021 * Math.sin(2 * dr * M)
+  C1 -= 0.4068 * Math.sin(Mpr * dr) + 0.0161 * Math.sin(dr * 2 * Mpr) - 0.0004 * Math.sin(dr * 3 * Mpr)
+  C1 += 0.0104 * Math.sin(dr * 2 * F) - 0.0051 * Math.sin(dr * (M + Mpr))
+  C1 -= 0.0074 * Math.sin(dr * (M - Mpr)) + 0.0004 * Math.sin(dr * (2 * F + M))
+  C1 -= 0.0004 * Math.sin(dr * (2 * F - M)) - 0.0006 * Math.sin(dr * (2 * F + Mpr))
+  C1 += 0.0010 * Math.sin(dr * (2 * F - Mpr)) + 0.0005 * Math.sin(dr * (M + 2 * Mpr))
+  const deltat = T < -11
+    ? 0.001 + 0.000839 * T + 0.0002261 * T2 - 0.00000845 * T3 - 0.000000081 * T * T3
+    : -0.000278 + 0.000265 * T + 0.000262 * T2
+  return Math.floor(Jde + C1 - deltat + 0.5 + TZ / 24)
+}
+
+function _sunLong(jdn: number): number {
+  const dr = Math.PI / 180
+  const T = (jdn - 2451545.5 - TZ / 24) / 36525, T2 = T * T
+  const M  = 357.52910 + 35999.05030 * T - 0.0001559 * T2 - 0.00000048 * T * T2
+  const L0 = 280.46645 + 36000.76983 * T + 0.0003032 * T2
+  const DL = (1.9146 - 0.004817 * T - 0.000014 * T2) * Math.sin(dr * M)
+           + (0.019993 - 0.000101 * T) * Math.sin(dr * 2 * M)
+           + 0.00029 * Math.sin(dr * 3 * M)
+  let L = (L0 + DL) / 360; L -= Math.floor(L)
+  return Math.floor(L * 12)
+}
+
+function _lunarMonth11(y: number): number {
+  const off = _jdFromDate(31, 12, y) - 2415021
+  const k   = Math.floor(off / 29.530588853)
+  let nm    = _newMoonDay(k)
+  if (_sunLong(nm) >= 9) nm = _newMoonDay(k - 1)
+  return nm
+}
+
+function _leapOffset(a11: number): number {
+  const k = Math.floor((a11 - 2415021.076998695) / 29.530588853 + 0.5)
+  let last = 0, i = 1
+  let arc  = _sunLong(_newMoonDay(k + i))
+  do { last = arc; i++; arc = _sunLong(_newMoonDay(k + i)) } while (arc !== last && i < 14)
+  return i - 1
+}
+
+function solarToLunar(d: number, m: number, y: number): { day: number; month: number; year: number; leap: boolean } {
+  const dayNum = _jdFromDate(d, m, y)
+  const k      = Math.floor((dayNum - 2415021.076998695) / 29.530588853)
+  let monthStart = _newMoonDay(k + 1)
+  if (monthStart > dayNum) monthStart = _newMoonDay(k)
+  let a11 = _lunarMonth11(y), b11 = a11
+  if (a11 >= monthStart) { a11 = _lunarMonth11(y - 1) } else { b11 = _lunarMonth11(y + 1) }
+  const lunarDay = dayNum - monthStart + 1
+  const diff     = Math.floor((monthStart - a11) / 29)
+  let lunarLeap  = false
+  let lunarMonth = diff + 11
+  if (b11 - a11 > 365) {
+    const lo = _leapOffset(a11)
+    if (diff >= lo) { lunarMonth = diff + 10; if (diff === lo) lunarLeap = true }
+  }
+  if (lunarMonth > 12) lunarMonth -= 12
+  const lunarYear = (lunarMonth >= 11 && diff < 4) ? y - 1 : y
+  return { day: lunarDay, month: lunarMonth, year: lunarYear, leap: lunarLeap }
+}
+
+// Cache để tránh tính lại nhiều lần
+const _lunarCache = new Map<string, { day: number; month: number; year: number; leap: boolean }>()
+function getLunar(d: number, m: number, y: number) {
+  const key = `${y}-${m}-${d}`
+  if (!_lunarCache.has(key)) _lunarCache.set(key, solarToLunar(d, m, y))
+  return _lunarCache.get(key)!
+}
+
+// Hiển thị ngày âm: nếu là mùng 1 thì show "T.X" (tháng âm), ngược lại show số ngày
+function lunarLabel(d: number, m: number, y: number): string {
+  const l = getLunar(d, m, y)
+  if (l.day === 1) return `T.${l.month}${l.leap ? '*' : ''}`
+  return String(l.day)
+}
+
 function ymd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
 }
@@ -216,6 +313,17 @@ export default function CalendarPage() {
                         : 'text-gray-300'
                     }`}>
                       {cell.day}
+                    </span>
+                    <span className={`text-[9px] leading-none mb-0.5 ${
+                      isSelected
+                        ? 'text-blue-100'
+                        : isToday
+                        ? 'text-blue-400'
+                        : isCurrentMonth
+                        ? 'text-gray-400'
+                        : 'text-gray-200'
+                    }`}>
+                      {lunarLabel(cell.day, cell.month, cell.year)}
                     </span>
                     <div className="flex gap-0.5 h-2 items-center">
                       {dotTypes.map(t => (
