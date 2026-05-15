@@ -597,6 +597,109 @@ function PLWidget({ pl }: { pl: PLSummary }) {
   )
 }
 
+// ─── Sales Leaderboard ───────────────────────────────────────────────────────
+
+const MEDALS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
+type LeaderItem = DashboardStats['leaderboard'][0]
+
+function SalesLeaderboard({ data }: { data: LeaderItem[] }) {
+  if (data.length === 0) return null
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-3">Bảng xếp hạng tháng này</p>
+      <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
+        {data.map((item, i) => (
+          <div key={item.user_id} className="flex items-center gap-3 px-4 py-3">
+            <span className="text-lg flex-shrink-0 w-8">{MEDALS[i] ?? `${i + 1}.`}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-700 truncate">{item.full_name}</p>
+              <p className="text-xs text-gray-400">{item.deals} đơn</p>
+            </div>
+            <p className="text-sm font-bold text-green-600 flex-shrink-0">{fmtMoney(item.revenue)}đ</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Regional Heatmap ─────────────────────────────────────────────────────────
+
+const KHU_VUC_LABEL: Record<string, string> = {
+  MB: 'Miền Bắc', MN: 'Miền Nam', MT: 'Miền Trung', CN: 'Chi nhánh',
+}
+const REGION_COLORS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500',
+]
+
+function RegionalHeatmap({ breakdown }: { breakdown: Record<string, number> }) {
+  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
+  const total   = entries.reduce((s, [, v]) => s + v, 0)
+  if (entries.length === 0 || total === 0) return null
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-3">Phân bố theo khu vực</p>
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        {/* Stacked bar */}
+        <div className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-4">
+          {entries.map(([kv, cnt], i) => (
+            <div
+              key={kv}
+              className={`${REGION_COLORS[i % REGION_COLORS.length]} transition-all duration-500`}
+              style={{ width: `${Math.round(cnt / total * 100)}%` }}
+            />
+          ))}
+        </div>
+        {/* Legend grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {entries.map(([kv, cnt], i) => (
+            <div key={kv} className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${REGION_COLORS[i % REGION_COLORS.length]}`} />
+              <span className="text-xs text-gray-600 flex-1 truncate">{KHU_VUC_LABEL[kv] ?? kv}</span>
+              <span className="text-xs font-bold text-gray-700">{cnt}</span>
+              <span className="text-xs text-gray-400">{Math.round(cnt / total * 100)}%</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-50">Tổng {total} KH active</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── AI Insights ──────────────────────────────────────────────────────────────
+
+type InsightItem = DashboardStats['insights'][0]
+
+const INSIGHT_STYLE: Record<string, { bg: string; border: string }> = {
+  positive: { bg: 'bg-green-50',  border: 'border-green-100'  },
+  warning:  { bg: 'bg-amber-50',  border: 'border-amber-100'  },
+  info:     { bg: 'bg-blue-50',   border: 'border-blue-100'   },
+}
+
+function AIInsights({ insights }: { insights: InsightItem[] }) {
+  if (insights.length === 0) return null
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-sm font-semibold text-gray-700">Phân tích tự động</p>
+        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">AI</span>
+      </div>
+      <div className="space-y-2">
+        {insights.map((ins, i) => {
+          const s = INSIGHT_STYLE[ins.type] ?? INSIGHT_STYLE.info
+          return (
+            <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${s.bg} ${s.border}`}>
+              <span className="text-xl flex-shrink-0 leading-tight">{ins.icon}</span>
+              <p className="text-sm text-gray-700 leading-snug">{ins.text}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Build cards per role ─────────────────────────────────────────────────────
 
 function buildCards(role: string, s: DashboardStats, target: number | null): KPICard[] {
@@ -805,6 +908,15 @@ export default function DashboardPage() {
 
       {/* ── Conversion Funnel ── */}
       {showFunnel && stats && <ConversionFunnel pipeline={stats.pipeline} />}
+
+      {/* ── Sales Leaderboard (manager only) ── */}
+      {isManager && stats && <SalesLeaderboard data={stats.leaderboard} />}
+
+      {/* ── Regional Heatmap (manager only) ── */}
+      {isManager && stats && <RegionalHeatmap breakdown={stats.khu_vuc_breakdown} />}
+
+      {/* ── AI Insights (manager only) ── */}
+      {isManager && stats && <AIInsights insights={stats.insights} />}
 
       {/* ── Activity feed (manager only) ── */}
       {isManager && stats && stats.activity_feed.length > 0 && (

@@ -35,6 +35,10 @@ export interface DashboardStats {
   warranty_tickets_pending:  number   // yêu cầu bảo hành Chờ xử lý
   // Phase 15B — OKR
   kpi_target: { target_revenue: number; target_contracts: number; target_customers: number } | null
+  // Phase 15C — Leaderboard, Regional, Insights
+  leaderboard:       { user_id: string; full_name: string; revenue: number; deals: number }[]
+  khu_vuc_breakdown: Record<string, number>
+  insights:          { icon: string; text: string; type: 'positive' | 'warning' | 'info' }[]
   // Phase 15A — Activity Feed & P&L
   activity_feed: { user_name: string; action: string; entity: string; detail: string; created_at: string }[]
   pl_summary: {
@@ -95,7 +99,8 @@ function zero(): DashboardStats {
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
     logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0, quotes_cho_duyet: 0,
     hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0, warranty_tickets_pending: 0,
-    kpi_target: null, activity_feed: [], pl_summary: null,
+    kpi_target: null, leaderboard: [], khu_vuc_breakdown: {}, insights: [],
+    activity_feed: [], pl_summary: null,
   }
 }
 
@@ -299,6 +304,110 @@ export async function GET() {
         loi_nhuan: pl_ln,
         bien_loi_nhuan_pct: pl_dt > 0 ? Math.round(pl_ln / pl_dt * 100) : 0,
       }
+
+      // ── Phase 15C: Leaderboard + Regional Heatmap + AI Insights ─────────────
+      const [lbRecordsRes, regionalRes] = await Promise.all([
+        service.from('payment_records')
+          .select('nguoi_phu_trach_id, amount')
+          .eq('is_paid', true)
+          .gte('paid_date', mFrom)
+          .lte('paid_date', mTo)
+          .not('nguoi_phu_trach_id', 'is', null),
+        service.from('customers')
+          .select('khu_vuc')
+          .not('pipeline', 'in', '("Lost","Từ chối")'),
+      ])
+
+      // Leaderboard: group → sort → top 5 → enrich with names
+      const lbMap: Record<string, { revenue: number; deals: number }> = {}
+      for (const r of lbRecordsRes.data ?? []) {
+        const uid = r.nguoi_phu_trach_id as string
+        if (!lbMap[uid]) lbMap[uid] = { revenue: 0, deals: 0 }
+        lbMap[uid].revenue += (r.amount ?? 0)
+        lbMap[uid].deals++
+      }
+      const topIds = Object.entries(lbMap)
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .slice(0, 5)
+        .map(([id]) => id)
+      if (topIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: lbProfiles } = await service.from('profiles').select('id, full_name').in('id', topIds)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nameMap = Object.fromEntries((lbProfiles ?? []).map((p: any) => [p.id, p.full_name as string]))
+        stats.leaderboard = topIds.map(id => ({
+          user_id:   id,
+          full_name: (nameMap[id] as string) ?? 'Không rõ',
+          revenue:   lbMap[id].revenue,
+          deals:     lbMap[id].deals,
+        }))
+      }
+
+      // Regional heatmap
+      const kvMap: Record<string, number> = {}
+      for (const c of regionalRes.data ?? []) {
+        const kv = (c.khu_vuc as string | null) || 'Khác'
+        kvMap[kv] = (kvMap[kv] ?? 0) + 1
+      }
+      stats.khu_vuc_breakdown = kvMap
+
+      // AI Insights (rule-based, prioritise warning > positive > info, max 3)
+      const fmtVnd = (n: number) =>
+        n >= 1_000_000_000 ? (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' tỷ'
+        : n >= 1_000_000   ? Math.round(n / 1_000_000) + ' tr'
+        : n.toLocaleString('vi-VN')
+
+      const ins: { icon: string; text: string; type: 'positive' | 'warning' | 'info' }[] = []
+
+      // R1: Revenue trend (current vs prev month)
+      const rev6 = stats.revenue_6months
+      if (rev6.length >= 2) {
+        const curr = rev6[rev6.length - 1].value
+        const prev = rev6[rev6.length - 2].value
+        if (prev > 0 && curr >= prev * 1.1) {
+          ins.push({ icon: '📈', text: `Doanh số tháng này cao hơn ${Math.round((curr - prev) / prev * 100)}% so với tháng trước`, type: 'positive' })
+        } else if (prev > 0 && curr <= prev * 0.9) {
+          ins.push({ icon: '📉', text: `Doanh số giảm ${Math.round((prev - curr) / prev * 100)}% so với tháng trước — cần kiểm tra pipeline`, type: 'warning' })
+        }
+      }
+
+      // R2: KH no-contact risk
+      if (stats.kh_no_contact_30d > 5)
+        ins.push({ icon: '⚠️', text: `${stats.kh_no_contact_30d} KH chưa liên hệ > 30 ngày — nguy cơ mất KH`, type: 'warning' })
+
+      // R3: Overdue receivables
+      if (stats.cong_no_qua_han > 0)
+        ins.push({ icon: '💰', text: `${fmtVnd(stats.cong_no_qua_han)}đ công nợ quá hạn cần thu hồi ngay`, type: 'warning' })
+
+      // R4: Pipeline conversion (Báo giá+Đàm phán → Chốt HĐ)
+      const pipelineBQ = (stats.pipeline['Báo giá'] ?? 0) + (stats.pipeline['Đàm phán'] ?? 0)
+      const pipelineChot = stats.pipeline['Chốt HĐ'] ?? 0
+      if (pipelineBQ + pipelineChot >= 5) {
+        const convPct = Math.round(pipelineChot / (pipelineBQ + pipelineChot) * 100)
+        if (convPct >= 50)
+          ins.push({ icon: '🎯', text: `Tỷ lệ chốt HĐ tốt (${convPct}% từ Báo giá + Đàm phán)`, type: 'positive' })
+        else if (convPct < 25)
+          ins.push({ icon: '💡', text: `Tỷ lệ chốt HĐ thấp (${convPct}%) — cần cải thiện quy trình bán hàng`, type: 'warning' })
+      }
+
+      // R5: Maintenance overdue
+      if (stats.maintenance_overdue > 3)
+        ins.push({ icon: '🔧', text: `${stats.maintenance_overdue} bảo trì định kỳ quá hạn chưa xử lý`, type: 'warning' })
+
+      // R6: Hoa hồng pending
+      if (stats.hoa_hong_chua_tra > 0)
+        ins.push({ icon: '💸', text: `Còn ${fmtVnd(stats.hoa_hong_chua_tra)}đ hoa hồng chưa trả cho nhân viên kinh doanh`, type: 'info' })
+
+      // R7: Leader shoutout
+      if (stats.leaderboard.length > 0) {
+        const top = stats.leaderboard[0]
+        if (top.revenue > 0)
+          ins.push({ icon: '🏆', text: `${top.full_name} dẫn đầu doanh số tháng: ${fmtVnd(top.revenue)}đ (${top.deals} đơn)`, type: 'positive' })
+      }
+
+      const sevOrder: Record<string, number> = { warning: 0, positive: 1, info: 2 }
+      ins.sort((a, b) => sevOrder[a.type] - sevOrder[b.type])
+      stats.insights = ins.slice(0, 3)
     }
 
     // ── G. Bảo hành ──────────────────────────────────────────────────────────
