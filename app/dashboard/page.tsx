@@ -169,7 +169,7 @@ function QuickActions({ role }: { role: string }) {
     sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
     tech_lead:  [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     tech:       [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
-    logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
+    logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }, { label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }],
     partner:    [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }],
   }
 
@@ -343,10 +343,10 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
   ]
 
   if (role === 'logistics') return [
-    { label: 'Chờ giao',        value: s.logistics_pending,         sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/orders' },
-    { label: 'Đang giao',       value: s.logistics_delivering,      sub: 'Trên đường',               color: 'bg-blue-50 text-blue-600',     icon: '🚚', href: '/dashboard/orders' },
-    { label: 'Đã giao tháng',   value: s.logistics_delivered_month, sub: 'Tháng này',                color: 'bg-green-50 text-green-600',   icon: '✅', href: '/dashboard/orders' },
-    { label: 'Quá hạn giao',    value: s.logistics_overdue,         sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/orders' },
+    { label: 'Chờ giao',        value: s.logistics_pending,          sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/orders' },
+    { label: 'Quá hạn giao',    value: s.logistics_overdue,          sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/orders' },
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,          sub: 'CT + Định kỳ',             color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
+    { label: 'Chờ bảo hành',    value: s.warranty_tickets_pending,   sub: 'Yêu cầu chờ xử lý',       color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty' },
   ]
 
   // Fallback
@@ -357,11 +357,12 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
 }
 
 function buildAlerts(role: string, s: DashboardStats) {
-  const base = [
-    { label: `${s.kh_no_contact_30d} KH chưa liên hệ > 30 ngày`,  count: s.kh_no_contact_30d, href: '/dashboard/customers', color: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  ]
+  // KH no-contact alert: chỉ cho role quản lý KH (không cho logistics/tech/accountant)
+  const base = ['admin', 'ceo', 'director', 'sales', 'partner'].includes(role)
+    ? [{ label: `${s.kh_no_contact_30d} KH chưa liên hệ > 30 ngày`, count: s.kh_no_contact_30d, href: '/dashboard/customers', color: 'bg-amber-50 text-amber-700 border border-amber-200' }]
+    : []
 
-  if (['admin', 'ceo', 'director', 'tech_lead', 'tech'].includes(role)) {
+  if (['admin', 'ceo', 'director', 'tech_lead', 'tech', 'logistics'].includes(role)) {
     base.push({ label: `${s.maintenance_overdue} bảo trì định kỳ quá hạn`, count: s.maintenance_overdue, href: '/dashboard/maintenance', color: 'bg-red-50 text-red-700 border border-red-200' })
     if (s.warranty_tickets_pending > 0) {
       base.push({ label: `${s.warranty_tickets_pending} yêu cầu bảo hành chờ xử lý`, count: s.warranty_tickets_pending, href: '/dashboard/warranty', color: 'bg-purple-50 text-purple-700 border border-purple-200' })
@@ -370,7 +371,7 @@ function buildAlerts(role: string, s: DashboardStats) {
   if (role === 'accountant') {
     base.push({ label: `${s.contracts_unpaid} hợp đồng chưa thu đủ`, count: s.contracts_unpaid, href: '/dashboard/orders', color: 'bg-red-50 text-red-700 border border-red-200' })
   }
-  if (role === 'sales' || role === 'partner') {
+  if (role === 'sales') {
     base.push({ label: `${s.quotes_stale} báo giá đã gửi chưa phản hồi`, count: s.quotes_stale, href: '/dashboard/orders', color: 'bg-blue-50 text-blue-700 border border-blue-200' })
   }
   if (['admin', 'ceo', 'director'].includes(role) && s.quotes_cho_duyet > 0) {
@@ -419,7 +420,7 @@ export default function DashboardPage() {
   const cards   = stats ? buildCards(role, stats, profile?.target_thang ?? null) : []
   const alerts  = stats ? buildAlerts(role, stats) : []
   const showRevChart   = ['admin', 'ceo', 'director', 'accountant', 'sales'].includes(role)
-  const showPipeline   = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)
+  const showPipeline   = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)  // logistics không xem pipeline sales
 
   // Target progress bar cho sales
   const targetPct = profile?.target_thang && stats?.revenue_month

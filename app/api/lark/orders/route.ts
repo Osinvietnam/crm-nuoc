@@ -38,18 +38,39 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profile } = await supabase
-      .from('profiles').select('id, full_name, role').eq('id', user.id).single()
+      .from('profiles').select('id, full_name, role, khu_vuc').eq('id', user.id).single()
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
     const tab          = req.nextUrl.searchParams.get('tab') ?? 'b2c'
     const customerParam = req.nextUrl.searchParams.get('customer_id')
     const isSales      = profile.role === 'sales'
+    const isLogistics  = profile.role === 'logistics'
+    const isPartner    = profile.role === 'partner'
 
     if (tab === 'b2c') {
       let query = supabase.from('orders').select(B2C_SELECT)
         .eq('type', 'b2c').order('created_at', { ascending: false })
-      if (customerParam)   query = query.eq('customer_id', parseInt(customerParam))
-      else if (isSales)    query = query.eq('nguoi_phu_trach', profile.id)
+
+      if (customerParam) {
+        query = query.eq('customer_id', parseInt(customerParam))
+      } else if (isSales) {
+        query = query.eq('nguoi_phu_trach', profile.id)
+      } else if (isLogistics && profile.khu_vuc) {
+        // Logistics: chỉ xem orders của KH trong khu vực mình phụ trách
+        const { data: khIds } = await supabase
+          .from('customers').select('id').eq('khu_vuc', profile.khu_vuc)
+        const ids = (khIds ?? []).map((c: { id: number }) => c.id)
+        if (ids.length > 0) query = query.in('customer_id', ids)
+        else return NextResponse.json({ data: [] }) // không có KH trong khu vực
+      } else if (isPartner) {
+        // Partner: chỉ xem orders của KH mình phụ trách
+        const { data: khIds } = await supabase
+          .from('customers').select('id').eq('nguoi_phu_trach', profile.id)
+        const ids = (khIds ?? []).map((c: { id: number }) => c.id)
+        if (ids.length > 0) query = query.in('customer_id', ids)
+        else return NextResponse.json({ data: [] }) // chưa có KH nào
+      }
+
       const { data, error } = await query
       if (error) throw error
       return NextResponse.json({ data: (data ?? []).map(mapContract) })
