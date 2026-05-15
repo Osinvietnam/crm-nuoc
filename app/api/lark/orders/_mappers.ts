@@ -8,21 +8,25 @@ function toMs(d: string | null | undefined): number | null {
 }
 
 export interface Contract {
-  record_id:       string
-  ma_hd:           string
-  khach_hang:      string
-  sdt:             string
-  nguoi_phu_trach: string
-  ngay_ky:         number | null
-  gia_tri_hd:      number
-  gia_tri_gws:     number
-  trang_thai:      string
-  san_pham:        string[]
-  dia_chi_ct:      string
-  hh_kinh_doanh:   number
-  ngay_giao_dk:    number | null
-  ghi_chu:         string
-  customer_id:     number | null
+  record_id:            string
+  ma_hd:                string
+  khach_hang:           string
+  sdt:                  string
+  nguoi_phu_trach:      string
+  ngay_ky:              number | null
+  ngay_giao_dk:         number | null
+  ngay_giao_thuc:       number | null  // actual delivery date
+  gia_tri_hd:           number
+  gia_tri_gws:          number
+  trang_thai:           string
+  san_pham:             string[]
+  dia_chi_ct:           string
+  hh_kinh_doanh:        number
+  ghi_chu:              string
+  customer_id:          number | null
+  source_quote_id:      number | null  // BG gốc tạo ra HĐ này
+  delivery_photos:      string[]       // URLs ảnh giao hàng
+  delivery_confirmed_at: string | null  // ISO timestamp xác nhận giao
 }
 
 export interface CommercialOrder {
@@ -70,6 +74,9 @@ export interface Project {
   ty_le_thang:     number
   cong_no:         number
   ghi_chu:         string
+  customer_id:     number | null
+  khach_hang:      string
+  sdt:             string
 }
 
 export function mapContract(r: any): Contract {
@@ -79,16 +86,20 @@ export function mapContract(r: any): Contract {
     khach_hang:      r.customers?.ho_ten ?? '',
     sdt:             r.customers?.sdt    ?? '',
     nguoi_phu_trach: r.staff?.full_name  ?? '',
-    ngay_ky:         toMs(r.ngay_ky),
-    gia_tri_hd:      r.gia_tri_hd        ?? 0,
-    gia_tri_gws:     r.gia_tri_gws       ?? 0,
-    trang_thai:      r.trang_thai        ?? '',
-    san_pham:        r.san_pham          ?? [],
-    dia_chi_ct:      r.dia_chi_ct        ?? '',
-    hh_kinh_doanh:   r.hh_kinh_doanh    ?? 0,
-    ngay_giao_dk:    toMs(r.ngay_giao_dk),
-    ghi_chu:         r.ghi_chu           ?? '',
-    customer_id:     r.customer_id       ?? null,
+    ngay_ky:               toMs(r.ngay_ky),
+    ngay_giao_dk:          toMs(r.ngay_giao_dk),
+    ngay_giao_thuc:        toMs(r.ngay_giao_thuc),
+    gia_tri_hd:            r.gia_tri_hd             ?? 0,
+    gia_tri_gws:           r.gia_tri_gws            ?? 0,
+    trang_thai:            r.trang_thai             ?? '',
+    san_pham:              r.san_pham               ?? [],
+    dia_chi_ct:            r.dia_chi_ct             ?? '',
+    hh_kinh_doanh:         r.hh_kinh_doanh          ?? 0,
+    ghi_chu:               r.ghi_chu                ?? '',
+    customer_id:           r.customer_id            ?? null,
+    source_quote_id:       r.source_quote_id        ?? null,
+    delivery_photos:       r.delivery_photos        ?? [],
+    delivery_confirmed_at: r.delivery_confirmed_at  ?? null,
   }
 }
 
@@ -135,11 +146,14 @@ export function mapProject(r: any): Project {
     ngay_du_kien_ky: toMs(r.ngay_du_kien_ky),
     ngay_bt_tc:      toMs(r.ngay_bt_tc),
     ngay_hoan_thanh: toMs(r.ngay_hoan_thanh),
-    nv_phu_trach:    r.staff?.full_name  ?? '',
-    doi_tac:         r.doi_tac_da        ?? '',
-    ty_le_thang:     Number(r.ty_le_thang ?? 0),
-    cong_no:         r.cong_no           ?? 0,
-    ghi_chu:         r.ghi_chu           ?? '',
+    nv_phu_trach:    r.staff?.full_name       ?? '',
+    doi_tac:         r.doi_tac_da             ?? '',
+    ty_le_thang:     Number(r.ty_le_thang     ?? 0),
+    cong_no:         r.cong_no                ?? 0,
+    ghi_chu:         r.ghi_chu                ?? '',
+    customer_id:     r.customer_id            ?? null,
+    khach_hang:      r.customers?.ho_ten      ?? '',
+    sdt:             r.customers?.sdt         ?? '',
   }
 }
 

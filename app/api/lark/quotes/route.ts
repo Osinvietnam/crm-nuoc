@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('id, full_name, role').eq('id', user.id).single()
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
-    if (!['admin', 'ceo', 'sales'].includes(profile.role)) {
+    if (!['admin', 'ceo', 'director', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Không có quyền tạo báo giá' }, { status: 403 })
     }
 

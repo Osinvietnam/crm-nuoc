@@ -20,12 +20,17 @@ async function autoCreateConstruction(supabase: any, order: any) {
     .maybeSingle()
   if (existing) return
 
+  // ngay_du_kien = ngay_giao_dk from the order (expected delivery date)
+  const ngay_du_kien = order.ngay_giao_dk ?? null
+
   await supabase.from('maintenance_construction').insert({
-    order_id:    order.id,
-    customer_id: order.customer_id  ?? null,
-    khu_vuc:     order.khu_vuc      ?? null,
-    san_pham:    order.san_pham?.[0] ?? null,
-    trang_thai:  'Đang thi công',
+    order_id:        order.id,
+    customer_id:     order.customer_id    ?? null,
+    khu_vuc:         order.khu_vuc        ?? null,
+    san_pham:        order.san_pham?.[0]  ?? null,
+    trang_thai:      'Đang thi công',
+    nguoi_phu_trach: order.nguoi_phu_trach ?? null,
+    ngay_du_kien,
   })
 }
 
@@ -122,11 +127,15 @@ export async function PATCH(
         const { data: existing } = await supabase
           .from('order_warranties').select('id').eq('order_id', data.id).maybeSingle()
         if (!existing) {
-          const today    = new Date().toISOString().split('T')[0]
-          const het_han  = new Date(Date.now() + 24 * 30 * 86_400_000).toISOString().split('T')[0]
+          // bat_dau = actual delivery date if available, else today
+          const startDate = data.ngay_giao_thuc ? new Date(data.ngay_giao_thuc) : new Date()
+          const endDate   = new Date(startDate)
+          endDate.setMonth(endDate.getMonth() + 24)
+          const bat_dau = startDate.toISOString().split('T')[0]
+          const het_han = endDate.toISOString().split('T')[0]
           const { error: wErr } = await supabase.from('order_warranties').insert({
             order_id:   data.id,
-            bat_dau:    today,
+            bat_dau,
             het_han,
             loai_bh:    '24 tháng',
             created_by: user.id,

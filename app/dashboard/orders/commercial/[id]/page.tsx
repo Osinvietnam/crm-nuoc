@@ -38,6 +38,7 @@ export default function CommercialDetailPage() {
   const [showStatus, setShowStatus] = useState(false)
   const [updating, setUpdating]     = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [myRole, setMyRole]         = useState('')
 
   useEffect(() => {
     fetch(`/api/lark/orders/commercial/${id}`)
@@ -45,6 +46,7 @@ export default function CommercialDetailPage() {
       .then(d => setOrder(d.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
   }, [id])
 
   const updateStatus = async (status: string) => {
@@ -71,6 +73,7 @@ export default function CommercialDetailPage() {
   )
 
   const sc = COMMERCIAL_STATUS_COLORS[order.trang_thai] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+  const canUpdate = ['admin', 'ceo', 'director', 'sales', 'logistics'].includes(myRole)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -95,10 +98,12 @@ export default function CommercialDetailPage() {
             <span className={`text-sm font-semibold px-3 py-1.5 rounded-xl ${sc.bg} ${sc.text}`}>
               {order.trang_thai || '—'}
             </span>
-            <button onClick={() => setShowStatus(true)} disabled={updating}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
-              {updating ? 'Đang lưu...' : 'Cập nhật'}
-            </button>
+            {canUpdate && (
+              <button onClick={() => setShowStatus(true)} disabled={updating}
+                className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
+                {updating ? 'Đang lưu...' : 'Cập nhật'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -132,6 +137,21 @@ export default function CommercialDetailPage() {
               <p className="text-xs text-gray-400">{order.sdt}</p>
             </div>
           </a>
+        )}
+
+        {/* Xem KH */}
+        {order.customer_id && (
+          <button onClick={() => router.push(`/dashboard/customers/${order.customer_id}`)}
+            className="w-full bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center gap-3 text-left">
+            <span className="text-xl">👤</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-700">Xem khách hàng</p>
+              <p className="text-xs text-gray-400 truncate">{order.ten_kh}</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         )}
 
         {/* Details */}

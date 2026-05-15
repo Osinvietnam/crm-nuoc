@@ -46,13 +46,25 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('id, full_name, role').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
+
+    const canUpdate     = ['admin', 'ceo', 'director', 'sales', 'logistics'].includes(profile.role)
+    const canEditFinance = ['admin', 'ceo', 'director', 'accountant'].includes(profile.role)
+    if (!canUpdate) return NextResponse.json({ error: 'Không có quyền cập nhật đơn hàng' }, { status: 403 })
+
     const { id } = await params
     const body = await req.json()
 
     const updates: Record<string, unknown> = {}
-    for (const key of ['trang_thai', 'ghi_chu', 'loai_khach', 'tinh_thanh', 'san_pham_text', 'ma_sp_text', 'so_luong', 'don_gia', 'tong_tien', 'phuong_thuc_tt']) {
+    for (const key of ['trang_thai', 'ghi_chu', 'loai_khach', 'tinh_thanh', 'san_pham_text', 'ma_sp_text', 'so_luong', 'phuong_thuc_tt']) {
       if (key in body) updates[key] = body[key]
+    }
+    // Financial fields — restricted to finance roles
+    if (canEditFinance) {
+      for (const key of ['don_gia', 'tong_tien']) {
+        if (key in body) updates[key] = body[key]
+      }
     }
     // ten_kh from UI maps to ten_kh_tm in DB
     if ('ten_kh' in body) updates.ten_kh_tm = body.ten_kh

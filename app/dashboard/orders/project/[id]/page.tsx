@@ -39,6 +39,7 @@ export default function ProjectDetailPage() {
   const [showStage, setShowStage] = useState(false)
   const [updating, setUpdating]   = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [myRole, setMyRole]        = useState('')
 
   useEffect(() => {
     fetch(`/api/lark/orders/project/${id}`)
@@ -46,6 +47,7 @@ export default function ProjectDetailPage() {
       .then(d => setProject(d.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
   }, [id])
 
   const updateStage = async (stage: string) => {
@@ -72,6 +74,7 @@ export default function ProjectDetailPage() {
   )
 
   const sc = PROJECT_STAGE_COLORS[project.giai_doan] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+  const canUpdate = ['admin', 'ceo', 'director', 'sales', 'logistics'].includes(myRole)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -96,10 +99,12 @@ export default function ProjectDetailPage() {
             <span className={`text-sm font-semibold px-3 py-1.5 rounded-xl ${sc.bg} ${sc.text}`}>
               {project.giai_doan || '—'}
             </span>
-            <button onClick={() => setShowStage(true)} disabled={updating}
-              className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
-              {updating ? 'Đang lưu...' : 'Cập nhật'}
-            </button>
+            {canUpdate && (
+              <button onClick={() => setShowStage(true)} disabled={updating}
+                className="text-xs text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl">
+                {updating ? 'Đang lưu...' : 'Cập nhật'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -150,6 +155,21 @@ export default function ProjectDetailPage() {
           <InfoRow label="Bắt đầu TC" value={fmtDate(project.ngay_bt_tc)} />
           <InfoRow label="Hoàn thành DK" value={fmtDate(project.ngay_hoan_thanh)} />
         </div>
+
+        {/* Xem KH */}
+        {project.customer_id && (
+          <button onClick={() => router.push(`/dashboard/customers/${project.customer_id}`)}
+            className="w-full bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center gap-3 text-left">
+            <span className="text-xl">👤</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-700">Xem khách hàng</p>
+              <p className="text-xs text-gray-400 truncate">{project.khach_hang || project.chu_dau_tu}</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
 
         {/* Details */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">

@@ -53,9 +53,10 @@ export default function ContractDetailPage() {
   const [uploadingDelivery, setUploadingDelivery] = useState(false)
   const [showDeliveryForm, setShowDeliveryForm] = useState(false)
   const [myRole, setMyRole] = useState('')
-  const [warranties,    setWarranties]    = useState<any[]>([])
-  const [wTickets,      setWTickets]      = useState<any[]>([])
-  const [showAddTicket, setShowAddTicket] = useState(false)
+  const [warranties,      setWarranties]      = useState<any[]>([])
+  const [wTickets,        setWTickets]        = useState<any[]>([])
+  const [warrantyReady,   setWarrantyReady]   = useState<boolean | null>(null) // null=loading, false=unavailable
+  const [showAddTicket,   setShowAddTicket]   = useState(false)
   const [ticketTitle,   setTicketTitle]   = useState('')
   const [ticketMoTa,    setTicketMoTa]    = useState('')
   const [ticketPriority,setTicketPriority]= useState('Bình thường')
@@ -73,9 +74,21 @@ export default function ContractDetailPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
     fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
-    // Load warranties + tickets sau khi có id
-    fetch(`/api/warranties?order_id=${id}`).then(r => r.json()).then(d => setWarranties(d.data ?? [])).catch(() => {})
-    fetch(`/api/warranty-tickets?order_id=${id}`).then(r => r.json()).then(d => setWTickets(d.data ?? [])).catch(() => {})
+    // Load warranties + tickets — guard if API not yet available
+    Promise.all([
+      fetch(`/api/warranties?order_id=${id}`),
+      fetch(`/api/warranty-tickets?order_id=${id}`),
+    ]).then(async ([wRes, tRes]) => {
+      if (wRes.ok) {
+        const wd = await wRes.json()
+        setWarranties(wd.data ?? [])
+      }
+      if (tRes.ok) {
+        const td = await tRes.json()
+        setWTickets(td.data ?? [])
+      }
+      setWarrantyReady(wRes.ok && tRes.ok)
+    }).catch(() => setWarrantyReady(false))
   }, [id])
 
   const confirmDelivery = async (file?: File) => {
@@ -202,6 +215,21 @@ export default function ContractDetailPage() {
           </a>
         </div>
 
+        {/* Xem KH */}
+        {contract.customer_id && (
+          <button onClick={() => router.push(`/dashboard/customers/${contract.customer_id}`)}
+            className="w-full bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center gap-3 text-left">
+            <span className="text-xl">👤</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-700">Xem khách hàng</p>
+              <p className="text-xs text-gray-400 truncate">{contract.khach_hang}</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
         {/* Details */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">CHI TIẾT HỢP ĐỒNG</p>
@@ -212,7 +240,18 @@ export default function ContractDetailPage() {
           <InfoRow label="Địa chỉ công trình" value={contract.dia_chi_ct} />
           <InfoRow label="Ngày ký" value={fmtDate(contract.ngay_ky)} />
           <InfoRow label="Ngày giao DK" value={fmtDate(contract.ngay_giao_dk)} />
+          {contract.ngay_giao_thuc ? <InfoRow label="Ngày giao thực" value={fmtDate(contract.ngay_giao_thuc)} /> : null}
           {contract.ghi_chu && <InfoRow label="Ghi chú" value={contract.ghi_chu} />}
+          {contract.source_quote_id && (
+            <div className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+              <span className="text-xs text-gray-400 w-36 flex-shrink-0 pt-0.5">Báo giá gốc</span>
+              <button
+                onClick={() => router.push(`/dashboard/orders/quote/${contract.source_quote_id}`)}
+                className="text-sm text-blue-600 font-semibold hover:underline">
+                Xem báo giá #{contract.source_quote_id}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Xác nhận giao hàng */}
@@ -268,7 +307,12 @@ export default function ContractDetailPage() {
         </div>
 
         {/* ── Bảo hành ── */}
-        {warranties.length > 0 && (() => {
+        {warrantyReady === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+            <p className="text-xs text-amber-700 font-medium">Module bảo hành chưa được kích hoạt</p>
+          </div>
+        )}
+        {warrantyReady && warranties.length > 0 && (() => {
           const w = warranties[0]
           const daysLeft = w.days_left as number
           const isActive = w.is_active as boolean
@@ -302,7 +346,7 @@ export default function ContractDetailPage() {
         })()}
 
         {/* ── Yêu cầu bảo hành ── */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        {warrantyReady && <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-gray-400">YÊU CẦU BẢO HÀNH</p>
             <button onClick={() => setShowAddTicket(v => !v)}
@@ -386,7 +430,7 @@ export default function ContractDetailPage() {
               })}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Xuất PDF */}
         <button

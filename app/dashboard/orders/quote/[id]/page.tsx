@@ -70,13 +70,33 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ─── Status Sheet ─────────────────────────────────────────────────────────────
 
-function StatusSheet({ current, onSelect, onClose }: {
+// M6: Valid transitions by role
+const MANAGER_ROLES = ['admin', 'ceo', 'director']
+const STATUS_ALLOWED: Record<string, string[]> = {
+  // Managers can set any status
+  admin:    [...QUOTE_STATUSES],
+  ceo:      [...QUOTE_STATUSES],
+  director: [...QUOTE_STATUSES],
+  // Sales: can draft/send/negotiate but NOT accept/reject (that's manager-only)
+  sales:    ['Nháp', 'Đã gửi', 'Đàm phán', 'Hết hạn'],
+  // View-only roles: no status changes
+  accountant: [],
+  tech_lead:  [],
+  tech:       [],
+  logistics:  [],
+  partner:    [],
+}
+
+function StatusSheet({ current, role, onSelect, onClose }: {
   current: string
+  role:    string
   onSelect: (s: string, lyDo?: string) => void
   onClose: () => void
 }) {
   const [lyDo, setLyDo] = useState('')
   const [pending, setPending] = useState('')
+
+  const allowedStatuses = STATUS_ALLOWED[role] ?? (MANAGER_ROLES.includes(role) ? [...QUOTE_STATUSES] : [])
 
   const handleSelect = (s: string) => {
     if (s === 'Từ chối') { setPending(s); return }
@@ -116,6 +136,8 @@ function StatusSheet({ current, onSelect, onClose }: {
     )
   }
 
+  const visibleStatuses = QUOTE_STATUSES.filter(s => allowedStatuses.includes(s))
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
       onClick={e => e.target === e.currentTarget && onClose()}>
@@ -127,7 +149,9 @@ function StatusSheet({ current, onSelect, onClose }: {
           <h2 className="text-base font-bold text-gray-800">Cập nhật trạng thái</h2>
         </div>
         <div className="p-4 space-y-2 pb-8">
-          {QUOTE_STATUSES.map(s => {
+          {visibleStatuses.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">Bạn không có quyền đổi trạng thái</p>
+          ) : visibleStatuses.map(s => {
             const c = QUOTE_STATUS_COLORS[s]
             const active = current === s
             return (
@@ -275,10 +299,10 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
   useEffect(() => {
     if (items.length > 0) return
     if (quote.items && quote.items.length > 0) {
-      // H2: Có items structured — seed với đơn giá đầy đủ
+      // H2: Có items structured — seed với đơn giá đầy đủ + giữ product_id
       quote.items
         .sort((a, b) => a.sort_order - b.sort_order)
-        .forEach(it => addItem({ ten_sp: it.ten_sp, don_gia: it.don_gia }))
+        .forEach(it => addItem({ ten_sp: it.ten_sp, don_gia: it.don_gia, product_id: it.product_id ?? null }))
     } else if (quote.san_pham.length > 0) {
       // Fallback: parse text cũ (mất đơn giá)
       quote.san_pham.forEach(sp => {
@@ -317,7 +341,7 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
             ten_sp:     it.ten_sp,
             don_gia:    it.don_gia,
             so_luong:   it.so_luong,
-            product_id: null,
+            product_id: it.product_id ?? null,
           })),
         }),
       })
@@ -344,7 +368,7 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
           <div className="flex-1 overflow-y-auto">
             {products.map(p => (
               <button key={p.record_id}
-                onClick={() => { addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0 }); setShowPicker(false) }}
+                onClick={() => { addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null }); setShowPicker(false) }}
                 className="w-full px-4 py-3.5 border-b border-gray-50 text-left flex items-center gap-3 active:bg-blue-50">
                 <ProductThumb p={p} />
                 <div className="flex-1 min-w-0">
@@ -447,6 +471,75 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
   )
 }
 
+// ─── Reject Sheet ─────────────────────────────────────────────────────────────
+
+const REJECT_REASONS = [
+  'Giá cao hơn đối thủ',
+  'Báo giá sai thông số kỹ thuật',
+  'Không phù hợp yêu cầu KH',
+  'KH không phản hồi / không liên lạc được',
+  'KH chọn nhà cung cấp khác',
+  'Khác',
+]
+
+function RejectSheet({ onConfirm, onClose }: {
+  onConfirm: (lyDo: string) => void
+  onClose:   () => void
+}) {
+  const [selected, setSelected] = useState('')
+  const [custom,   setCustom]   = useState('')
+
+  const lyDo = selected === 'Khác' ? custom.trim() : selected
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-t-3xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-800">Lý do từ chối</h2>
+          <button onClick={onClose} className="text-gray-400 p-1 text-lg">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+          {REJECT_REASONS.map(r => (
+            <button key={r} onClick={() => setSelected(r)}
+              className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all ${
+                selected === r
+                  ? 'bg-red-50 border border-red-200 text-red-700 font-semibold'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}>
+              {r}
+            </button>
+          ))}
+          {selected === 'Khác' && (
+            <textarea
+              value={custom}
+              onChange={e => setCustom(e.target.value)}
+              placeholder="Nhập lý do cụ thể..."
+              rows={3}
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+            />
+          )}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 flex gap-3 sheet-safe">
+          <button onClick={onClose}
+            className="flex-1 border border-gray-200 text-gray-600 font-medium py-3 rounded-xl text-sm">
+            Huỷ
+          </button>
+          <button
+            onClick={() => { if (lyDo) { onConfirm(lyDo); onClose() } }}
+            disabled={!lyDo}
+            className="flex-1 bg-red-500 disabled:bg-red-300 text-white font-semibold py-3 rounded-xl text-sm">
+            Xác nhận từ chối
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function QuoteDetailPage() {
@@ -458,11 +551,17 @@ export default function QuoteDetailPage() {
   const [showStatus,  setShowStatus]  = useState(false)
   const [showEdit,    setShowEdit]    = useState(false)
   const [updating,    setUpdating]    = useState(false)
-  const [duplicating,   setDuplicating]   = useState(false)
-  const [exportingPDF,  setExportingPDF]  = useState(false)
-  const [sending,       setSending]       = useState(false)
-  const [successMsg,    setSuccessMsg]    = useState('')
-  const [errorMsg,      setErrorMsg]      = useState('')
+  const [duplicating,     setDuplicating]     = useState(false)
+  const [exportingPDF,    setExportingPDF]    = useState(false)
+  const [sending,         setSending]         = useState(false)
+  const [successMsg,      setSuccessMsg]      = useState('')
+  const [errorMsg,        setErrorMsg]        = useState('')
+  const [showRejectSheet, setShowRejectSheet] = useState(false)
+  const [myRole,          setMyRole]          = useState('')
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMyRole(d?.role ?? '')).catch(() => {})
+  }, [])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -669,6 +768,21 @@ export default function QuoteDetailPage() {
           )}
         </div>
 
+        {/* Xem KH */}
+        {quote.customer_id && (
+          <button onClick={() => router.push(`/dashboard/customers/${quote.customer_id}`)}
+            className="w-full bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100 flex items-center gap-3 text-left">
+            <span className="text-xl">👤</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-700">Xem khách hàng</p>
+              <p className="text-xs text-gray-400 truncate">{quote.khach_hang}</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
         {/* Info card */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs font-semibold text-gray-400 mb-3">THÔNG TIN BÁO GIÁ</p>
@@ -750,10 +864,7 @@ export default function QuoteDetailPage() {
                   ✅ Duyệt
                 </button>
                 <button
-                  onClick={() => {
-                    const ly_do = prompt('Lý do từ chối:')
-                    if (ly_do !== null) handleStatusChange('Từ chối', ly_do)
-                  }}
+                  onClick={() => setShowRejectSheet(true)}
                   disabled={updating}
                   className="bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">
                   ✕ Từ chối
@@ -803,6 +914,7 @@ export default function QuoteDetailPage() {
       {showStatus && (
         <StatusSheet
           current={displayStatus}
+          role={myRole}
           onSelect={handleStatusChange}
           onClose={() => setShowStatus(false)}
         />
@@ -813,6 +925,13 @@ export default function QuoteDetailPage() {
           quote={quote}
           onClose={() => setShowEdit(false)}
           onSaved={updated => { setQuote(updated); setShowEdit(false); notify('Đã lưu thay đổi') }}
+        />
+      )}
+
+      {showRejectSheet && (
+        <RejectSheet
+          onConfirm={lyDo => handleStatusChange('Từ chối', lyDo)}
+          onClose={() => setShowRejectSheet(false)}
         />
       )}
     </div>

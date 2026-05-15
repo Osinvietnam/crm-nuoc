@@ -5,7 +5,8 @@ import { logAudit } from '@/lib/audit'
 
 const SELECT = `
   *,
-  staff:nguoi_phu_trach(id, full_name)
+  staff:nguoi_phu_trach(id, full_name),
+  customers!customer_id(id, ho_ten, sdt)
 `
 
 // ─── GET /api/lark/orders/project/[id] ────────────────────────────────────────
@@ -45,13 +46,25 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('id, full_name, role').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
+
+    const canUpdate      = ['admin', 'ceo', 'director', 'sales', 'logistics'].includes(profile.role)
+    const canEditFinance = ['admin', 'ceo', 'director', 'accountant'].includes(profile.role)
+    if (!canUpdate) return NextResponse.json({ error: 'Không có quyền cập nhật dự án' }, { status: 403 })
+
     const { id } = await params
     const body = await req.json()
 
     const updates: Record<string, unknown> = {}
-    for (const key of ['trang_thai', 'ghi_chu', 'giai_doan', 'ten_da', 'chu_dau_tu', 'tong_thau', 'loai_da', 'quy_mo', 'tinh_thanh', 'gia_tri_dt', 'gia_tri_hd', 'ty_le_thang', 'cong_no']) {
+    for (const key of ['trang_thai', 'ghi_chu', 'giai_doan', 'ten_da', 'chu_dau_tu', 'tong_thau', 'loai_da', 'quy_mo', 'tinh_thanh']) {
       if (key in body) updates[key] = body[key]
+    }
+    // Financial fields — restricted to finance roles
+    if (canEditFinance) {
+      for (const key of ['gia_tri_dt', 'gia_tri_hd', 'ty_le_thang', 'cong_no']) {
+        if (key in body) updates[key] = body[key]
+      }
     }
     // doi_tac from UI maps to doi_tac_da in DB
     if ('doi_tac' in body) updates.doi_tac_da = body.doi_tac

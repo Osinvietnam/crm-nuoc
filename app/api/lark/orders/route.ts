@@ -19,7 +19,8 @@ const COMMERCIAL_SELECT = `
 `
 const PROJECT_SELECT = `
   *,
-  staff:nguoi_phu_trach(id, full_name)
+  staff:nguoi_phu_trach(id, full_name),
+  customers!customer_id(id, ho_ten, sdt)
 `
 
 // ─── Code generators ─────────────────────────────────────────────────────────

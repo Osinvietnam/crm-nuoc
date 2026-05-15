@@ -33,7 +33,7 @@ export function PaymentSection({ customerId, customerName, nguoiPhuTrach, userRo
   const [paidDate,      setPaidDate]      = useState('')
   const [markingPaid,   setMarkingPaid]   = useState(false)
 
-  const canEdit = ['accountant', 'admin', 'ceo'].includes(userRole)
+  const canEdit = ['accountant', 'admin', 'ceo', 'director'].includes(userRole)
 
   const load = useCallback(() => {
     setLoading(true)
