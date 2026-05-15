@@ -29,12 +29,13 @@ interface Profile {
 }
 
 interface KPICard {
-  label:   string
-  value:   string | number
-  sub?:    string
-  color:   string
-  icon:    string
-  href?:   string
+  label:     string
+  value:     string | number
+  sub?:      string
+  color:     string
+  icon:      string
+  href?:     string
+  progress?: number   // 0–100, hiển thị OKR progress bar nếu có
 }
 
 type AlertSeverity = 'urgent' | 'important' | 'watch'
@@ -130,6 +131,19 @@ function KPIGrid({ cards, loading }: { cards: KPICard[]; loading: boolean }) {
             </p>
             <p className="text-xs mt-1 font-semibold opacity-90">{c.label}</p>
             {c.sub && <p className="text-xs mt-0.5 opacity-60">{c.sub}</p>}
+            {c.progress !== undefined && (
+              <div className="mt-2">
+                <div className="h-1 bg-black/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${
+                      c.progress >= 100 ? 'bg-green-500' : c.progress >= 60 ? 'bg-current opacity-50' : 'bg-amber-400'
+                    }`}
+                    style={{ width: `${Math.min(c.progress, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs mt-0.5 opacity-60">{Math.min(c.progress, 100)}% KPI</p>
+              </div>
+            )}
           </button>
         ))}
       </div>
@@ -350,6 +364,124 @@ function MyTasksWidget({ role }: { role: string }) {
   )
 }
 
+// ─── Mini Calendar ───────────────────────────────────────────────────────────
+
+interface TodayEvent {
+  date:  number
+  type:  string
+  title: string
+  sub:   string
+  href:  string
+  color: string
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  quote:         'BG follow-up',
+  quote_expire:  'BG hết hạn',
+  contract:      'Giao hàng B2C',
+  contract_sign: 'Ký HĐ',
+  delivery_tm:   'Giao hàng TM',
+  construction:  'Bảo trì CT',
+  acceptance:    'Nghiệm thu',
+  periodic:      'Bảo dưỡng ĐK',
+  warranty:      'Bảo hành',
+  payment_due:   'Đến hạn TT',
+  task_due:      'Task đến hạn',
+  project_sign:  'Ký HĐ dự án',
+  project_start: 'Khởi công',
+  project_end:   'Hoàn thành DK',
+}
+
+function MiniCalendar() {
+  const [events, setEvents] = useState<TodayEvent[]>([])
+  const router = useRouter()
+
+  useEffect(() => {
+    const now     = new Date()
+    const month   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const todayStr = now.toISOString().split('T')[0]
+    fetch(`/api/calendar?month=${month}`)
+      .then(r => r.json())
+      .then(d => {
+        const filtered = ((d.events ?? []) as TodayEvent[])
+          .filter(e => new Date(e.date).toISOString().split('T')[0] === todayStr)
+          .slice(0, 6)
+        setEvents(filtered)
+      })
+      .catch(() => {})
+  }, [])
+
+  if (events.length === 0) return null
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-700">📅 Lịch hôm nay</p>
+        <button onClick={() => router.push('/dashboard/calendar')}
+          className="text-xs text-blue-600 font-medium">Xem lịch →</button>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
+        {events.map((e, i) => (
+          <button key={i} onClick={() => e.href && router.push(e.href)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-gray-50">
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${e.color}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-700 truncate font-medium">{e.title}</p>
+              <p className="text-xs text-gray-400 truncate">{EVENT_LABEL[e.type] ?? e.type} · {e.sub}</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Conversion Funnel ────────────────────────────────────────────────────────
+
+const FUNNEL_STAGES = [
+  'Lead mới','Tiềm năng','Báo giá','Đàm phán',
+  'Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì',
+]
+
+function ConversionFunnel({ pipeline }: { pipeline: Record<string, number> }) {
+  const total = FUNNEL_STAGES.reduce((s, st) => s + (pipeline[st] ?? 0), 0)
+  if (total === 0) return null
+
+  const funnel = FUNNEL_STAGES.map((stage, i) => {
+    const reached = FUNNEL_STAGES.slice(i).reduce((s, st) => s + (pipeline[st] ?? 0), 0)
+    return { stage, count: pipeline[stage] ?? 0, rate: Math.round(reached / total * 100) }
+  }).filter(f => f.count > 0)
+
+  if (funnel.length < 2) return null
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-3">Phễu chuyển đổi</p>
+      <div className="bg-white rounded-2xl border border-gray-100 px-4 py-4 space-y-2.5">
+        {funnel.map(({ stage, count, rate }) => (
+          <div key={stage} className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-24 flex-shrink-0 truncate">{stage}</span>
+            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-blue-400 transition-all duration-500"
+                style={{ width: `${rate}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-gray-700 w-7 text-right flex-shrink-0">{count}</span>
+            <span className="text-xs text-gray-400 w-9 text-right flex-shrink-0">{rate}%</span>
+          </div>
+        ))}
+        <p className="text-xs text-gray-400 pt-1.5 border-t border-gray-50">
+          Tổng {total} KH active
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ─── Activity Feed ────────────────────────────────────────────────────────────
 
 type FeedItem = DashboardStats['activity_feed'][0]
@@ -468,59 +600,60 @@ function PLWidget({ pl }: { pl: PLSummary }) {
 // ─── Build cards per role ─────────────────────────────────────────────────────
 
 function buildCards(role: string, s: DashboardStats, target: number | null): KPICard[] {
-  const isManagerGroup = ['admin', 'ceo', 'director'].includes(role)
+  const kpi  = s.kpi_target
+  const isMgr = ['admin', 'ceo', 'director'].includes(role)
+  // Helper: compute OKR %, undefined nếu không có target
+  const pct = (actual: number, t: number | null | undefined): number | undefined =>
+    t ? Math.round(actual / t * 100) : undefined
 
-  if (isManagerGroup) return [
-    { label: 'Khách hàng', value: s.total_customers,  sub: `+${s.new_customers_month} tháng này`, color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
-    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',         color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
-    { label: 'Đơn tháng này', value: s.orders_month,  sub: 'HĐ + Thương mại',                    color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
-    { label: 'Bảo trì hôm nay', value: s.maintenance_today, sub: 'Công trình + Định kỳ',         color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
+  if (isMgr) return [
+    { label: 'Khách hàng',      value: s.total_customers,          sub: `+${s.new_customers_month} tháng này`, color: 'bg-blue-50 text-blue-600',    icon: '👥', href: '/dashboard/customers', progress: pct(s.new_customers_month, kpi?.target_customers) },
+    { label: 'Doanh số tháng',  value: fmtMoney(s.revenue_month),  sub: 'HĐ + Thương mại',                     color: 'bg-green-50 text-green-600',   icon: '💰', href: '/dashboard/contracts',  progress: pct(s.revenue_month, kpi?.target_revenue)    },
+    { label: 'Đơn tháng này',   value: s.orders_month,              sub: 'HĐ + Thương mại',                     color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts',  progress: pct(s.orders_month, kpi?.target_contracts)   },
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,         sub: 'Công trình + Định kỳ',                color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance'                                                          },
   ]
 
   if (role === 'accountant') return [
-    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
-    { label: 'Chờ thanh toán', value: s.contracts_unpaid, sub: 'HĐ chưa thu đủ',          color: 'bg-red-50 text-red-600',      icon: '⏳', href: '/dashboard/contracts' },
-    { label: 'KH mới tháng',   value: s.new_customers_month, sub: 'Ngày liên hệ đầu',     color: 'bg-blue-50 text-blue-600',    icon: '👥', href: '/dashboard/customers' },
-    { label: 'Đơn tháng này',  value: s.orders_month,  sub: 'HĐ + Thương mại',            color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
+    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại', color: 'bg-green-50 text-green-600',   icon: '💰', href: '/dashboard/contracts',  progress: pct(s.revenue_month, kpi?.target_revenue) },
+    { label: 'Chờ thanh toán', value: s.contracts_unpaid,         sub: 'HĐ chưa thu đủ', color: 'bg-red-50 text-red-600',       icon: '⏳', href: '/dashboard/contracts'  },
+    { label: 'KH mới tháng',   value: s.new_customers_month,      sub: 'Ngày liên hệ đầu', color: 'bg-blue-50 text-blue-600',  icon: '👥', href: '/dashboard/customers'  },
+    { label: 'Đơn tháng này',  value: s.orders_month,             sub: 'HĐ + Thương mại', color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts'  },
   ]
 
   if (role === 'sales' || role === 'partner') {
-    const targetPct = target && s.orders_month > 0
-      ? `${Math.round((s.revenue_month / target) * 100)}% target`
-      : target ? '0% target' : ''
+    const revTarget = kpi?.target_revenue ?? target
     return [
-      { label: 'KH của tôi',    value: s.total_customers,  sub: `+${s.new_customers_month} tháng`,  color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
-      { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: targetPct,                  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
-      { label: 'Báo giá chờ',   value: s.pending_quotes,   sub: 'Nháp + Đã gửi',                   color: 'bg-amber-50 text-amber-600',  icon: '📋', href: '/dashboard/contracts' },
-      { label: 'Đơn tháng',     value: s.orders_month,     sub: 'HĐ + Thương mại',                  color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
+      { label: 'KH của tôi',     value: s.total_customers,          sub: `+${s.new_customers_month} tháng`, color: 'bg-blue-50 text-blue-600',    icon: '👥', href: '/dashboard/customers', progress: pct(s.new_customers_month, kpi?.target_customers) },
+      { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month),  sub: 'Tháng này',                       color: 'bg-green-50 text-green-600',   icon: '💰', href: '/dashboard/contracts',  progress: pct(s.revenue_month, revTarget)                },
+      { label: 'Báo giá chờ',    value: s.pending_quotes,            sub: 'Nháp + Đã gửi',                   color: 'bg-amber-50 text-amber-600',  icon: '📋', href: '/dashboard/contracts'                                                                  },
+      { label: 'Đơn tháng',      value: s.orders_month,              sub: 'HĐ + Thương mại',                 color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts',  progress: pct(s.orders_month, kpi?.target_contracts)     },
     ]
   }
 
   if (role === 'tech_lead') return [
-    { label: 'Bảo trì hôm nay', value: s.maintenance_today,        sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600',  icon: '🔧', href: '/dashboard/maintenance' },
-    { label: 'Đang thi công',    value: s.construction_ongoing,     sub: 'Công trình',          color: 'bg-blue-50 text-blue-600',      icon: '🏗️', href: '/dashboard/maintenance' },
-    { label: 'Tuần này',         value: s.maintenance_week,         sub: 'CT + Định kỳ',        color: 'bg-amber-50 text-amber-600',    icon: '📅', href: '/dashboard/calendar' },
-    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending, sub: 'Yêu cầu chờ xử lý',  color: 'bg-purple-50 text-purple-600',  icon: '🛡️', href: '/dashboard/warranty' },
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,         sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
+    { label: 'Đang thi công',    value: s.construction_ongoing,      sub: 'Công trình',          color: 'bg-blue-50 text-blue-600',     icon: '🏗️', href: '/dashboard/maintenance' },
+    { label: 'Tuần này',         value: s.maintenance_week,          sub: 'CT + Định kỳ',        color: 'bg-amber-50 text-amber-600',   icon: '📅', href: '/dashboard/calendar'    },
+    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending,  sub: 'Yêu cầu chờ xử lý', color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty'    },
   ]
 
   if (role === 'tech') return [
-    { label: 'Bảo trì hôm nay', value: s.maintenance_today,   sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
-    { label: 'Tuần này',         value: s.maintenance_week,    sub: 'CT + Định kỳ',       color: 'bg-amber-50 text-amber-600',   icon: '📅', href: '/dashboard/calendar' },
-    { label: 'Đang thi công',    value: s.construction_ongoing, sub: 'Công trình',         color: 'bg-blue-50 text-blue-600',    icon: '🏗️', href: '/dashboard/maintenance' },
-    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending, sub: 'Yêu cầu chờ xử lý', color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty' },
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,              sub: 'CT + Định kỳ',       color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
+    { label: 'Tuần này',         value: s.maintenance_week,               sub: 'CT + Định kỳ',       color: 'bg-amber-50 text-amber-600',   icon: '📅', href: '/dashboard/calendar'    },
+    { label: 'Đang thi công',    value: s.construction_ongoing,           sub: 'Công trình',          color: 'bg-blue-50 text-blue-600',     icon: '🏗️', href: '/dashboard/maintenance' },
+    { label: 'Chờ bảo hành',     value: s.warranty_tickets_pending,       sub: 'Yêu cầu chờ xử lý', color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty'    },
   ]
 
   if (role === 'logistics') return [
-    { label: 'Chờ giao',        value: s.logistics_pending,          sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/contracts' },
-    { label: 'Quá hạn giao',    value: s.logistics_overdue,          sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/contracts' },
-    { label: 'Bảo trì hôm nay', value: s.maintenance_today,          sub: 'CT + Định kỳ',             color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
-    { label: 'Chờ bảo hành',    value: s.warranty_tickets_pending,   sub: 'Yêu cầu chờ xử lý',       color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty' },
+    { label: 'Chờ giao',        value: s.logistics_pending,        sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/contracts'   },
+    { label: 'Quá hạn giao',    value: s.logistics_overdue,        sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/contracts'   },
+    { label: 'Bảo trì hôm nay', value: s.maintenance_today,        sub: 'CT + Định kỳ',             color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
+    { label: 'Chờ bảo hành',    value: s.warranty_tickets_pending, sub: 'Yêu cầu chờ xử lý',       color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty'    },
   ]
 
-  // Fallback
   return [
-    { label: 'Khách hàng', value: s.total_customers, sub: `+${s.new_customers_month} tháng`, color: 'bg-blue-50 text-blue-600', icon: '👥', href: '/dashboard/customers' },
-    { label: 'Báo giá chờ', value: s.pending_quotes,  sub: 'Nháp + Đã gửi',                  color: 'bg-amber-50 text-amber-600', icon: '📋', href: '/dashboard/contracts' },
+    { label: 'Khách hàng', value: s.total_customers, sub: `+${s.new_customers_month} tháng`, color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
+    { label: 'Báo giá chờ', value: s.pending_quotes, sub: 'Nháp + Đã gửi',                   color: 'bg-amber-50 text-amber-600', icon: '📋', href: '/dashboard/contracts'  },
   ]
 }
 
@@ -595,6 +728,7 @@ export default function DashboardPage() {
   const isManager     = ['admin', 'ceo', 'director'].includes(role)
   const showRevChart  = ['admin', 'ceo', 'director', 'accountant', 'sales'].includes(role)
   const showPipeline  = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)
+  const showFunnel    = isManager || role === 'sales' || role === 'partner'
 
   // Target progress bar cho sales
   const targetPct = profile?.target_thang && stats?.revenue_month
@@ -649,6 +783,9 @@ export default function DashboardPage() {
       {/* ── Quick actions ── */}
       <QuickActions role={role} />
 
+      {/* ── Lịch hôm nay ── */}
+      <MiniCalendar />
+
       {/* ── Việc cần làm (tech/logistics/sales) ── */}
       <MyTasksWidget role={role} />
 
@@ -665,6 +802,9 @@ export default function DashboardPage() {
 
       {/* ── Pipeline ── */}
       {showPipeline && stats && <PipelineSection pipeline={stats.pipeline} />}
+
+      {/* ── Conversion Funnel ── */}
+      {showFunnel && stats && <ConversionFunnel pipeline={stats.pipeline} />}
 
       {/* ── Activity feed (manager only) ── */}
       {isManager && stats && stats.activity_feed.length > 0 && (

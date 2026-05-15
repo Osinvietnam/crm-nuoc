@@ -33,6 +33,8 @@ export interface DashboardStats {
   khau_hao_thang:            number   // tổng khấu hao tháng hiện tại
   cong_no_qua_han:           number   // tổng công nợ quá hạn (due_date < today)
   warranty_tickets_pending:  number   // yêu cầu bảo hành Chờ xử lý
+  // Phase 15B — OKR
+  kpi_target: { target_revenue: number; target_contracts: number; target_customers: number } | null
   // Phase 15A — Activity Feed & P&L
   activity_feed: { user_name: string; action: string; entity: string; detail: string; created_at: string }[]
   pl_summary: {
@@ -93,7 +95,7 @@ function zero(): DashboardStats {
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
     logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0, quotes_cho_duyet: 0,
     hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0, warranty_tickets_pending: 0,
-    activity_feed: [], pl_summary: null,
+    kpi_target: null, activity_feed: [], pl_summary: null,
   }
 }
 
@@ -129,7 +131,8 @@ export async function GET() {
     // ── A. Khách hàng ─────────────────────────────────────────────────────────
     // RLS already filters: sales sees own, tech sees khu_vuc, admin/ceo see all
 
-    const [custAllRes, custMonthRes, noContactRes, pipelineRes] = await Promise.all([
+    const nowD = new Date()
+    const [custAllRes, custMonthRes, noContactRes, pipelineRes, kpiRes] = await Promise.all([
       supabase.from('customers').select('*', { count: 'exact', head: true }),
       supabase.from('customers').select('*', { count: 'exact', head: true })
         .gte('ngay_lien_he_dau', mFrom).lte('ngay_lien_he_dau', mTo),
@@ -137,11 +140,18 @@ export async function GET() {
         .or(`ngay_follow_up.is.null,ngay_follow_up.lt.${ago30}`)
         .not('pipeline', 'in', '("Từ chối","Bảo hành")'),
       supabase.from('customers').select('pipeline'),
+      supabase.from('kpi_targets')
+        .select('target_revenue, target_contracts, target_customers')
+        .eq('user_id', user.id)
+        .eq('month', nowD.getMonth() + 1)
+        .eq('year', nowD.getFullYear())
+        .maybeSingle(),
     ])
 
     stats.total_customers     = custAllRes.count   ?? 0
     stats.new_customers_month = custMonthRes.count ?? 0
     stats.kh_no_contact_30d   = noContactRes.count ?? 0
+    stats.kpi_target          = kpiRes.data        ?? null
 
     for (const stage of PIPELINE_STAGES) stats.pipeline[stage] = 0
     for (const r of pipelineRes.data ?? []) {
