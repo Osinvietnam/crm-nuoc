@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { mapQuote } from '../_mappers'
+import { mapQuote, ALLOWED_TRANSITIONS_BY_TYPE, TERMINAL_POSITIVE, type QuoteType } from '../_mappers'
 import { logAudit } from '@/lib/audit'
 import { notifyManagers } from '@/lib/notifications'
 
@@ -56,35 +56,28 @@ export async function PATCH(
     const body   = await req.json()
 
     // C3 guard: fetch current quote trước
-    const fetchQuery = supabase.from('quotes').select('id, trang_thai, tong_gia_tri, chiet_khau, customer_id, ngay_gui_kh')
+    const fetchQuery = supabase.from('quotes').select('id, type, trang_thai, tong_gia_tri, chiet_khau, customer_id, ngay_gui_kh')
     const { data: current, error: fetchErr } = await (/^\d+$/.test(id)
       ? fetchQuery.eq('id', parseInt(id))
       : fetchQuery.eq('lark_record_id', id)
     ).single()
     if (fetchErr || !current) return NextResponse.json({ error: 'Không tìm thấy báo giá' }, { status: 404 })
 
-    // C3: Nếu báo giá đã bị khóa, xóa các field nhạy cảm khỏi body
-    const isLocked = ['Chấp nhận', 'Từ chối'].includes(current.trang_thai)
+    const quoteType: QuoteType = (current.type ?? 'b2c') as QuoteType
+    const terminalPositive = TERMINAL_POSITIVE[quoteType]
+
+    // C3: Nếu báo giá đã bị khóa (terminal positive), xóa các field nhạy cảm
+    const isLocked = current.trang_thai === terminalPositive
     if (isLocked) {
       const LOCKED_BLOCKED = ['san_pham', 'tong_gia_tri', 'chiet_khau', 'kenh_tiep_nhan', 'ngay_gui_kh', 'ma_hd_tham_chieu']
       for (const f of LOCKED_BLOCKED) delete body[f]
     }
 
-    // M6: State machine — block nhảy trạng thái không hợp lệ (trừ admin/ceo)
+    // M6: State machine per type — block nhảy trạng thái không hợp lệ (trừ manager)
     if (body.trang_thai && body.trang_thai !== current.trang_thai) {
       const isManager = ['admin', 'ceo', 'director'].includes(profile.role)
       if (!isManager) {
-        // Định nghĩa chuyển trạng thái hợp lệ — chỉ manager mới duyệt 'Chấp nhận'
-        const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-          'Nháp':       ['Đã gửi', 'Hết hạn'],
-          'Đã gửi':    ['Đàm phán', 'Chờ duyệt', 'Từ chối', 'Hết hạn'],
-          'Đàm phán':   ['Chờ duyệt', 'Từ chối', 'Hết hạn'],
-          'Chờ duyệt':  [],           // Chỉ manager mới duyệt hoặc từ chối
-          'Chấp nhận':  [],           // Terminal cho non-manager
-          'Từ chối':    [],           // Terminal (chỉ admin)
-          'Hết hạn':    ['Nháp', 'Đã gửi'],
-        }
-        const allowed = ALLOWED_TRANSITIONS[current.trang_thai] ?? []
+        const allowed = ALLOWED_TRANSITIONS_BY_TYPE[quoteType]?.[current.trang_thai] ?? []
         if (!allowed.includes(body.trang_thai)) {
           return NextResponse.json({
             error: `Không thể chuyển từ "${current.trang_thai}" sang "${body.trang_thai}"`,
@@ -97,7 +90,10 @@ export async function PATCH(
       'trang_thai', 'ly_do_tu_choi', 'ma_hd_tham_chieu', 'tong_gia_tri',
       'chiet_khau', 'ghi_chu_ky_thuat', 'ghi_chu_thuong_mai',
       'kenh_tiep_nhan', 'ket_qua_follow_up',
-      // NOTE: 'san_pham' không phải cột trong bảng quotes — sản phẩm lưu qua quote_items
+      // Thương mại
+      'loai_khach', 'tinh_thanh', 'phuong_thuc_tt',
+      // Dự án
+      'ten_da', 'chu_dau_tu', 'loai_da', 'quy_mo', 'gia_tri_dt', 'doi_tac_da',
     ]
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
@@ -150,22 +146,27 @@ export async function PATCH(
 
     if (error) throw error
 
-    // Automation: Báo giá chấp nhận → KH pipeline → "Chốt HĐ"
-    // Guard: chỉ update nếu KH đang ở 'Báo giá' hoặc 'Đàm phán' (tránh kéo lùi KH đã qua stage)
-    if (body.trang_thai === 'Chấp nhận' && data.customer_id) {
+    // Automation: terminal positive → KH pipeline "Chốt HĐ" (chỉ B2C)
+    if (body.trang_thai === terminalPositive && data.customer_id && quoteType === 'b2c') {
       void supabase.from('customers')
         .update({ pipeline: 'Chốt HĐ' })
         .in('pipeline', ['Báo giá', 'Đàm phán'])
         .eq('id', data.customer_id)
     }
 
-    // Automation: Từ chối → KH pipeline → "Đàm phán"
-    // Guard: chỉ update nếu KH đang ở 'Báo giá' (tránh kéo lùi KH đã qua Đàm phán/Chốt HĐ trở đi)
-    if (body.trang_thai === 'Từ chối' && data.customer_id) {
+    // Automation: Từ chối / Thua thầu → KH pipeline "Đàm phán" (chỉ B2C)
+    if (['Từ chối', 'Thua thầu'].includes(body.trang_thai ?? '') && data.customer_id && quoteType === 'b2c') {
       void supabase.from('customers')
         .update({ pipeline: 'Đàm phán' })
         .in('pipeline', ['Báo giá'])
         .eq('id', data.customer_id)
+    }
+
+    // Date fields per type
+    if ('ngay_nop_thau' in body) {
+      updates.ngay_nop_thau = body.ngay_nop_thau
+        ? new Date(Number(body.ngay_nop_thau)).toISOString().split('T')[0]
+        : null
     }
 
     // H3: Audit log khi thay đổi trạng thái quan trọng

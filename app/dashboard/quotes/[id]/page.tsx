@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { QUOTE_STATUSES, QUOTE_STATUS_COLORS, NGUON_KH_OPTIONS } from '@/lib/lark/tables'
-import type { Quote } from '@/app/api/lark/quotes/_mappers'
+import type { Quote, QuoteType } from '@/app/api/lark/quotes/_mappers'
+import { STATUSES_BY_TYPE, TERMINAL_POSITIVE, TERMINAL_NEGATIVE } from '@/app/api/lark/quotes/_mappers'
 import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
 import type { Product } from '@/app/api/lark/products/_mapper'
 async function fetchCompany() {
@@ -87,56 +88,74 @@ const STATUS_ALLOWED: Record<string, string[]> = {
   partner:    [],
 }
 
-function StatusSheet({ current, role, onSelect, onClose }: {
+function StatusSheet({ current, role, type, onSelect, onClose }: {
   current: string
   role:    string
+  type:    QuoteType
   onSelect: (s: string, lyDo?: string) => void
   onClose: () => void
 }) {
-  const [lyDo, setLyDo] = useState('')
   const [pending, setPending] = useState('')
 
-  const allowedStatuses = STATUS_ALLOWED[role] ?? (MANAGER_ROLES.includes(role) ? [...QUOTE_STATUSES] : [])
+  const isManager = MANAGER_ROLES.includes(role)
+  const allStatuses = STATUSES_BY_TYPE[type]
+
+  // B2C: sales có thể thay đổi một số trạng thái; manager toàn quyền
+  // Commercial/Project: sales và manager đều được thay đổi, trừ terminal positive (cần manager)
+  const termPos = TERMINAL_POSITIVE[type]
+  const termNeg = TERMINAL_NEGATIVE[type]
+
+  const allowedStatuses = isManager
+    ? allStatuses
+    : allStatuses.filter(s => s !== termPos)
 
   const handleSelect = (s: string) => {
-    if (s === 'Từ chối') { setPending(s); return }
+    if (termNeg.includes(s)) { setPending(s); return }
     onSelect(s)
     onClose()
   }
 
-  if (pending === 'Từ chối') {
+  if (pending) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
         onClick={e => e.target === e.currentTarget && onClose()}>
         <div className="bg-white rounded-t-3xl p-5 space-y-4">
-          <div className="flex justify-center -mt-2 mb-2">
-            <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
-          </div>
-          <h2 className="text-base font-bold text-gray-800">Lý do từ chối</h2>
-          <select value={lyDo} onChange={e => setLyDo(e.target.value)}
+          <div className="flex justify-center -mt-2 mb-2"><div className="w-12 h-1.5 bg-gray-300 rounded-full" /></div>
+          <h2 className="text-base font-bold text-gray-800">
+            {type === 'project' ? 'Xác nhận thua thầu' : 'Lý do từ chối'}
+          </h2>
+          <select onChange={e => { onSelect(pending, e.target.value); onClose() }}
+            defaultValue=""
             className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400">
-            <option value="">— Chọn lý do —</option>
-            <option>Giá cao</option>
-            <option>Không bám đuổi</option>
-            <option>Giới thiệu trễ</option>
-            <option>Khác</option>
+            <option value="" disabled>— Chọn lý do —</option>
+            {type === 'project' ? (
+              <>
+                <option>Giá không cạnh tranh</option>
+                <option>Không đáp ứng yêu cầu kỹ thuật</option>
+                <option>Đối thủ có mối quan hệ</option>
+                <option>Rút khỏi dự án</option>
+                <option>Khác</option>
+              </>
+            ) : (
+              <>
+                <option>Giá cao</option>
+                <option>Không bám đuổi</option>
+                <option>Giới thiệu trễ</option>
+                <option>KH chọn nhà khác</option>
+                <option>Khác</option>
+              </>
+            )}
           </select>
-          <div className="flex gap-3">
-            <button onClick={() => setPending('')}
-              className="flex-1 border border-gray-200 text-gray-600 font-medium py-3 rounded-xl text-sm">
-              Quay lại
-            </button>
-            <button onClick={() => { onSelect('Từ chối', lyDo); onClose() }}
-              className="flex-1 bg-red-500 text-white font-medium py-3 rounded-xl text-sm">
-              Xác nhận từ chối
-            </button>
-          </div>
+          <button onClick={() => setPending('')}
+            className="w-full border border-gray-200 text-gray-600 font-medium py-3 rounded-xl text-sm">
+            Quay lại
+          </button>
         </div>
       </div>
     )
   }
 
-  const visibleStatuses = QUOTE_STATUSES.filter(s => allowedStatuses.includes(s))
+  const visibleStatuses = allStatuses.filter(s => allowedStatuses.includes(s))
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
@@ -152,7 +171,7 @@ function StatusSheet({ current, role, onSelect, onClose }: {
           {visibleStatuses.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">Bạn không có quyền đổi trạng thái</p>
           ) : visibleStatuses.map(s => {
-            const c = QUOTE_STATUS_COLORS[s]
+            const c = QUOTE_STATUS_COLORS[s] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
             const active = current === s
             return (
               <button key={s} onClick={() => handleSelect(s)}
@@ -673,25 +692,37 @@ export default function QuoteDetailPage() {
     </div>
   )
 
+  const quoteType: QuoteType    = quote.type ?? 'b2c'
+  const terminalPositive        = TERMINAL_POSITIVE[quoteType]
+  const terminalNegatives       = TERMINAL_NEGATIVE[quoteType]
+  const isTerminalState         = quote.trang_thai === terminalPositive || terminalNegatives.includes(quote.trang_thai)
+
   const now          = Date.now()
-  const isExpired    = quote.ngay_het_han ? now > quote.ngay_het_han : false
-  const daysLeft     = quote.ngay_het_han ? diffDays(quote.ngay_het_han) : null
-  const displayStatus = (isExpired && !['Chấp nhận','Từ chối'].includes(quote.trang_thai)) ? 'Hết hạn' : quote.trang_thai
+  const isExpired    = quoteType === 'b2c' && quote.ngay_het_han ? now > quote.ngay_het_han : false
+  const daysLeft     = quoteType === 'b2c' && quote.ngay_het_han ? diffDays(quote.ngay_het_han) : null
+  const displayStatus = (isExpired && !terminalNegatives.includes(quote.trang_thai) && quote.trang_thai !== terminalPositive)
+    ? 'Hết hạn' : quote.trang_thai
   const statusColor  = QUOTE_STATUS_COLORS[displayStatus] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
-  const canEdit      = !['Chấp nhận', 'Từ chối'].includes(quote.trang_thai)
+  const canEdit      = !isTerminalState
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <button onClick={() => router.push('/dashboard/quotes')} className="text-gray-500 p-2.5 -ml-2">
+        <button onClick={() => router.push(`/dashboard/quotes?tab=${quoteType}`)} className="text-gray-500 p-2.5 -ml-2">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate">{quote.ma_bao_gia}</h1>
-          <p className="text-xs text-gray-400">{quote.khach_hang} · v{quote.phien_ban}</p>
+          <h1 className="text-base font-bold text-gray-800 truncate">
+            {quoteType === 'project' ? (quote.ten_da || quote.ma_bao_gia) : quote.ma_bao_gia}
+          </h1>
+          <p className="text-xs text-gray-400">
+            {quoteType === 'project'
+              ? `${quote.chu_dau_tu || quote.khach_hang} · ${quote.ma_bao_gia}`
+              : `${quote.khach_hang} · v${quote.phien_ban}`}
+          </p>
         </div>
         {successMsg && <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-lg">{successMsg}</span>}
         {errorMsg   && <span className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded-lg">{errorMsg}</span>}
@@ -785,17 +816,34 @@ export default function QuoteDetailPage() {
 
         {/* Info card */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 mb-3">THÔNG TIN BÁO GIÁ</p>
-          <InfoRow label="Mã báo giá"     value={quote.ma_bao_gia} />
-          <InfoRow label="Khách hàng"     value={quote.khach_hang} />
-          <InfoRow label="Số điện thoại"  value={quote.sdt} />
+          <p className="text-xs font-semibold text-gray-400 mb-3">
+            {quoteType === 'b2c' ? 'THÔNG TIN BÁO GIÁ' : quoteType === 'commercial' ? 'THÔNG TIN ĐƠN THƯƠNG MẠI' : 'THÔNG TIN DỰ ÁN'}
+          </p>
+          <InfoRow label="Mã"              value={quote.ma_bao_gia} />
+          <InfoRow label="Khách hàng"      value={quote.khach_hang} />
+          <InfoRow label="Số điện thoại"   value={quote.sdt} />
           <InfoRow label="Người phụ trách" value={quote.nguoi_phu_trach} />
-          <InfoRow label="Phiên bản"      value={`v${quote.phien_ban}`} />
-          <InfoRow label="Ngày lập"       value={fmtDate(quote.ngay_lap)} />
-          <InfoRow label="Ngày hết hạn"   value={fmtDate(quote.ngay_het_han)} />
-          {quote.ma_hd_tham_chieu && (
-            <InfoRow label="Mã HĐ tham chiếu" value={quote.ma_hd_tham_chieu} />
-          )}
+          {quoteType === 'b2c' && <>
+            <InfoRow label="Phiên bản"      value={`v${quote.phien_ban}`} />
+            <InfoRow label="Ngày lập"       value={fmtDate(quote.ngay_lap)} />
+            <InfoRow label="Ngày hết hạn"   value={fmtDate(quote.ngay_het_han)} />
+            {quote.ma_hd_tham_chieu && <InfoRow label="Mã HĐ tham chiếu" value={quote.ma_hd_tham_chieu} />}
+          </>}
+          {quoteType === 'commercial' && <>
+            <InfoRow label="Loại khách"      value={quote.loai_khach} />
+            <InfoRow label="Tỉnh / Thành"    value={quote.tinh_thanh} />
+            <InfoRow label="Phương thức TT"  value={quote.phuong_thuc_tt} />
+            <InfoRow label="Ngày lập"        value={fmtDate(quote.ngay_lap)} />
+          </>}
+          {quoteType === 'project' && <>
+            <InfoRow label="Tên dự án"      value={quote.ten_da} />
+            <InfoRow label="Chủ đầu tư"     value={quote.chu_dau_tu} />
+            <InfoRow label="Loại dự án"     value={quote.loai_da} />
+            <InfoRow label="Quy mô"         value={quote.quy_mo} />
+            <InfoRow label="Tỉnh / Thành"   value={quote.tinh_thanh} />
+            <InfoRow label="Đối tác"        value={quote.doi_tac_da} />
+            <InfoRow label="Ngày nộp thầu"  value={fmtDate(quote.ngay_nop_thau)} />
+          </>}
         </div>
 
         {/* Notes */}
@@ -830,84 +878,80 @@ export default function QuoteDetailPage() {
 
         {/* Action buttons */}
         <div className="space-y-2 pb-6">
-          {/* Gửi KH — chỉ khi Nháp hoặc Đàm phán */}
-          {['Nháp', 'Đàm phán'].includes(quote.trang_thai) && (
-            <button
-              onClick={handleSend}
-              disabled={sending}
-              className="w-full bg-green-600 disabled:bg-green-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
-              <span>📤</span>
-              {sending ? 'Đang gửi...' : 'Gửi KH (Xuất PDF + Cập nhật trạng thái)'}
-            </button>
-          )}
 
-          {/* Gửi duyệt — sales khi BG đã gửi hoặc đàm phán */}
-          {['Đã gửi', 'Đàm phán'].includes(quote.trang_thai) && (
-            <button
-              onClick={() => handleStatusChange('Chờ duyệt')}
-              disabled={updating}
-              className="w-full bg-orange-500 disabled:bg-orange-300 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-orange-600">
-              <span>⏳</span>
-              {updating ? 'Đang gửi...' : 'Gửi lên CEO duyệt'}
-            </button>
-          )}
-
-          {/* Duyệt / Từ chối — manager khi BG đang chờ duyệt */}
-          {quote.trang_thai === 'Chờ duyệt' && (
-            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-orange-700 text-center">Báo giá đang chờ duyệt</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleStatusChange('Chấp nhận')}
-                  disabled={updating}
-                  className="bg-green-600 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">
-                  ✅ Duyệt
-                </button>
-                <button
-                  onClick={() => setShowRejectSheet(true)}
-                  disabled={updating}
-                  className="bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">
-                  ✕ Từ chối
-                </button>
+          {/* ── B2C actions ──────────────────────────────────────────────── */}
+          {quoteType === 'b2c' && <>
+            {['Nháp', 'Đàm phán'].includes(quote.trang_thai) && (
+              <button onClick={handleSend} disabled={sending}
+                className="w-full bg-green-600 disabled:bg-green-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
+                <span>📤</span>
+                {sending ? 'Đang gửi...' : 'Gửi KH (Xuất PDF + Cập nhật trạng thái)'}
+              </button>
+            )}
+            {['Đã gửi', 'Đàm phán'].includes(quote.trang_thai) && (
+              <button onClick={() => handleStatusChange('Chờ duyệt')} disabled={updating}
+                className="w-full bg-orange-500 disabled:bg-orange-300 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-orange-600">
+                <span>⏳</span>{updating ? 'Đang gửi...' : 'Gửi lên CEO duyệt'}
+              </button>
+            )}
+            {quote.trang_thai === 'Chờ duyệt' && MANAGER_ROLES.includes(myRole) && (
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-orange-700 text-center">Báo giá đang chờ duyệt</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => handleStatusChange('Chấp nhận')} disabled={updating}
+                    className="bg-green-600 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">✅ Duyệt</button>
+                  <button onClick={() => setShowRejectSheet(true)} disabled={updating}
+                    className="bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50">✕ Từ chối</button>
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Xuất PDF */}
-          <button
-            onClick={async () => {
-              setExportingPDF(true)
-              try { await downloadQuotePDF(quote) }
-              catch (e) { notify('Lỗi xuất PDF: ' + (e instanceof Error ? e.message : String(e)), true) }
-              finally { setExportingPDF(false) }
-            }}
-            disabled={exportingPDF}
-            className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-blue-700">
-            <span>📄</span>
-            {exportingPDF ? 'Đang tạo PDF...' : 'Xuất PDF báo giá'}
-          </button>
-
-          {/* Xuất XLSX */}
-          <button
-            onClick={() => { downloadQuoteXLSX(quote) }}
-            className="w-full bg-white border border-gray-200 text-green-700 font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-gray-50">
-            <span>📊</span> Xuất XLSX
-          </button>
-
-          {/* Tạo version mới */}
-          <button onClick={handleDuplicate} disabled={duplicating}
-            className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-gray-50">
-            <span>📋</span>
-            {duplicating ? 'Đang tạo...' : `Tạo version mới (v${quote.phien_ban + 1})`}
-          </button>
-
-          {/* Chuyển thành HĐ — chỉ khi Chấp nhận */}
-          {quote.trang_thai === 'Chấp nhận' && (
-            <button onClick={handleCreateContract}
-              className="w-full bg-green-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
-              <span>✅</span> Chuyển thành Hợp đồng
+            )}
+            <button onClick={async () => { setExportingPDF(true); try { await downloadQuotePDF(quote) } catch (e) { notify('Lỗi xuất PDF: ' + (e instanceof Error ? e.message : String(e)), true) } finally { setExportingPDF(false) } }}
+              disabled={exportingPDF}
+              className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-blue-700">
+              <span>📄</span>{exportingPDF ? 'Đang tạo PDF...' : 'Xuất PDF báo giá'}
             </button>
-          )}
+            <button onClick={() => downloadQuoteXLSX(quote)}
+              className="w-full bg-white border border-gray-200 text-green-700 font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-gray-50">
+              <span>📊</span> Xuất XLSX
+            </button>
+            <button onClick={handleDuplicate} disabled={duplicating}
+              className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-gray-50">
+              <span>📋</span>{duplicating ? 'Đang tạo...' : `Tạo version mới (v${quote.phien_ban + 1})`}
+            </button>
+            {quote.trang_thai === 'Chấp nhận' && (
+              <button onClick={handleCreateContract}
+                className="w-full bg-green-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
+                <span>✅</span> Chuyển thành Hợp đồng B2C
+              </button>
+            )}
+          </>}
+
+          {/* ── Commercial actions ────────────────────────────────────────── */}
+          {quoteType === 'commercial' && <>
+            {quote.trang_thai === 'Xác nhận' && (
+              <button onClick={() => {
+                const params = new URLSearchParams({ from_quote: quote.record_id, tab: 'commercial', khach_hang: quote.khach_hang, sdt: quote.sdt, gia_tri: String(quote.tong_gia_tri) })
+                router.push(`/dashboard/contracts?${params.toString()}`)
+              }}
+                className="w-full bg-green-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
+                <span>✅</span> Tạo Đơn thương mại
+              </button>
+            )}
+          </>}
+
+          {/* ── Project actions ────────────────────────────────────────────── */}
+          {quoteType === 'project' && <>
+            {quote.trang_thai === 'Thắng thầu' && (
+              <button onClick={() => {
+                const params = new URLSearchParams({ from_quote: quote.record_id, tab: 'projects', ten_da: quote.ten_da, chu_dau_tu: quote.chu_dau_tu || '', gia_tri: String(quote.gia_tri_dt || quote.tong_gia_tri) })
+                router.push(`/dashboard/contracts?${params.toString()}`)
+              }}
+                className="w-full bg-green-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-green-700">
+                <span>🏆</span> Tạo Dự án
+              </button>
+            )}
+          </>}
+
         </div>
       </div>
 
@@ -915,6 +959,7 @@ export default function QuoteDetailPage() {
         <StatusSheet
           current={displayStatus}
           role={myRole}
+          type={quoteType}
           onSelect={handleStatusChange}
           onClose={() => setShowStatus(false)}
         />
