@@ -310,6 +310,7 @@ export default function CustomerDetailPage() {
   const [logSaving, setLogSaving]                 = useState(false)
   const [activities, setActivities]               = useState<ActivityRecord[]>([])
   const [activitiesLoading, setActivitiesLoading] = useState(false)
+  const [activeTab, setActiveTab]                 = useState<'overview'|'quotes'|'payment'|'aftercare'|'history'>('overview')
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
 
@@ -589,7 +590,35 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-100 sticky top-[57px] z-10">
+        <div className="flex overflow-x-auto scrollbar-none px-2">
+          {([
+            { key: 'overview',  label: 'Tổng quan',  icon: '📋' },
+            { key: 'quotes',    label: 'Báo giá',    icon: '💼' },
+            { key: 'payment',   label: 'Thanh toán', icon: '💰' },
+            { key: 'aftercare', label: 'Dịch vụ',    icon: '🔧' },
+            { key: 'history',   label: 'Lịch sử',    icon: '🕐' },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
+                activeTab === t.key
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span>{t.icon}</span>{t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="p-4 space-y-4">
+        {/* ── Tab: Tổng quan ───────────────────────────────────────────────── */}
+        {activeTab === 'overview' && <>
+
         {/* Pipeline warnings */}
         {pipelineWarnings.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
@@ -864,10 +893,15 @@ export default function CustomerDetailPage() {
           !editingInfo && (
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <p className="text-xs font-semibold text-gray-400 mb-2">NỘI DUNG TRAO ĐỔI</p>
-              <p className="text-sm text-gray-700 leading-relaxed">{customer.noi_dung}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{customer.noi_dung}</p>
             </div>
           )
         ) : null}
+
+        </> /* end tab: overview */}
+
+        {/* ── Tab: Báo giá & HĐ ───────────────────────────────────────────── */}
+        {activeTab === 'quotes' && <>
 
         {/* Lịch sử Báo giá */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -916,15 +950,67 @@ export default function CustomerDetailPage() {
           )}
         </div>
 
-        {/* Thanh toán 3 đợt — chỉ hiện từ giai đoạn Chốt HĐ trở đi */}
-        {currentStageIdx >= PIPELINE_STAGES.indexOf('Chốt HĐ') && pipeline !== 'Lost' && userRole && (
+        </> /* end tab: quotes */}
+
+        {/* ── Tab: Thanh toán ──────────────────────────────────────────────── */}
+        {activeTab === 'payment' && <>
+
+        {currentStageIdx >= PIPELINE_STAGES.indexOf('Chốt HĐ') && pipeline !== 'Lost' && userRole ? (
           <PaymentSection
             customerId={id}
             customerName={customer.ho_ten}
             nguoiPhuTrach={customer.nguoi_phu_trach}
             userRole={userRole}
           />
+        ) : (
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+            <p className="text-2xl mb-2">💰</p>
+            <p className="text-sm text-gray-500">Thanh toán sẽ hiện sau khi KH đạt giai đoạn Chốt HĐ</p>
+          </div>
         )}
+
+        </> /* end tab: payment */}
+
+        {/* ── Tab: Dịch vụ (Bảo trì / Bảo hành) ─────────────────────────── */}
+        {activeTab === 'aftercare' && <>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => router.push(`/dashboard/maintenance?customer_id=${id}`)}
+            className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:bg-gray-50 text-left"
+          >
+            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">🔧</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-800">Lịch bảo trì</p>
+              <p className="text-xs text-gray-400 mt-0.5">Xem và quản lý lịch bảo trì định kỳ</p>
+            </div>
+            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => router.push(`/dashboard/warranty?customer_id=${id}`)}
+            className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:bg-gray-50 text-left"
+          >
+            <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">🛡️</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-800">Phiếu bảo hành</p>
+              <p className="text-xs text-gray-400 mt-0.5">Xem ticket bảo hành và yêu cầu hỗ trợ</p>
+            </div>
+            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        </> /* end tab: aftercare */}
+
+        {/* ── Tab: Lịch sử ─────────────────────────────────────────────────── */}
+        {activeTab === 'history' && <>
 
         {/* Activity Timeline */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -975,6 +1061,7 @@ export default function CustomerDetailPage() {
           )}
         </div>
 
+        {/* Lost card — hiện ở tab Lịch sử */}
         {pipeline === 'Lost' && (
           <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -996,6 +1083,8 @@ export default function CustomerDetailPage() {
             )}
           </div>
         )}
+
+        </> /* end tab: history */}
       </div>
 
       {showPipeline && (
