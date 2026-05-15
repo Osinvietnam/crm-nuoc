@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ToastProvider } from '@/components/Toast'
 import { NotificationPanel } from '@/components/NotificationPanel'
+import { CommandBar } from '@/components/CommandBar'
 
 interface Profile {
   full_name: string
@@ -173,6 +174,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ToastProvider>
+    <CommandBar />
     <div className="min-h-screen bg-gray-50 flex">
 
       {/* ── Desktop Sidebar (lg+) ─────────────────────────────────────── */}
@@ -194,6 +196,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Menu items */}
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+          {/* Search trigger */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('commandbar:open'))}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-600 mb-1 transition-colors"
+          >
+            <span className="text-lg leading-none">🔍</span>
+            <span className="flex-1 text-left">Tìm kiếm...</span>
+            <kbd className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+          </button>
           {menu.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
@@ -247,6 +258,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </button>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('commandbar:open'))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 transition-colors text-lg"
+              aria-label="Tìm kiếm"
+            >
+              🔍
+            </button>
             <NotificationPanel unreadCount={unreadCount} onCountChange={setUnreadCount} />
             <button
               onClick={handleLogout}
