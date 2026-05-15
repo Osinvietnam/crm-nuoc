@@ -150,7 +150,7 @@ export default function WarrantyPage() {
                 <p className="text-sm font-semibold text-gray-800">{t.title}</p>
                 {t.khach_hang && (
                   <button
-                    onClick={() => t.order_id && router.push(`/dashboard/orders/contract/${t.order_id}`)}
+                    onClick={() => t.order_id && router.push(`/dashboard/contracts/b2c/${t.order_id}`)}
                     className="text-xs text-blue-600 hover:underline text-left">
                     {t.khach_hang}{t.ma_hd ? ` · ${t.ma_hd}` : ''}
                   </button>

@@ -162,14 +162,14 @@ function QuickActions({ role }: { role: string }) {
   const router = useRouter()
 
   const actionsByRole: Record<string, { label: string; icon: string; href: string }[]> = {
-    admin:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
-    ceo:        [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
-    director:   [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }],
+    admin:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/contracts' }],
+    ceo:        [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/contracts' }],
+    director:   [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/contracts' }],
     accountant: [{ label: 'Ghi thu', icon: '💵', href: '/dashboard/finance' }, { label: 'Xem công nợ', icon: '📊', href: '/dashboard/finance' }],
-    sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/orders' }],
+    sales:      [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }, { label: 'Tạo báo giá', icon: '📋', href: '/dashboard/contracts' }],
     tech_lead:  [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
     tech:       [{ label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }, { label: 'Xem lịch', icon: '📅', href: '/dashboard/calendar' }],
-    logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/orders' }, { label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }],
+    logistics:  [{ label: 'Xem đơn hàng', icon: '📦', href: '/dashboard/contracts' }, { label: 'Xem bảo trì', icon: '🔧', href: '/dashboard/maintenance' }],
     partner:    [{ label: 'Khách hàng mới', icon: '👥', href: '/dashboard/customers' }],
   }
 
@@ -304,16 +304,16 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
 
   if (isManagerGroup) return [
     { label: 'Khách hàng', value: s.total_customers,  sub: `+${s.new_customers_month} tháng này`, color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
-    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',         color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/orders' },
-    { label: 'Đơn tháng này', value: s.orders_month,  sub: 'HĐ + Thương mại',                    color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/orders' },
+    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',         color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
+    { label: 'Đơn tháng này', value: s.orders_month,  sub: 'HĐ + Thương mại',                    color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
     { label: 'Bảo trì hôm nay', value: s.maintenance_today, sub: 'Công trình + Định kỳ',         color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
   ]
 
   if (role === 'accountant') return [
-    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/orders' },
-    { label: 'Chờ thanh toán', value: s.contracts_unpaid, sub: 'HĐ chưa thu đủ',          color: 'bg-red-50 text-red-600',      icon: '⏳', href: '/dashboard/orders' },
+    { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: 'HĐ + Thương mại',  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
+    { label: 'Chờ thanh toán', value: s.contracts_unpaid, sub: 'HĐ chưa thu đủ',          color: 'bg-red-50 text-red-600',      icon: '⏳', href: '/dashboard/contracts' },
     { label: 'KH mới tháng',   value: s.new_customers_month, sub: 'Ngày liên hệ đầu',     color: 'bg-blue-50 text-blue-600',    icon: '👥', href: '/dashboard/customers' },
-    { label: 'Đơn tháng này',  value: s.orders_month,  sub: 'HĐ + Thương mại',            color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/orders' },
+    { label: 'Đơn tháng này',  value: s.orders_month,  sub: 'HĐ + Thương mại',            color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
   ]
 
   if (role === 'sales' || role === 'partner') {
@@ -322,9 +322,9 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
       : target ? '0% target' : ''
     return [
       { label: 'KH của tôi',    value: s.total_customers,  sub: `+${s.new_customers_month} tháng`,  color: 'bg-blue-50 text-blue-600',   icon: '👥', href: '/dashboard/customers' },
-      { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: targetPct,                  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/orders' },
-      { label: 'Báo giá chờ',   value: s.pending_quotes,   sub: 'Nháp + Đã gửi',                   color: 'bg-amber-50 text-amber-600',  icon: '📋', href: '/dashboard/orders' },
-      { label: 'Đơn tháng',     value: s.orders_month,     sub: 'HĐ + Thương mại',                  color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/orders' },
+      { label: 'Doanh số tháng', value: fmtMoney(s.revenue_month), sub: targetPct,                  color: 'bg-green-50 text-green-600',  icon: '💰', href: '/dashboard/contracts' },
+      { label: 'Báo giá chờ',   value: s.pending_quotes,   sub: 'Nháp + Đã gửi',                   color: 'bg-amber-50 text-amber-600',  icon: '📋', href: '/dashboard/contracts' },
+      { label: 'Đơn tháng',     value: s.orders_month,     sub: 'HĐ + Thương mại',                  color: 'bg-purple-50 text-purple-600', icon: '📦', href: '/dashboard/contracts' },
     ]
   }
 
@@ -343,8 +343,8 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
   ]
 
   if (role === 'logistics') return [
-    { label: 'Chờ giao',        value: s.logistics_pending,          sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/orders' },
-    { label: 'Quá hạn giao',    value: s.logistics_overdue,          sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/orders' },
+    { label: 'Chờ giao',        value: s.logistics_pending,          sub: 'Chờ xác nhận + Chuẩn bị', color: 'bg-amber-50 text-amber-600',   icon: '📦', href: '/dashboard/contracts' },
+    { label: 'Quá hạn giao',    value: s.logistics_overdue,          sub: 'Chưa giao đúng hẹn',       color: 'bg-red-50 text-red-600',       icon: '⚠️', href: '/dashboard/contracts' },
     { label: 'Bảo trì hôm nay', value: s.maintenance_today,          sub: 'CT + Định kỳ',             color: 'bg-orange-50 text-orange-600', icon: '🔧', href: '/dashboard/maintenance' },
     { label: 'Chờ bảo hành',    value: s.warranty_tickets_pending,   sub: 'Yêu cầu chờ xử lý',       color: 'bg-purple-50 text-purple-600', icon: '🛡️', href: '/dashboard/warranty' },
   ]
@@ -352,7 +352,7 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
   // Fallback
   return [
     { label: 'Khách hàng', value: s.total_customers, sub: `+${s.new_customers_month} tháng`, color: 'bg-blue-50 text-blue-600', icon: '👥', href: '/dashboard/customers' },
-    { label: 'Báo giá chờ', value: s.pending_quotes,  sub: 'Nháp + Đã gửi',                  color: 'bg-amber-50 text-amber-600', icon: '📋', href: '/dashboard/orders' },
+    { label: 'Báo giá chờ', value: s.pending_quotes,  sub: 'Nháp + Đã gửi',                  color: 'bg-amber-50 text-amber-600', icon: '📋', href: '/dashboard/contracts' },
   ]
 }
 
@@ -369,16 +369,16 @@ function buildAlerts(role: string, s: DashboardStats) {
     }
   }
   if (role === 'accountant') {
-    base.push({ label: `${s.contracts_unpaid} hợp đồng chưa thu đủ`, count: s.contracts_unpaid, href: '/dashboard/orders', color: 'bg-red-50 text-red-700 border border-red-200' })
+    base.push({ label: `${s.contracts_unpaid} hợp đồng chưa thu đủ`, count: s.contracts_unpaid, href: '/dashboard/contracts', color: 'bg-red-50 text-red-700 border border-red-200' })
   }
   if (role === 'sales') {
-    base.push({ label: `${s.quotes_stale} báo giá đã gửi chưa phản hồi`, count: s.quotes_stale, href: '/dashboard/orders', color: 'bg-blue-50 text-blue-700 border border-blue-200' })
+    base.push({ label: `${s.quotes_stale} báo giá đã gửi chưa phản hồi`, count: s.quotes_stale, href: '/dashboard/contracts', color: 'bg-blue-50 text-blue-700 border border-blue-200' })
   }
   if (['admin', 'ceo', 'director'].includes(role) && s.quotes_cho_duyet > 0) {
-    base.unshift({ label: `${s.quotes_cho_duyet} báo giá chờ duyệt`, count: s.quotes_cho_duyet, href: '/dashboard/orders', color: 'bg-orange-50 text-orange-700 border border-orange-300' })
+    base.unshift({ label: `${s.quotes_cho_duyet} báo giá chờ duyệt`, count: s.quotes_cho_duyet, href: '/dashboard/contracts', color: 'bg-orange-50 text-orange-700 border border-orange-300' })
   }
   if (role === 'logistics') {
-    base.push({ label: `${s.logistics_overdue} đơn giao quá hạn`, count: s.logistics_overdue, href: '/dashboard/orders', color: 'bg-red-50 text-red-700 border border-red-200' })
+    base.push({ label: `${s.logistics_overdue} đơn giao quá hạn`, count: s.logistics_overdue, href: '/dashboard/contracts', color: 'bg-red-50 text-red-700 border border-red-200' })
   }
 
   return base

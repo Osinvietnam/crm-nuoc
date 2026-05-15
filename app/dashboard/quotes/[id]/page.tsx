@@ -657,7 +657,7 @@ export default function QuoteDetailPage() {
       gia_tri:    String(quote.gia_tri_sau_ck || quote.tong_gia_tri),
       dia_chi_ct: quote.dia_chi_ct,            // Địa chỉ công trình từ KH
     })
-    router.push(`/dashboard/orders?tab=b2c&${params.toString()}`)
+    router.push(`/dashboard/contracts?${params.toString()}`)
   }
 
   if (loading) return (

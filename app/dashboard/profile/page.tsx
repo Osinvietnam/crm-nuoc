@@ -399,7 +399,7 @@ export default function ProfilePage() {
                 <span className="text-sm text-gray-700">👥 Khách hàng của tôi</span>
                 <span className="text-gray-400 text-sm">→</span>
               </button>
-              <button onClick={() => router.push('/dashboard/orders')}
+              <button onClick={() => router.push('/dashboard/contracts')}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                 <span className="text-sm text-gray-700">📦 Đơn hàng của tôi</span>
                 <span className="text-gray-400 text-sm">→</span>
