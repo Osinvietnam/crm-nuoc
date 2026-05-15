@@ -223,16 +223,35 @@ export async function POST(req: NextRequest) {
         })()
       }
 
-      // C3: Ghi mã HĐ + tự động chấp nhận BG (câu hỏi 3 xác nhận)
+      // C3: Ghi mã HĐ + tự động chấp nhận BG + version sync nếu giá trị thay đổi
       if (quoteId && data.ma_hd) {
         void (async () => {
-          const { error: linkErr } = await supabase.from('quotes')
-            .update({
-              ma_hd_tham_chieu: data.ma_hd,
-              trang_thai:       'Chấp nhận',   // Auto-accept khi HĐ được tạo từ BG
-            })
+          // Fetch quote gốc để so sánh giá trị
+          const { data: qOrig } = await supabase
+            .from('quotes')
+            .select('id, trang_thai, tong_gia_tri, gia_tri_sau_ck, phien_ban')
             .eq('id', quoteId)
-            .neq('trang_thai', 'Chấp nhận')   // Idempotent: không ghi đè nếu đã accept
+            .single()
+
+          const updates: Record<string, unknown> = {
+            ma_hd_tham_chieu: data.ma_hd,
+            trang_thai:       'Chấp nhận',
+          }
+
+          // Sprint 4 — Version sync: nếu giá trị HĐ khác BG gốc → tạo phiên bản mới
+          const giaTriHd = Number(gia_tri_hd)
+          const giaBg    = qOrig?.gia_tri_sau_ck ?? qOrig?.tong_gia_tri ?? 0
+          if (giaTriHd > 0 && giaBg > 0 && giaTriHd !== giaBg) {
+            updates.tong_gia_tri  = giaTriHd
+            updates.gia_tri_sau_ck = giaTriHd
+            updates.phien_ban     = (qOrig?.phien_ban ?? 1) + 1
+            console.log(`[orders/b2c] Quote #${quoteId} version bump: ${giaBg} → ${giaTriHd}`)
+          }
+
+          const { error: linkErr } = await supabase.from('quotes')
+            .update(updates)
+            .eq('id', quoteId)
+            .neq('trang_thai', 'Chấp nhận')  // Idempotent
           if (linkErr) console.error('Quote back-link:', linkErr)
         })()
       }

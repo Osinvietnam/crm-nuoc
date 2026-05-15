@@ -34,6 +34,7 @@ export async function GET() {
       const { data, error } = await service
         .from('profiles')
         .select(MANAGER_FIELDS)
+        .limit(200)
         .order('created_at', { ascending: true })
       if (!error) {
         profiles = data
@@ -45,6 +46,7 @@ export async function GET() {
       const { data, error } = await service
         .from('profiles')
         .select(BASIC_FIELDS)
+        .limit(200)
         .order('created_at', { ascending: true })
       if (!error) {
         profiles = data
@@ -53,6 +55,7 @@ export async function GET() {
         const { data: data2, error: error2 } = await service
           .from('profiles')
           .select(MINIMAL_FIELDS)
+          .limit(200)
           .order('created_at', { ascending: true })
         if (error2) {
           const msg = `MINIMAL_FIELDS failed: ${error2.message}`
@@ -199,7 +202,7 @@ export async function PATCH(req: NextRequest) {
       user_name: me.full_name,
       action:    'profile_updated',
       entity:    'user',
-      detail:    `${before?.full_name ?? id}: ${JSON.stringify(updates)}`,
+      detail:    `${before?.full_name ?? id}: cập nhật [${Object.keys(updates).join(', ')}]`,
     })
 
     return NextResponse.json({ success: true })

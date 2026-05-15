@@ -441,6 +441,10 @@ export default function ProductsPage() {
   const [isAdmin, setIsAdmin]   = useState(false)
   const [showActions, setShowActions] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
+  const [sortBy, setSortBy] = useState<'name'|'price_asc'|'price_desc'>('name')
+  const [catalogueMode, setCatalogueMode] = useState(false)
+  const [selectedForCatalogue, setSelectedForCatalogue] = useState<Set<string>>(new Set())
+  const [catalogueTier, setCatalogueTier] = useState<'niem_yet'|'chiet_khau'|'hide'>('niem_yet')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -476,6 +480,12 @@ export default function ProductsPage() {
     return true
   })
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === 'price_asc') return a.gia_niem_yet - b.gia_niem_yet
+    if (sortBy === 'price_desc') return b.gia_niem_yet - a.gia_niem_yet
+    return a.ten_sp.localeCompare(b.ten_sp, 'vi')
+  })
+
   return (
     <div className="flex flex-col h-full">
       {/* Top bar */}
@@ -488,10 +498,18 @@ export default function ProductsPage() {
             </p>
           </div>
           {isAdmin && (
-            <button onClick={() => setShowActions(true)}
-              className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5">
-              <span className="text-base leading-none">+</span> Thêm
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowActions(true)}
+                className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5">
+                <span className="text-base leading-none">+</span> Thêm
+              </button>
+              {isAdmin && (
+                <button onClick={() => { setCatalogueMode(m => !m); setSelectedForCatalogue(new Set()) }}
+                  className={`text-sm font-semibold px-3 py-2 rounded-xl ${catalogueMode ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}>
+                  📋
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -517,6 +535,16 @@ export default function ProductsPage() {
               {v === 'all' ? 'Tất cả' : v === 'con' ? 'Còn hàng' : 'Hết hàng'}
             </button>
           ))}
+        </div>
+
+        {/* Sort */}
+        <div className="flex items-center gap-2">
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}
+            className="text-xs border border-gray-200 rounded-xl px-2 py-1.5 bg-white text-gray-600">
+            <option value="name">Tên A-Z</option>
+            <option value="price_asc">Giá ↑</option>
+            <option value="price_desc">Giá ↓</option>
+          </select>
         </div>
 
         {/* Filter: phân loại */}
@@ -573,25 +601,39 @@ export default function ProductsPage() {
             <p className="text-gray-500 text-sm font-medium">Chưa có sản phẩm</p>
           </div>
         )}
-        {!loading && !error && filtered.map(p => (
-          <ProductCard
-            key={p.record_id}
-            p={p}
-            isAdmin={isAdmin}
-            onClick={() => router.push(`/dashboard/products/${p.record_id}`)}
-            onToggleStock={isAdmin ? async () => {
-              const res = await fetch(`/api/lark/products/${p.record_id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ con_hang: !p.con_hang }),
-              })
-              if (res.ok) {
-                const json = await res.json()
-                setProducts(prev => prev.map(x => x.record_id === p.record_id ? json.data : x))
-              }
-            } : undefined}
-            onDelete={isAdmin ? () => setDeleteTarget(p) : undefined}
-          />
+        {!loading && !error && sorted.map(p => (
+          <div key={p.record_id} className="relative">
+            {catalogueMode && (
+              <div className="absolute top-2 left-2 z-10">
+                <input type="checkbox"
+                  checked={selectedForCatalogue.has(p.record_id)}
+                  onChange={e => setSelectedForCatalogue(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(p.record_id); else next.delete(p.record_id)
+                    return next
+                  })}
+                  className="w-5 h-5 rounded accent-blue-600"
+                />
+              </div>
+            )}
+            <ProductCard
+              p={p}
+              isAdmin={isAdmin}
+              onClick={() => router.push(`/dashboard/products/${p.record_id}`)}
+              onToggleStock={isAdmin ? async () => {
+                const res = await fetch(`/api/lark/products/${p.record_id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ con_hang: !p.con_hang }),
+                })
+                if (res.ok) {
+                  const json = await res.json()
+                  setProducts(prev => prev.map(x => x.record_id === p.record_id ? json.data : x))
+                }
+              } : undefined}
+              onDelete={isAdmin ? () => setDeleteTarget(p) : undefined}
+            />
+          </div>
         ))}
       </div>
 
@@ -646,6 +688,27 @@ export default function ProductsPage() {
             load()
           }}
         />
+      )}
+
+      {/* Catalogue floating bar */}
+      {catalogueMode && selectedForCatalogue.size > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
+          <div className="max-w-2xl mx-auto bg-blue-600 rounded-2xl p-3 flex items-center gap-3 shadow-xl">
+            <p className="text-white text-sm font-semibold flex-1">Đã chọn {selectedForCatalogue.size} SP</p>
+            <select value={catalogueTier} onChange={e => setCatalogueTier(e.target.value as typeof catalogueTier)}
+              className="text-xs px-2 py-1.5 rounded-xl bg-blue-500 text-white border border-blue-400">
+              <option value="niem_yet">Giá niêm yết</option>
+              <option value="chiet_khau">Giá chiết khấu</option>
+              <option value="hide">Ẩn giá</option>
+            </select>
+            <button onClick={() => {
+              const ids = [...selectedForCatalogue].join(',')
+              window.open(`/dashboard/products/catalogue?ids=${ids}&tier=${catalogueTier}`, '_blank')
+            }} className="bg-white text-blue-600 text-xs font-bold px-3 py-1.5 rounded-xl">
+              Xuất catalogue
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Delete confirm BottomSheet */}

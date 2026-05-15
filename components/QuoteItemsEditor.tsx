@@ -10,6 +10,7 @@ export interface QuoteItem {
   so_luong:   number
   don_gia:    number
   product_id: number | null  // FK → products.id; null nếu nhập tay
+  don_vi?:    string
 }
 
 export function itemsToLarkFields(items: QuoteItem[]): { san_pham: string; tong_gia_tri: number } {
@@ -23,6 +24,35 @@ function uid() {
 }
 
 const fmtMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '0₫'
+
+const DECIMAL_UNITS = new Set(['m', 'm²', 'm2', 'm³', 'm3', 'kg', 'lít', 'lit', 'tấn', 'tan', 'cuộn', 'cuon'])
+export function isDecimalUnit(u?: string): boolean {
+  return u ? DECIMAL_UNITS.has(u.toLowerCase().trim()) : false
+}
+
+// Formatted price input: shows 28.000.000₫ when unfocused, raw number when editing
+export function PriceInput({ value, onChange, placeholder, className }: {
+  value:       number
+  onChange:    (v: number) => void
+  placeholder?: string
+  className?:  string
+}) {
+  const [focused, setFocused] = useState(false)
+  const [raw,     setRaw]     = useState('')
+  const display = focused ? raw : (value > 0 ? value.toLocaleString('vi-VN') : '')
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={display}
+      placeholder={placeholder}
+      className={className}
+      onFocus={() => { setFocused(true); setRaw(value > 0 ? String(value) : '') }}
+      onChange={e => setRaw(e.target.value.replace(/[^\d]/g, ''))}
+      onBlur={() => { setFocused(false); onChange(parseInt(raw) || 0) }}
+    />
+  )
+}
 
 // ─── Draft persistence ────────────────────────────────────────────────────────
 
@@ -48,7 +78,14 @@ function ItemRow({ item, onChange, onRemove }: {
   onChange: (id: string, field: keyof QuoteItem, value: string | number) => void
   onRemove: (id: string) => void
 }) {
-  const subtotal = item.so_luong * item.don_gia
+  const subtotal  = item.so_luong * item.don_gia
+  const isDecimal = isDecimalUnit(item.don_vi)
+  const step      = isDecimal ? 0.01 : 1
+
+  const handleQtyChange = (raw: string) => {
+    const v = isDecimal ? parseFloat(raw) : parseInt(raw)
+    if (!isNaN(v) && v > 0) onChange(item.id, 'so_luong', isDecimal ? v : Math.round(v))
+  }
 
   return (
     <div className="bg-gray-50 rounded-xl p-3 space-y-2">
@@ -72,24 +109,31 @@ function ItemRow({ item, onChange, onRemove }: {
 
       {/* Qty × Price = Subtotal */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1.5 py-1">
           <button
-            onClick={() => onChange(item.id, 'so_luong', Math.max(1, item.so_luong - 1))}
+            onClick={() => onChange(item.id, 'so_luong', Math.max(step, parseFloat((item.so_luong - step).toFixed(2))))}
             className="w-5 h-5 flex items-center justify-center text-gray-500 text-base leading-none"
           >−</button>
-          <span className="text-sm font-semibold text-gray-700 w-5 text-center">{item.so_luong}</span>
+          <input
+            type="number"
+            inputMode={isDecimal ? 'decimal' : 'numeric'}
+            step={step}
+            min={step}
+            value={item.so_luong}
+            onChange={e => handleQtyChange(e.target.value)}
+            className="w-12 text-sm font-semibold text-gray-700 text-center bg-transparent focus:outline-none"
+          />
           <button
-            onClick={() => onChange(item.id, 'so_luong', item.so_luong + 1)}
+            onClick={() => onChange(item.id, 'so_luong', parseFloat((item.so_luong + step).toFixed(2)))}
             className="w-5 h-5 flex items-center justify-center text-gray-500 text-base leading-none"
           >+</button>
         </div>
 
         <span className="text-gray-300 text-sm">×</span>
 
-        <input
-          type="number"
-          value={item.don_gia || ''}
-          onChange={e => onChange(item.id, 'don_gia', Number(e.target.value) || 0)}
+        <PriceInput
+          value={item.don_gia}
+          onChange={v => onChange(item.id, 'don_gia', v)}
           placeholder="Đơn giá"
           className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
@@ -107,7 +151,7 @@ function ItemRow({ item, onChange, onRemove }: {
 interface Props {
   draftKey:    string                              // sessionStorage key, unique per form
   onAddFromPicker?: () => void                    // mở ProductPicker bên ngoài
-  pendingProduct?: { ten_sp: string; don_gia: number } | null  // product từ picker truyền vào
+  pendingProduct?: { ten_sp: string; don_gia: number; don_vi?: string } | null  // product từ picker truyền vào
   onPendingConsumed?: () => void                  // báo đã consume pending product
 }
 
@@ -125,7 +169,7 @@ export function QuoteItemsEditor({ draftKey, onAddFromPicker, pendingProduct, on
       if (existing) {
         return prev.map(i => i.id === existing.id ? { ...i, so_luong: i.so_luong + 1 } : i)
       }
-      return [...prev, { id: uid(), ten_sp: pendingProduct.ten_sp, so_luong: 1, don_gia: pendingProduct.don_gia, product_id: (pendingProduct as any).product_id ?? null }]
+      return [...prev, { id: uid(), ten_sp: pendingProduct.ten_sp, so_luong: 1, don_gia: pendingProduct.don_gia, product_id: (pendingProduct as any).product_id ?? null, don_vi: pendingProduct.don_vi }]
     })
     onPendingConsumed?.()
   }, [pendingProduct, onPendingConsumed])
@@ -189,11 +233,11 @@ export function useQuoteItems(draftKey: string) {
   const [items, setItems] = useState<QuoteItem[]>(() => loadDraft(draftKey))
   useEffect(() => { saveDraft(draftKey, items) }, [draftKey, items])
 
-  const addItem = useCallback((product: { ten_sp: string; don_gia: number; product_id?: number | null }) => {
+  const addItem = useCallback((product: { ten_sp: string; don_gia: number; product_id?: number | null; so_luong?: number; don_vi?: string }) => {
     setItems(prev => {
       const existing = prev.find(i => i.ten_sp === product.ten_sp)
       if (existing) return prev.map(i => i.id === existing.id ? { ...i, so_luong: i.so_luong + 1 } : i)
-      return [...prev, { id: uid(), ten_sp: product.ten_sp, so_luong: 1, don_gia: product.don_gia, product_id: product.product_id ?? null }]
+      return [...prev, { id: uid(), ten_sp: product.ten_sp, so_luong: product.so_luong ?? 1, don_gia: product.don_gia, product_id: product.product_id ?? null, don_vi: product.don_vi }]
     })
   }, [])
 

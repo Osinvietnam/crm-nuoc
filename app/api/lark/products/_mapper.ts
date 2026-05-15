@@ -11,26 +11,13 @@ export interface Product {
   gia_dai_ly:     number
   gia_npp:        number
   hh_kd:          number  // % Hoa hồng KD
+  don_vi:         string
   mo_ta:          string
-  anh_sp:         string  // URL ảnh từ Supabase Storage
+  anh_sp:         string  // Legacy URL — use productImageUrl(record_id) for Storage-based images
   con_hang:       boolean
+  sort_order:     number
+  created_at:     string | null
   updated_at:     string | null
-}
-
-// Legacy: kept for import route compatibility
-export function productToFields(body: Partial<Product>): Record<string, unknown> {
-  const fields: Record<string, unknown> = {}
-  if (body.ten_sp         !== undefined) fields['Tên sản phẩm']       = body.ten_sp
-  if (body.ma_sp          !== undefined) fields['Mã SP']               = body.ma_sp
-  if (body.phan_loai      !== undefined) fields['Phân loại']           = body.phan_loai
-  if (body.nhom_sp        !== undefined) fields['Nhóm SP']             = body.nhom_sp
-  if (body.gia_niem_yet   !== undefined) fields['Giá niêm yết (VNĐ)'] = String(body.gia_niem_yet)
-  if (body.gia_chiet_khau !== undefined) fields['Giá chiết khấu']      = String(body.gia_chiet_khau)
-  if (body.gia_dai_ly     !== undefined) fields['Giá đại lý']          = String(body.gia_dai_ly)
-  if (body.gia_npp        !== undefined) fields['Giá nhà phân phối']   = String(body.gia_npp)
-  if (body.hh_kd          !== undefined) fields['% Hoa hồng KD']       = String(body.hh_kd)
-  if (body.mo_ta          !== undefined) fields['Mô tả']               = body.mo_ta
-  return fields
 }
 
 export function mapProduct(r: any): Product {
@@ -45,9 +32,12 @@ export function mapProduct(r: any): Product {
     gia_dai_ly:     r.gia_dai_ly     ?? 0,
     gia_npp:        r.gia_npp        ?? 0,
     hh_kd:          r.hh_kd          ?? 0,
+    don_vi:         r.don_vi         ?? 'cái',
     mo_ta:          r.mo_ta          ?? '',
     anh_sp:         r.anh_sp         ?? '',
     con_hang:       r.con_hang       ?? true,
+    sort_order:     r.sort_order     ?? 0,
+    created_at:     r.created_at     ?? null,
     updated_at:     r.updated_at     ?? null,
   }
 }

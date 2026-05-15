@@ -5,6 +5,39 @@ import { useRouter } from 'next/navigation'
 import { usePullToRefresh, PullIndicator } from '@/components/PullToRefresh'
 import type { Construction, PeriodicService } from '@/app/api/lark/maintenance/_mappers'
 
+// ─── Time filter helpers ───────────────────────────────────────────────────────
+
+type TimePreset = 'month' | 'last_month' | 'quarter' | 'all' | 'custom'
+
+function currentYM() {
+  const d = new Date()
+  return { y: d.getFullYear(), m: d.getMonth() + 1 }
+}
+
+function presetLabel(p: TimePreset, customY: number, customM: number) {
+  if (p === 'all')        return 'Tất cả'
+  if (p === 'month')      return 'Tháng này'
+  if (p === 'last_month') return 'Tháng trước'
+  if (p === 'quarter')    return 'Quý này'
+  return `${String(customM).padStart(2, '0')}/${customY}`
+}
+
+function presetRange(p: TimePreset, customY: number, customM: number): [number, number] | null {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth() + 1
+  if (p === 'all') return null
+  if (p === 'month') return [new Date(y, m - 1, 1).getTime(), new Date(y, m, 1).getTime() - 1]
+  if (p === 'last_month') {
+    const lm = m === 1 ? 12 : m - 1, ly = m === 1 ? y - 1 : y
+    return [new Date(ly, lm - 1, 1).getTime(), new Date(ly, lm, 1).getTime() - 1]
+  }
+  if (p === 'quarter') {
+    const q = Math.floor((m - 1) / 3)
+    return [new Date(y, q * 3, 1).getTime(), new Date(y, q * 3 + 3, 1).getTime() - 1]
+  }
+  return [new Date(customY, customM - 1, 1).getTime(), new Date(customY, customM, 1).getTime() - 1]
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmtDate = (ms: number | null) => {
@@ -190,6 +223,11 @@ export default function MaintenancePage() {
   const [tab, setTab]       = useState<Tab>('construction')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterOption>('all')
+  const { y: cY, m: cM }   = currentYM()
+  const [timePreset, setTimePreset] = useState<TimePreset>('all')
+  const [customY,    setCustomY]    = useState(cY)
+  const [customM,    setCustomM]    = useState(cM)
+  const [showPicker, setShowPicker] = useState(false)
 
   const { data, loading, error, reload } = useMaintenanceData(tab)
 
@@ -222,6 +260,16 @@ export default function MaintenancePage() {
       const p = item as PeriodicService
       if (filter === 'overdue') return p.so_ngay_con_lai < 0
       if (filter === 'urgent')  return p.so_ngay_con_lai >= 0 && p.so_ngay_con_lai <= 30
+    }
+    if (timePreset !== 'all') {
+      const timeRange = presetRange(timePreset, customY, customM)
+      if (timeRange) {
+        const dateStr = (item as any).created_at
+        if (dateStr) {
+          const ms = new Date(dateStr).getTime()
+          if (ms < timeRange[0] || ms > timeRange[1]) return false
+        }
+      }
     }
     return true
   })
@@ -261,7 +309,7 @@ export default function MaintenancePage() {
           {tabs.map(t => (
             <button
               key={t.key}
-              onClick={() => { setTab(t.key); setFilter('all') }}
+              onClick={() => { setTab(t.key); setFilter('all'); setTimePreset('all'); setShowPicker(false) }}
               className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 tab === t.key ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'
               }`}
@@ -282,6 +330,47 @@ export default function MaintenancePage() {
             className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-9 pr-4 text-sm outline-none focus:border-blue-400"
           />
         </div>
+
+        {/* Time filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 shrink-0">Thời gian:</span>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1">
+            {(['month', 'last_month', 'quarter', 'all'] as TimePreset[]).map(p => (
+              <button key={p}
+                onClick={() => { setTimePreset(p); setShowPicker(false) }}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  timePreset === p && p !== 'custom'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >{presetLabel(p, customY, customM)}</button>
+            ))}
+            <button onClick={() => setShowPicker(v => !v)}
+              className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                timePreset === 'custom'
+                  ? 'bg-blue-600 text-white border-transparent'
+                  : 'bg-white text-gray-500 border-gray-200'
+              }`}
+            >{timePreset === 'custom' ? presetLabel('custom', customY, customM) : 'Tùy chọn'}</button>
+          </div>
+        </div>
+        {showPicker && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2.5">
+            <select value={customM} onChange={e => { setCustomM(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={m}>Tháng {m}</option>
+              ))}
+            </select>
+            <select value={customY} onChange={e => { setCustomY(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({ length: 5 }, (_, i) => cY - 2 + i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <button onClick={() => setShowPicker(false)} className="text-blue-600 text-sm font-semibold ml-auto">Xong</button>
+          </div>
+        )}
 
         {/* Filter chips */}
         <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">

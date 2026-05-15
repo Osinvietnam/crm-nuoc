@@ -27,3 +27,19 @@ export async function notifyManagers(payload: NotificationPayload) {
     managers.map(m => ({ user_id: m.id, ...payload }))
   )
 }
+
+// Gửi notification cho tất cả user có role trong danh sách đang active
+export async function notifyByRole(roles: string[], payload: NotificationPayload) {
+  const service = createServiceClient()
+  const { data: users } = await service
+    .from('profiles')
+    .select('id')
+    .in('role', roles)
+    .eq('is_active', true)
+
+  if (!users?.length) return
+
+  await service.from('notifications').insert(
+    users.map(u => ({ user_id: u.id, ...payload }))
+  )
+}

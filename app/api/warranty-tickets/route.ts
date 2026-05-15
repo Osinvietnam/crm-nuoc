@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { notifyByRole } from '@/lib/notifications'
 
 export interface WarrantyTicket {
   id:               number
@@ -111,6 +112,13 @@ export async function POST(req: NextRequest) {
     }).select(SELECT).single()
 
     if (error) throw error
+    // Sprint 3: Notify tech team về phiếu bảo hành mới
+    void notifyByRole(['tech', 'admin', 'ceo', 'director'], {
+      type:  'warranty_ticket_new',
+      title: 'Phiếu bảo hành mới',
+      body:  `${body.title ?? 'Yêu cầu bảo hành'} — ${body.customer_id ? `KH #${body.customer_id}` : 'KH không rõ'}`,
+      link:  '/dashboard/warranty',
+    })
     return NextResponse.json({ data: mapTicket(data) }, { status: 201 })
   } catch (err) {
     console.error('POST /api/warranty-tickets:', err)

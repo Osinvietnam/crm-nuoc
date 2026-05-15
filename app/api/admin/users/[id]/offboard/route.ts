@@ -38,21 +38,50 @@ export async function POST(
       return NextResponse.json({ error: 'Nhân viên đã ở trạng thái Nghỉ việc' }, { status: 400 })
     }
 
-    // Lấy CEO để chuyển KH
-    const { data: ceo } = await service
-      .from('profiles').select('id, full_name').eq('role', 'ceo').single()
-    const ceoName = ceo?.full_name ?? me.full_name // fallback về người thực hiện
+    // Tìm người nhận bàn giao theo thứ tự: CEO → Director → Admin
+    const { data: allManagers } = await service
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('role', ['ceo', 'director', 'admin'])
+      .eq('is_active', true)
+      .neq('id', id)  // không phải chính người đang offboard
 
-    // Chuyển tất cả KH trong Supabase về CEO
-    let transferred = 0
-    if (ceo) {
-      const { data: updated } = await service
-        .from('customers')
-        .update({ nguoi_phu_trach: ceo.id })
-        .eq('nguoi_phu_trach', id)
-        .select('id')
-      transferred = updated?.length ?? 0
+    const receiver = allManagers?.find(p => p.role === 'ceo')
+      ?? allManagers?.find(p => p.role === 'director')
+      ?? allManagers?.find(p => p.role === 'admin')
+
+    if (!receiver) {
+      return NextResponse.json(
+        { error: 'Không tìm thấy người nhận bàn giao (cần ít nhất 1 CEO/Director/Admin đang active)' },
+        { status: 400 }
+      )
     }
+
+    // Chuyển tất cả KH trong Supabase về receiver
+    const { data: updated } = await service
+      .from('customers')
+      .update({ nguoi_phu_trach: receiver.id })
+      .eq('nguoi_phu_trach', id)
+      .select('id')
+    const transferred = updated?.length ?? 0
+
+    // Reassign tasks đang active
+    const { data: reassignedTasks } = await service
+      .from('tasks')
+      .update({ assigned_to: receiver.id })
+      .eq('assigned_to', id)
+      .in('trang_thai', ['Chờ xử lý', 'Đang làm'])
+      .select('id')
+    const tasksTransferred = reassignedTasks?.length ?? 0
+
+    // Reassign maintenance construction chưa hoàn thành
+    const { data: reassignedMaintenance } = await service
+      .from('maintenance_construction')
+      .update({ ktv_phu_trach: receiver.id })
+      .eq('ktv_phu_trach', id)
+      .neq('trang_thai', 'Nghiệm thu hoàn thành')
+      .select('id')
+    const maintenanceTransferred = reassignedMaintenance?.length ?? 0
 
     // Disable Supabase Auth (ban ~100 năm)
     await service.auth.admin.updateUserById(id, { ban_duration: '876600h' })
@@ -68,10 +97,16 @@ export async function POST(
       user_name: me.full_name,
       action:    'user_offboarded',
       entity:    'user',
-      detail:    `${target.full_name} — chuyển ${transferred} KH sang ${ceoName}`,
+      detail:    `${target.full_name} → bàn giao cho ${receiver.full_name}: ${transferred} KH, ${tasksTransferred} tasks, ${maintenanceTransferred} CT lắp đặt`,
     })
 
-    return NextResponse.json({ success: true, transferred, ceoName })
+    return NextResponse.json({
+      success: true,
+      transferred,
+      tasksTransferred,
+      maintenanceTransferred,
+      receiverName: receiver.full_name
+    })
   } catch (err) {
     console.error('POST offboard:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })

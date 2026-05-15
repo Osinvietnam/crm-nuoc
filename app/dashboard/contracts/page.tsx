@@ -16,6 +16,7 @@ import {
 import type { Contract, CommercialOrder, Project } from '@/app/api/lark/orders/route'
 import type { Customer } from '@/app/api/lark/customers/route'
 import type { Product } from '@/app/api/lark/products/_mapper'
+import type { Quote } from '@/app/api/lark/quotes/_mappers'
 import CustomerPicker from '@/components/CustomerPicker'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -202,6 +203,90 @@ function ProductPicker({ onSelect, onClose, priceLabel }: {
   )
 }
 
+// ─── Quote Picker ─────────────────────────────────────────────────────────────
+
+function QuotePicker({ onSelect, onClose }: {
+  onSelect: (q: Quote) => void
+  onClose:  () => void
+}) {
+  const [quotes,  setQuotes]  = useState<Quote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q,       setQ]       = useState('')
+
+  useEffect(() => {
+    fetch('/api/lark/quotes?type=b2c&pageSize=100')
+      .then(r => r.json())
+      .then(d => {
+        const all: Quote[] = d.data ?? []
+        setQuotes(all.filter(x => x.trang_thai === 'Chấp nhận' && !x.ma_hd_tham_chieu))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = quotes.filter(qt => {
+    if (!q) return true
+    return (qt.ma_bao_gia + qt.khach_hang).toLowerCase().includes(q.toLowerCase())
+  })
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+        <button onClick={onClose} className="text-gray-500 p-2.5 -ml-2">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-gray-800">Chọn từ báo giá</h2>
+          <p className="text-xs text-gray-400">Chỉ hiển thị BG đã Chấp nhận chưa tạo HĐ</p>
+        </div>
+      </div>
+      <div className="px-4 py-3 border-b border-gray-100">
+        <input autoFocus type="search" placeholder="Tìm mã BG, tên khách hàng..."
+          value={q} onChange={e => setQ(e.target.value)}
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-4 text-sm outline-none focus:border-blue-400" />
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {loading && (
+          <div className="flex items-center justify-center gap-2 py-12 text-gray-400 text-sm">
+            <span className="crm-spinner" /><span>Đang tải...</span>
+          </div>
+        )}
+        {!loading && filtered.length === 0 && (
+          <p className="text-center text-gray-400 text-sm py-12">
+            Không có báo giá Chấp nhận nào chưa tạo HĐ
+          </p>
+        )}
+        {filtered.map(qt => (
+          <button key={qt.record_id} onClick={() => onSelect(qt)}
+            className="w-full px-4 py-3.5 border-b border-gray-50 text-left active:bg-blue-50">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-blue-600">{qt.ma_bao_gia}</p>
+                <p className="text-sm text-gray-700 font-medium truncate">{qt.khach_hang}</p>
+                {qt.san_pham.length > 0 && (
+                  <p className="text-xs text-gray-400 truncate">
+                    {qt.san_pham.slice(0, 2).join(', ')}{qt.san_pham.length > 2 ? ` +${qt.san_pham.length - 2} SP` : ''}
+                  </p>
+                )}
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-bold text-green-700">
+                  {fmtMoney(qt.gia_tri_sau_ck || qt.tong_gia_tri)}
+                </p>
+                {qt.ngay_lap && (
+                  <p className="text-xs text-gray-400">{fmtDateStr(qt.ngay_lap)}</p>
+                )}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Picker chip ──────────────────────────────────────────────────────────────
 
 function PickerChip({ label, onClear }: { label: string; onClear: () => void }) {
@@ -227,6 +312,8 @@ function priceKeyLabel(loai: string): string {
 
 // ─── Add Forms ────────────────────────────────────────────────────────────────
 
+type QuoteLineItem = { id: number; ten_sp: string; don_gia: number; so_luong: number }
+
 function AddContractForm({
   onClose, onCreated,
   fromQuoteRecordId = '', initialKhachHang = '',
@@ -250,6 +337,12 @@ function AddContractForm({
   const [selectedProduct,    setSelectedProduct]    = useState<Product | null>(null)
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [showProductPicker,  setShowProductPicker]  = useState(false)
+  // ── Quote picker state ────────────────────────────────────────────────────
+  const [showQuotePicker,    setShowQuotePicker]    = useState(false)
+  const [selectedQuote,      setSelectedQuote]      = useState<Quote | null>(null)
+  const [quoteItems,         setQuoteItems]         = useState<QuoteLineItem[]>([])
+  const [fromQuoteId,        setFromQuoteId]        = useState(fromQuoteRecordId)
+  // ─────────────────────────────────────────────────────────────────────────
   const [saving, setSaving]   = useState(false)
   const [error,  setError]    = useState('')
   const [warnMsg, setWarnMsg] = useState('')
@@ -264,10 +357,52 @@ function AddContractForm({
     setSelectedCustomer(null); setCustomerRecordId('')
     setForm(f => ({ ...f, khach_hang: '', sdt: '' }))
   }
+
   const handleSelectProduct = (p: Product) => {
-    setSelectedProduct(p)
-    setForm(f => ({ ...f, san_pham: p.ten_sp, gia_tri_hd: f.gia_tri_hd || (p.gia_niem_yet > 0 ? String(p.gia_niem_yet) : '') }))
+    if (quoteItems.length > 0) {
+      // Thêm vào danh sách SP từ BG
+      setQuoteItems(prev => [...prev, { id: Date.now(), ten_sp: p.ten_sp, don_gia: p.gia_niem_yet, so_luong: 1 }])
+    } else {
+      setSelectedProduct(p)
+      setForm(f => ({ ...f, san_pham: p.ten_sp, gia_tri_hd: f.gia_tri_hd || (p.gia_niem_yet > 0 ? String(p.gia_niem_yet) : '') }))
+    }
     setShowProductPicker(false)
+  }
+
+  const handleSelectQuote = async (q: Quote) => {
+    setSelectedQuote(q)
+    setFromQuoteId(q.record_id)
+    setShowQuotePicker(false)
+    setForm(f => ({
+      ...f,
+      khach_hang: q.khach_hang || f.khach_hang,
+      sdt:        q.sdt        || f.sdt,
+      gia_tri_hd: (q.gia_tri_sau_ck || q.tong_gia_tri)
+                    ? String(q.gia_tri_sau_ck || q.tong_gia_tri)
+                    : f.gia_tri_hd,
+      dia_chi_ct: q.dia_chi_ct || f.dia_chi_ct,
+    }))
+    // Tải items chi tiết từ API
+    try {
+      const res  = await fetch(`/api/lark/quotes/${q.record_id}`)
+      const data = await res.json()
+      if (data.data?.items?.length) setQuoteItems(data.data.items)
+    } catch { /* ignore */ }
+  }
+  const clearQuote = () => {
+    setSelectedQuote(null)
+    setFromQuoteId(fromQuoteRecordId)
+    setQuoteItems([])
+  }
+
+  // Tổng tiền hiển thị từ quoteItems
+  const quoteItemsTotal = quoteItems.reduce((s, i) => s + i.don_gia * i.so_luong, 0)
+
+  // san_pham gửi lên API
+  const buildSanPham = () => {
+    if (quoteItems.length > 0) return quoteItems.map(i => i.so_luong > 1 ? `${i.ten_sp} (${i.so_luong}x)` : i.ten_sp)
+    if (selectedProduct) return [selectedProduct.ten_sp]
+    return form.san_pham ? [form.san_pham] : []
   }
 
   const submit = async () => {
@@ -279,10 +414,11 @@ function AddContractForm({
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          gia_tri_hd:         Number(form.gia_tri_hd.replace(/\D/g, '')),
+          san_pham:           buildSanPham(),
+          gia_tri_hd:         Number(String(form.gia_tri_hd).replace(/\D/g, '')),
           customer_id:        selectedCustomer?.id  || undefined,
           customer_record_id: customerRecordId      || undefined,
-          quote_record_id:    fromQuoteRecordId     || undefined,
+          quote_record_id:    fromQuoteId           || undefined,
         }),
       })
       const data = await res.json()
@@ -300,6 +436,7 @@ function AddContractForm({
     <>
       {showCustomerPicker && <CustomerPicker onSelect={handleSelectCustomer} onClose={() => setShowCustomerPicker(false)} />}
       {showProductPicker  && <ProductPicker  onSelect={handleSelectProduct}  onClose={() => setShowProductPicker(false)} />}
+      {showQuotePicker    && <QuotePicker    onSelect={handleSelectQuote}    onClose={() => setShowQuotePicker(false)} />}
       <BottomSheet title="Tạo hợp đồng B2C" onClose={onClose} error={error}
         footer={<SheetActions onClose={onClose} onSubmit={submit} saving={saving} />}>
         {warnMsg && (
@@ -307,6 +444,32 @@ function AddContractForm({
             <span>⚠️</span><span>{warnMsg}</span>
           </div>
         )}
+
+        {/* ── Liên kết báo giá (tuỳ chọn) ───────────────────────────────── */}
+        <div>
+          <label className="text-sm font-semibold text-gray-600 mb-1 block">
+            LIÊN KẾT BÁO GIÁ <span className="font-normal text-gray-400">(tuỳ chọn)</span>
+          </label>
+          {selectedQuote ? (
+            <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-blue-700">{selectedQuote.ma_bao_gia}</p>
+                <p className="text-xs text-blue-600 truncate">
+                  {selectedQuote.khach_hang} · {fmtMoney(selectedQuote.gia_tri_sau_ck || selectedQuote.tong_gia_tri)}
+                  {quoteItems.length > 0 && ` · ${quoteItems.length} SP`}
+                </p>
+              </div>
+              <button onClick={clearQuote} className="text-blue-400 text-lg leading-none flex-shrink-0">×</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowQuotePicker(true)}
+              className="w-full border-2 border-dashed border-blue-300 rounded-xl py-3 text-sm text-blue-600 font-medium flex items-center justify-center gap-2">
+              <span>📋</span><span>Chọn từ danh sách báo giá đã duyệt</span>
+            </button>
+          )}
+        </div>
+
+        {/* ── Khách hàng ─────────────────────────────────────────────────── */}
         <div>
           <label className="text-sm font-semibold text-gray-600 mb-1 block">KHÁCH HÀNG *</label>
           {selectedCustomer ? (
@@ -320,9 +483,39 @@ function AddContractForm({
         </div>
         <Field label="TÊN KHÁCH HÀNG *" value={form.khach_hang} onChange={v => set('khach_hang', v)} placeholder="Hoặc nhập tay nếu chưa có trong hệ thống" />
         <Field label="SỐ ĐIỆN THOẠI" value={form.sdt} onChange={v => set('sdt', v)} placeholder="0901234567" type="tel" />
+
+        {/* ── Sản phẩm ───────────────────────────────────────────────────── */}
         <div>
-          <label className="text-sm font-semibold text-gray-600 mb-1 block">SẢN PHẨM CHÍNH</label>
-          {selectedProduct ? (
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-semibold text-gray-600">SẢN PHẨM CHÍNH</label>
+            {quoteItems.length > 0 && (
+              <button onClick={() => setShowProductPicker(true)}
+                className="text-xs text-blue-600 font-semibold">+ Thêm SP</button>
+            )}
+          </div>
+          {quoteItems.length > 0 ? (
+            <div className="space-y-1.5">
+              {quoteItems.map((item, idx) => (
+                <div key={item.id} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700 truncate">{item.ten_sp}</p>
+                    <p className="text-xs text-gray-400">
+                      {item.so_luong} × {item.don_gia.toLocaleString('vi-VN')}₫
+                      {' '}= {(item.don_gia * item.so_luong).toLocaleString('vi-VN')}₫
+                    </p>
+                  </div>
+                  <button onClick={() => setQuoteItems(prev => prev.filter((_, i) => i !== idx))}
+                    className="text-gray-400 text-base leading-none flex-shrink-0 p-1">×</button>
+                </div>
+              ))}
+              {quoteItemsTotal > 0 && (
+                <div className="bg-green-50 rounded-xl px-3 py-2 flex justify-between items-center">
+                  <span className="text-xs text-green-600 font-medium">Tổng từ BG</span>
+                  <span className="text-sm font-bold text-green-700">{quoteItemsTotal.toLocaleString('vi-VN')}₫</span>
+                </div>
+              )}
+            </div>
+          ) : selectedProduct ? (
             <PickerChip label={`${selectedProduct.ten_sp} · ${fmtMoney(selectedProduct.gia_niem_yet)}`}
               onClear={() => { setSelectedProduct(null); set('san_pham', '') }} />
           ) : (
@@ -332,6 +525,7 @@ function AddContractForm({
             </button>
           )}
         </div>
+
         <Field label="GIÁ TRỊ HĐ (VNĐ) *" value={form.gia_tri_hd} onChange={v => set('gia_tri_hd', v)} placeholder="65000000" type="number" />
         <Field label="ĐỊA CHỈ CÔNG TRÌNH" value={form.dia_chi_ct} onChange={v => set('dia_chi_ct', v)} placeholder="Số nhà, đường, quận..." />
         <TextArea label="GHI CHÚ" value={form.ghi_chu} onChange={v => set('ghi_chu', v)} placeholder="Ghi chú thêm..." />
@@ -640,6 +834,39 @@ function ProjectCard({ p, onClick }: { p: Project; onClick: () => void }) {
   )
 }
 
+// ─── Time filter helpers ──────────────────────────────────────────────────────
+
+type TimePreset = 'month' | 'last_month' | 'quarter' | 'all' | 'custom'
+
+function currentYM() {
+  const d = new Date()
+  return { y: d.getFullYear(), m: d.getMonth() + 1 }
+}
+
+function presetLabel(p: TimePreset, customY: number, customM: number) {
+  if (p === 'all')        return 'Tất cả'
+  if (p === 'month')      return 'Tháng này'
+  if (p === 'last_month') return 'Tháng trước'
+  if (p === 'quarter')    return 'Quý này'
+  return `${String(customM).padStart(2, '0')}/${customY}`
+}
+
+function presetRange(p: TimePreset, customY: number, customM: number): [number, number] | null {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth() + 1
+  if (p === 'all') return null
+  if (p === 'month') return [new Date(y, m - 1, 1).getTime(), new Date(y, m, 1).getTime() - 1]
+  if (p === 'last_month') {
+    const lm = m === 1 ? 12 : m - 1, ly = m === 1 ? y - 1 : y
+    return [new Date(ly, lm - 1, 1).getTime(), new Date(ly, lm, 1).getTime() - 1]
+  }
+  if (p === 'quarter') {
+    const q = Math.floor((m - 1) / 3)
+    return [new Date(y, q * 3, 1).getTime(), new Date(y, q * 3 + 3, 1).getTime() - 1]
+  }
+  return [new Date(customY, customM - 1, 1).getTime(), new Date(customY, customM, 1).getTime() - 1]
+}
+
 // ─── Data hook ────────────────────────────────────────────────────────────────
 
 type Tab = 'b2c' | 'commercial' | 'projects'
@@ -689,6 +916,14 @@ export default function ContractsPage() {
   const [quickStatusSaving, setQuickStatusSaving]     = useState(false)
   const toast = useToast()
 
+  const { y: cY, m: cM } = currentYM()
+  const [timePreset, setTimePreset] = useState<TimePreset>('all')
+  const [customY,    setCustomY]    = useState(cY)
+  const [customM,    setCustomM]    = useState(cM)
+  const [showPicker, setShowPicker] = useState(false)
+
+  useEffect(() => { setTimePreset('all'); setShowPicker(false) }, [tab])
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => setRole(d?.role ?? '')).catch(() => {})
   }, [])
@@ -707,13 +942,22 @@ export default function ContractsPage() {
 
   const ptr = usePullToRefresh(async () => { reload() })
 
+  const timeRange = presetRange(timePreset, customY, customM)
   const filtered = data.filter(item => {
     const q = search.toLowerCase()
     const textMatch = !q || JSON.stringify(item).toLowerCase().includes(q)
+    if (!textMatch) return false
     if (tab === 'b2c' && deliveryFilter !== 'all') {
       if ((item as Contract).trang_thai !== deliveryFilter) return false
     }
-    return textMatch
+    if (timeRange) {
+      const dateStr = (item as any).created_at
+      if (dateStr) {
+        const ms = new Date(dateStr).getTime()
+        if (ms < timeRange[0] || ms > timeRange[1]) return false
+      }
+    }
+    return true
   })
 
   const allTabs: { key: Tab; label: string; icon: string; roles?: string[] }[] = [
@@ -813,6 +1057,43 @@ export default function ContractsPage() {
             <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">✕</button>
           )}
         </div>
+
+        {/* Time filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 shrink-0">Thời gian:</span>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1">
+            {(['month', 'last_month', 'quarter', 'all'] as TimePreset[]).map(p => (
+              <button key={p}
+                onClick={() => { setTimePreset(p); setShowPicker(false) }}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  timePreset === p && p !== 'custom'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >{presetLabel(p, customY, customM)}</button>
+            ))}
+            <button onClick={() => setShowPicker(v => !v)}
+              className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                timePreset === 'custom'
+                  ? 'bg-blue-600 text-white border-transparent'
+                  : 'bg-white text-gray-500 border-gray-200'
+              }`}
+            >{timePreset === 'custom' ? presetLabel('custom', customY, customM) : 'Tùy chọn'}</button>
+          </div>
+        </div>
+        {showPicker && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2.5">
+            <select value={customM} onChange={e => { setCustomM(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>Tháng {m}</option>)}
+            </select>
+            <select value={customY} onChange={e => { setCustomY(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({ length: 5 }, (_, i) => cY - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={() => setShowPicker(false)} className="text-blue-600 text-sm font-semibold ml-auto">Xong</button>
+          </div>
+        )}
 
         {/* Delivery filter — B2C, logistics only */}
         {tab === 'b2c' && role === 'logistics' && (

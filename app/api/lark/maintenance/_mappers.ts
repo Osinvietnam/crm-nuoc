@@ -26,6 +26,7 @@ export interface Construction {
   bh_expired:     boolean
   customer_id:    number | null
   order_id:       number | null
+  created_at:     string | null
 }
 
 export interface PeriodicService {
@@ -46,6 +47,7 @@ export interface PeriodicService {
   ghi_chu:          string
   customer_id:      number | null
   order_id:         number | null
+  created_at:       string | null
 }
 
 export function mapConstruction(r: any): Construction {
@@ -70,6 +72,7 @@ export function mapConstruction(r: any): Construction {
     bh_expired:     ngay_het_bh !== null && now > ngay_het_bh,
     customer_id:    r.customer_id         ?? null,
     order_id:       r.order_id            ?? null,
+    created_at:     r.created_at          ?? null,
   }
 }
 
@@ -96,6 +99,7 @@ export function mapPeriodic(r: any): PeriodicService {
     ghi_chu:          r.ghi_chu             ?? '',
     customer_id:      r.customer_id         ?? null,
     order_id:         r.order_id            ?? null,
+    created_at:       r.created_at          ?? null,
   }
 }
 

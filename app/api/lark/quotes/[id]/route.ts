@@ -137,6 +137,11 @@ export async function PATCH(
         ? new Date(Number(body.ngay_follow_up)).toISOString().split('T')[0]
         : null
     }
+    if ('ngay_nop_thau' in body) {
+      updates.ngay_nop_thau = body.ngay_nop_thau
+        ? new Date(Number(body.ngay_nop_thau)).toISOString().split('T')[0]
+        : null
+    }
 
     const query = supabase.from('quotes').update(updates).select(SELECT)
     const { data, error } = await (/^\d+$/.test(id)
@@ -146,27 +151,20 @@ export async function PATCH(
 
     if (error) throw error
 
-    // Automation: terminal positive → KH pipeline "Chốt HĐ" (chỉ B2C)
-    if (body.trang_thai === terminalPositive && data.customer_id && quoteType === 'b2c') {
+    // Automation: terminal positive → KH pipeline "Chốt HĐ" (tất cả loại BG)
+    if (body.trang_thai === terminalPositive && data.customer_id) {
       void supabase.from('customers')
         .update({ pipeline: 'Chốt HĐ' })
-        .in('pipeline', ['Báo giá', 'Đàm phán'])
+        .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá', 'Đàm phán'])
         .eq('id', data.customer_id)
     }
 
-    // Automation: Từ chối / Thua thầu → KH pipeline "Đàm phán" (chỉ B2C)
-    if (['Từ chối', 'Thua thầu'].includes(body.trang_thai ?? '') && data.customer_id && quoteType === 'b2c') {
+    // Automation: Từ chối / Thua thầu → KH pipeline "Đàm phán" (tất cả loại BG)
+    if (['Từ chối', 'Thua thầu'].includes(body.trang_thai ?? '') && data.customer_id) {
       void supabase.from('customers')
         .update({ pipeline: 'Đàm phán' })
-        .in('pipeline', ['Báo giá'])
+        .in('pipeline', ['Lead mới', 'Tiềm năng', 'Báo giá'])
         .eq('id', data.customer_id)
-    }
-
-    // Date fields per type
-    if ('ngay_nop_thau' in body) {
-      updates.ngay_nop_thau = body.ngay_nop_thau
-        ? new Date(Number(body.ngay_nop_thau)).toISOString().split('T')[0]
-        : null
     }
 
     // H3: Audit log khi thay đổi trạng thái quan trọng

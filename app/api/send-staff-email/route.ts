@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const roleLabel: Record<string, string> = {
-  admin: 'Quản trị viên',
-  manager: 'Quản lý',
-  sales: 'Kinh doanh',
-  tech: 'Kỹ thuật',
+  admin:      'Quản trị viên',
+  ceo:        'Giám đốc',
+  director:   'Quản lý / Phó Giám đốc',
+  accountant: 'Kế toán',
+  sales:      'Kinh doanh',
+  tech:       'Kỹ thuật',
+  logistics:  'Hậu cần',
+  partner:    'Đối tác',
 }
 
 export async function POST(req: NextRequest) {

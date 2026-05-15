@@ -27,6 +27,7 @@ export interface Contract {
   source_quote_id:      number | null  // BG gốc tạo ra HĐ này
   delivery_photos:      string[]       // URLs ảnh giao hàng
   delivery_confirmed_at: string | null  // ISO timestamp xác nhận giao
+  created_at:           string | null
 }
 
 export interface CommercialOrder {
@@ -52,6 +53,7 @@ export interface CommercialOrder {
   dia_chi:         string
   customer_id:     number | null
   source_quote_id: number | null  // BG gốc tạo ra đơn này
+  created_at:      string | null
 }
 
 export interface Project {
@@ -79,6 +81,7 @@ export interface Project {
   khach_hang:      string
   sdt:             string
   source_quote_id: number | null  // BG gốc tạo ra dự án này
+  created_at:      string | null
 }
 
 export function mapContract(r: any): Contract {
@@ -102,6 +105,7 @@ export function mapContract(r: any): Contract {
     source_quote_id:       r.source_quote_id        ?? null,
     delivery_photos:       r.delivery_photos        ?? [],
     delivery_confirmed_at: r.delivery_confirmed_at  ?? null,
+    created_at:            r.created_at             ?? null,
   }
 }
 
@@ -129,6 +133,7 @@ export function mapCommercial(r: any): CommercialOrder {
     dia_chi:         r.customers?.dia_chi_ct          ?? '',
     customer_id:     r.customer_id                    ?? null,
     source_quote_id: r.quote_id                       ?? null,
+    created_at:      r.created_at                     ?? null,
   }
 }
 
@@ -158,6 +163,7 @@ export function mapProject(r: any): Project {
     khach_hang:      r.customers?.ho_ten      ?? '',
     sdt:             r.customers?.sdt         ?? '',
     source_quote_id: r.quote_id               ?? null,
+    created_at:      r.created_at             ?? null,
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 
 // ─── PATCH /api/warranty-tickets/[id] ────────────────────────────────────────
 
@@ -40,6 +41,13 @@ export async function PATCH(
       .select('*, customers(ho_ten), orders(ma_hd)').single()
     if (error) throw error
 
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: profile.full_name ?? '',
+      action:    'warranty_ticket_updated',
+      entity:    'warranty_ticket',
+      detail:    `Phiếu BH #${id}: cập nhật [${Object.keys(updates).filter(k => k !== 'updated_at').join(', ')}]`,
+    })
     return NextResponse.json({ data })
   } catch (err) {
     console.error('PATCH /api/warranty-tickets/[id]:', err)

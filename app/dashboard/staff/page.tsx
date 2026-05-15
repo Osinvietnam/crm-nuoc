@@ -5,15 +5,30 @@ import { useEffect, useState, useMemo } from 'react'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROLE_OPTIONS = [
-  { value: 'sales',      label: 'Kinh doanh'         },
+  { value: 'ceo',        label: 'Giám đốc'            },
+  { value: 'director',   label: 'Quản lý / Phó GĐ'   },
+  { value: 'admin',      label: 'Quản trị viên'       },
+  { value: 'accountant', label: 'Kế toán'             },
   { value: 'tech',       label: 'Kỹ thuật'            },
+  { value: 'sales',      label: 'Kinh doanh'          },
   { value: 'logistics',  label: 'Hậu cần'             },
-  { value: 'director',   label: 'Giám đốc / Quản lý'   },
-  { value: 'accountant', label: 'Kế toán'              },
-  { value: 'ceo',        label: 'Giám đốc'             },
-  { value: 'admin',      label: 'Quản trị viên'        },
-  { value: 'partner',    label: 'Đối tác'              },
+  { value: 'partner',    label: 'Đối tác'             },
 ]
+
+// Thứ tự nhóm hiển thị
+const ROLE_ORDER = ['ceo', 'director', 'admin', 'accountant', 'tech', 'sales', 'logistics', 'partner']
+
+// Nhãn tiêu đề nhóm + icon
+const ROLE_GROUP: Record<string, { label: string; icon: string; color: string }> = {
+  ceo:        { label: 'Ban Giám đốc',    icon: '👑', color: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
+  director:   { label: 'Quản lý',         icon: '🏢', color: 'text-orange-700 bg-orange-50 border-orange-100' },
+  admin:      { label: 'Quản trị viên',   icon: '⚙️', color: 'text-purple-700 bg-purple-50 border-purple-100' },
+  accountant: { label: 'Kế toán',         icon: '💼', color: 'text-teal-700   bg-teal-50   border-teal-100'   },
+  tech:       { label: 'Kỹ thuật',        icon: '🔧', color: 'text-amber-700  bg-amber-50  border-amber-100'  },
+  sales:      { label: 'Kinh doanh',      icon: '📈', color: 'text-green-700  bg-green-50  border-green-100'  },
+  logistics:  { label: 'Hậu cần',         icon: '🚚', color: 'text-cyan-700   bg-cyan-50   border-cyan-100'   },
+  partner:    { label: 'Đối tác',         icon: '🤝', color: 'text-gray-600   bg-gray-50   border-gray-200'   },
+}
 
 const ROLE_LABEL: Record<string, string> = Object.fromEntries(ROLE_OPTIONS.map(r => [r.value, r.label]))
 
@@ -166,6 +181,20 @@ export default function StaffPage() {
     })
   }, [staffList, search, filterRole, filterStatus, filterKV])
 
+  // ─── Grouped by role (theo thứ tự cấp bậc) ────────────────────────────────
+
+  const grouped = useMemo(() => {
+    // Khi đang filter theo role cụ thể → không group, hiển thị flat
+    if (filterRole) return null
+    const map: Record<string, Staff[]> = {}
+    for (const s of filtered) {
+      const key = s.role in ROLE_GROUP ? s.role : 'partner'
+      if (!map[key]) map[key] = []
+      map[key].push(s)
+    }
+    return ROLE_ORDER.filter(r => map[r]?.length).map(r => ({ role: r, members: map[r] }))
+  }, [filtered, filterRole])
+
   // ─── Stats ─────────────────────────────────────────────────────────────────
 
   const stats = useMemo(() => ({
@@ -294,6 +323,187 @@ export default function StaffPage() {
     finally { setKpiSaving(false) }
   }
 
+  // ─── Render helpers ────────────────────────────────────────────────────────
+
+  const renderCard = (s: Staff) => {
+    const isExpanded    = expandedId === s.id
+    const isEditing     = editId === s.id
+    const isResetting   = resetId === s.id
+    const isOffboarding = offboardId === s.id
+    const initials      = s.full_name.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase()
+
+    return (
+      <div key={s.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+
+        {/* Collapsed row */}
+        <button
+          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+          onClick={() => {
+            const willExpand = !isExpanded
+            setExpandedId(willExpand ? s.id : null)
+            setEditId(null); setResetId(null); setOffboardId(null)
+            if (willExpand && isManager && !kpiData[s.id]) loadKpi(s.id)
+          }}
+        >
+          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+            <span className="text-sm font-bold text-blue-700">{initials}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">{s.full_name}</p>
+            <p className="text-xs text-gray-400 truncate">{s.chuc_vu ?? s.email}</p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[s.trang_thai_nv] ?? 'bg-gray-100'}`}>
+              {s.trang_thai_nv}
+            </span>
+            {s.khu_vuc && (
+              <span className="text-[10px] text-gray-400">{KHU_VUC_LABEL[s.khu_vuc] ?? s.khu_vuc}</span>
+            )}
+          </div>
+          <span className={`text-gray-400 text-xs ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+        </button>
+
+        {/* Expanded */}
+        {isExpanded && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+
+            {/* Basic info */}
+            <InfoGrid items={[
+              { label: 'SĐT',      value: s.phone },
+              { label: 'Email',    value: s.email },
+              { label: 'Khu vực', value: s.khu_vuc ? (KHU_VUC_LABEL[s.khu_vuc] ?? s.khu_vuc) : null },
+            ]} />
+
+            {/* Manager-only info */}
+            {isManager && !isEditing && (
+              <>
+                <InfoGrid items={[
+                  { label: 'Ngày vào làm',  value: s.ngay_vao_lam },
+                  { label: 'Ngày sinh',     value: s.ngay_sinh },
+                  { label: 'Địa chỉ',       value: s.dia_chi },
+                  { label: 'Tình trạng HN', value: s.tinh_trang_hn },
+                ]} />
+                <InfoGrid items={[
+                  { label: 'CMND/CCCD',    value: s.cccd },
+                  { label: 'Ngân hàng',    value: s.ngan_hang },
+                  { label: 'Số tài khoản', value: s.so_tk_nh },
+                  { label: 'Target/tháng', value: s.target_thang ? s.target_thang.toLocaleString('vi-VN') + ' ₫' : null },
+                ]} />
+                {s.ghi_chu_nb && (
+                  <div className="bg-amber-50 rounded-xl px-3 py-2">
+                    <p className="text-xs text-amber-600 font-medium mb-1">Ghi chú nội bộ</p>
+                    <p className="text-sm text-gray-700">{s.ghi_chu_nb}</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Edit form */}
+            {isEditing && (
+              <EditForm
+                form={editForm}
+                setForm={setEditForm}
+                isAdmin={isAdmin}
+                onSave={() => handleSave(s.id)}
+                onCancel={() => setEditId(null)}
+                saving={saving}
+              />
+            )}
+
+            {/* Reset password UI */}
+            {isResetting && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs font-medium text-gray-600">Đặt lại mật khẩu</p>
+                <input
+                  type="password"
+                  value={resetPass}
+                  onChange={e => setResetPass(e.target.value)}
+                  placeholder="Mật khẩu mới (≥ 8 ký tự)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {resetMsg && <p className={`text-xs ${resetMsg.includes('thành công') ? 'text-green-600' : 'text-red-500'}`}>{resetMsg}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => { setResetId(null); setResetPass(''); setResetMsg('') }}
+                    className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+                  <button onClick={() => handleResetPass(s.id)} disabled={resetSaving}
+                    className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
+                    {resetSaving ? 'Đang lưu...' : 'Xác nhận'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Offboard confirm */}
+            {isOffboarding && (
+              <div className="bg-red-50 rounded-xl px-3 py-3 space-y-2">
+                <p className="text-sm font-semibold text-red-700">Xác nhận cho nghỉ việc?</p>
+                <p className="text-xs text-red-600">
+                  Toàn bộ KH, tasks và công trình lắp đặt của <strong>{s.full_name}</strong> sẽ được bàn giao tự động.
+                  Tài khoản sẽ bị vô hiệu hóa ngay lập tức.
+                </p>
+                {offboardMsg && <p className={`text-xs font-medium ${offboardMsg.includes('Hoàn tất') ? 'text-green-700' : 'text-red-600'}`}>{offboardMsg}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => { setOffboardId(null); setOffboardMsg('') }}
+                    className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
+                  <button onClick={() => handleOffboard(s.id)} disabled={offboarding}
+                    className="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-medium disabled:opacity-50">
+                    {offboarding ? 'Đang xử lý...' : 'Xác nhận'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* KPI Card */}
+            {isManager && !isEditing && !isResetting && !isOffboarding && (
+              <KpiCard
+                data={kpiData[s.id]}
+                loading={kpiLoading.has(s.id)}
+                isAdmin={isAdmin || isManager}
+                month={kpiMonth}
+                year={kpiYear}
+                onSetTarget={() => {
+                  const d = kpiData[s.id]
+                  setKpiForm({
+                    target_revenue:   d?.target?.target_revenue   ? String(d.target.target_revenue)   : '',
+                    target_contracts: d?.target?.target_contracts ? String(d.target.target_contracts) : '',
+                    target_customers: d?.target?.target_customers ? String(d.target.target_customers) : '',
+                  })
+                  setKpiModal(s.id)
+                }}
+              />
+            )}
+
+            {/* Action buttons */}
+            {isManager && !isEditing && !isResetting && !isOffboarding && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => { setEditId(s.id); setEditForm({ ...s }) }}
+                  className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 font-medium"
+                >
+                  Sửa thông tin
+                </button>
+                <button
+                  onClick={() => setResetId(s.id)}
+                  className="flex-1 py-2 rounded-xl border border-blue-200 text-sm text-blue-600 font-medium"
+                >
+                  Đặt lại mật khẩu
+                </button>
+                {s.trang_thai_nv !== 'Nghỉ việc' && (
+                  <button
+                    onClick={() => setOffboardId(s.id)}
+                    className="w-full py-2 rounded-xl border border-red-200 text-sm text-red-600 font-medium"
+                  >
+                    Cho nghỉ việc
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   if (loading) return (
@@ -379,184 +589,28 @@ export default function StaffPage() {
           <p className="text-center text-gray-400 text-sm py-10">Không tìm thấy nhân viên nào</p>
         )}
 
-        {filtered.map(s => {
-          const isExpanded = expandedId === s.id
-          const isEditing  = editId === s.id
-          const isResetting = resetId === s.id
-          const isOffboarding = offboardId === s.id
-          const initials = s.full_name.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase()
-
+        {/* Grouped view */}
+        {!loadError && grouped && grouped.map(({ role, members }) => {
+          const grp = ROLE_GROUP[role]
           return (
-            <div key={s.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-
-              {/* Collapsed row */}
-              <button
-                className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                onClick={() => {
-                  const willExpand = !isExpanded
-                  setExpandedId(willExpand ? s.id : null)
-                  setEditId(null); setResetId(null); setOffboardId(null)
-                  if (willExpand && isManager && !kpiData[s.id]) loadKpi(s.id)
-                }}
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                  <span className="text-sm font-bold text-blue-700">{initials}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{s.full_name}</p>
-                  <p className="text-xs text-gray-400 truncate">{s.email}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLOR[s.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {ROLE_LABEL[s.role] ?? s.role}
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[s.trang_thai_nv] ?? 'bg-gray-100'}`}>
-                    {s.trang_thai_nv}
-                  </span>
-                </div>
-                <span className={`text-gray-400 text-xs ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
-              </button>
-
-              {/* Expanded */}
-              {isExpanded && (
-                <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
-
-                  {/* Basic info (all roles see) */}
-                  <InfoGrid items={[
-                    { label: 'SĐT',       value: s.phone },
-                    { label: 'Chức vụ',   value: s.chuc_vu },
-                    { label: 'Khu vực',   value: s.khu_vuc ? (KHU_VUC_LABEL[s.khu_vuc] ?? s.khu_vuc) : null },
-                  ]} />
-
-                  {/* Manager-only info */}
-                  {isManager && !isEditing && (
-                    <>
-                      <InfoGrid items={[
-                        { label: 'Ngày vào làm', value: s.ngay_vao_lam },
-                        { label: 'Ngày sinh',    value: s.ngay_sinh },
-                        { label: 'Địa chỉ',      value: s.dia_chi },
-                        { label: 'Tình trạng HN',value: s.tinh_trang_hn },
-                      ]} />
-                      <InfoGrid items={[
-                        { label: 'CMND/CCCD',   value: s.cccd },
-                        { label: 'Ngân hàng',   value: s.ngan_hang },
-                        { label: 'Số tài khoản',value: s.so_tk_nh },
-                        { label: 'Target/tháng',value: s.target_thang ? s.target_thang.toLocaleString('vi-VN') + ' ₫' : null },
-                      ]} />
-                      {s.ghi_chu_nb && (
-                        <div className="bg-amber-50 rounded-xl px-3 py-2">
-                          <p className="text-xs text-amber-600 font-medium mb-1">Ghi chú nội bộ</p>
-                          <p className="text-sm text-gray-700">{s.ghi_chu_nb}</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Edit form */}
-                  {isEditing && (
-                    <EditForm
-                      form={editForm}
-                      setForm={setEditForm}
-                      isAdmin={isAdmin}
-                      onSave={() => handleSave(s.id)}
-                      onCancel={() => setEditId(null)}
-                      saving={saving}
-                    />
-                  )}
-
-                  {/* Reset password UI */}
-                  {isResetting && (
-                    <div className="space-y-2 pt-1">
-                      <p className="text-xs font-medium text-gray-600">Đặt lại mật khẩu</p>
-                      <input
-                        type="password"
-                        value={resetPass}
-                        onChange={e => setResetPass(e.target.value)}
-                        placeholder="Mật khẩu mới (≥ 8 ký tự)"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      {resetMsg && <p className={`text-xs ${resetMsg.includes('thành công') ? 'text-green-600' : 'text-red-500'}`}>{resetMsg}</p>}
-                      <div className="flex gap-2">
-                        <button onClick={() => { setResetId(null); setResetPass(''); setResetMsg('') }}
-                          className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
-                        <button onClick={() => handleResetPass(s.id)} disabled={resetSaving}
-                          className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50">
-                          {resetSaving ? 'Đang lưu...' : 'Xác nhận'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Offboard confirm */}
-                  {isOffboarding && (
-                    <div className="bg-red-50 rounded-xl px-3 py-3 space-y-2">
-                      <p className="text-sm font-semibold text-red-700">Xác nhận cho nghỉ việc?</p>
-                      <p className="text-xs text-red-600">
-                        Toàn bộ khách hàng của <strong>{s.full_name}</strong> sẽ được chuyển sang CEO để phân bổ lại.
-                        Tài khoản sẽ bị vô hiệu hóa ngay lập tức.
-                      </p>
-                      {offboardMsg && <p className={`text-xs font-medium ${offboardMsg.includes('Hoàn tất') ? 'text-green-700' : 'text-red-600'}`}>{offboardMsg}</p>}
-                      <div className="flex gap-2">
-                        <button onClick={() => { setOffboardId(null); setOffboardMsg('') }}
-                          className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-600">Hủy</button>
-                        <button onClick={() => handleOffboard(s.id)} disabled={offboarding}
-                          className="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-medium disabled:opacity-50">
-                          {offboarding ? 'Đang xử lý...' : 'Xác nhận'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* KPI Card */}
-                  {isManager && !isEditing && !isResetting && !isOffboarding && (
-                    <KpiCard
-                      data={kpiData[s.id]}
-                      loading={kpiLoading.has(s.id)}
-                      isAdmin={isAdmin || isManager}
-                      month={kpiMonth}
-                      year={kpiYear}
-                      onSetTarget={() => {
-                        const d = kpiData[s.id]
-                        setKpiForm({
-                          target_revenue:   d?.target?.target_revenue   ? String(d.target.target_revenue)   : '',
-                          target_contracts: d?.target?.target_contracts ? String(d.target.target_contracts) : '',
-                          target_customers: d?.target?.target_customers ? String(d.target.target_customers) : '',
-                        })
-                        setKpiModal(s.id)
-                      }}
-                    />
-                  )}
-
-                  {/* Action buttons (manager only, not while in sub-forms) */}
-                  {isManager && !isEditing && !isResetting && !isOffboarding && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <button
-                        onClick={() => { setEditId(s.id); setEditForm({ ...s }) }}
-                        className="flex-1 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 font-medium"
-                      >
-                        Sửa thông tin
-                      </button>
-                      <button
-                        onClick={() => setResetId(s.id)}
-                        className="flex-1 py-2 rounded-xl border border-blue-200 text-sm text-blue-600 font-medium"
-                      >
-                        Đặt lại mật khẩu
-                      </button>
-                      {s.trang_thai_nv !== 'Nghỉ việc' && (
-                        <button
-                          onClick={() => setOffboardId(s.id)}
-                          className="w-full py-2 rounded-xl border border-red-200 text-sm text-red-600 font-medium"
-                        >
-                          Cho nghỉ việc
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div key={role}>
+              {/* Group header */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border mb-2 mt-1 ${grp.color}`}>
+                <span className="text-sm">{grp.icon}</span>
+                <span className="text-xs font-semibold tracking-wide uppercase">{grp.label}</span>
+                <span className="ml-auto text-xs font-medium opacity-70">{members.length}</span>
+              </div>
+              {/* Members */}
+              <div className="space-y-2 mb-3">
+                {members.map(s => renderCard(s))}
+              </div>
             </div>
           )
         })}
+
+        {/* Flat view (khi filter theo role cụ thể) */}
+        {!loadError && !grouped && filtered.map(s => renderCard(s))}
+
       </div>
 
       {/* KPI target modal */}

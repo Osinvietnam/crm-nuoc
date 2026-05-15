@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { QUOTE_STATUSES, QUOTE_STATUS_COLORS, NGUON_KH_OPTIONS } from '@/lib/lark/tables'
 import type { Quote, QuoteType } from '@/app/api/lark/quotes/_mappers'
 import { STATUSES_BY_TYPE, TERMINAL_POSITIVE, TERMINAL_NEGATIVE, ALLOWED_TRANSITIONS_BY_TYPE } from '@/app/api/lark/quotes/_mappers'
-import { useQuoteItems, itemsToLarkFields } from '@/components/QuoteItemsEditor'
+import { useQuoteItems, itemsToLarkFields, PriceInput, isDecimalUnit } from '@/components/QuoteItemsEditor'
 import type { Product } from '@/app/api/lark/products/_mapper'
 async function fetchCompany() {
   try {
@@ -321,7 +321,7 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
       // H2: Có items structured — seed với đơn giá đầy đủ + giữ product_id
       quote.items
         .sort((a, b) => a.sort_order - b.sort_order)
-        .forEach(it => addItem({ ten_sp: it.ten_sp, don_gia: it.don_gia, product_id: it.product_id ?? null }))
+        .forEach(it => addItem({ ten_sp: it.ten_sp, don_gia: it.don_gia, product_id: it.product_id ?? null, so_luong: it.so_luong }))
     } else if (quote.san_pham.length > 0) {
       // Fallback: parse text cũ (mất đơn giá)
       quote.san_pham.forEach(sp => {
@@ -387,7 +387,7 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
           <div className="flex-1 overflow-y-auto">
             {products.map(p => (
               <button key={p.record_id}
-                onClick={() => { addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null }); setShowPicker(false) }}
+                onClick={() => { addItem({ ten_sp: p.ten_sp, don_gia: p.gia_chiet_khau || p.gia_niem_yet || 0, product_id: parseInt(p.record_id) || null, don_vi: p.don_vi }); setShowPicker(false) }}
                 className="w-full px-4 py-3.5 border-b border-gray-50 text-left flex items-center gap-3 active:bg-blue-50">
                 <ProductThumb p={p} />
                 <div className="flex-1 min-w-0">
@@ -435,16 +435,37 @@ function EditItemsSheet({ quote, onClose, onSaved }: {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
-                    <button onClick={() => changeItem(item.id, 'so_luong', Math.max(1, item.so_luong - 1))} className="w-5 h-5 flex items-center justify-center text-gray-500">−</button>
-                    <span className="text-sm font-semibold text-gray-700 w-5 text-center">{item.so_luong}</span>
-                    <button onClick={() => changeItem(item.id, 'so_luong', item.so_luong + 1)} className="w-5 h-5 flex items-center justify-center text-gray-500">+</button>
+                  <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1.5 py-1">
+                    {(() => {
+                      const isDecimal = isDecimalUnit(item.don_vi)
+                      const step = isDecimal ? 0.01 : 1
+                      return (
+                        <>
+                          <button onClick={() => changeItem(item.id, 'so_luong', Math.max(step, parseFloat((item.so_luong - step).toFixed(2))))} className="w-5 h-5 flex items-center justify-center text-gray-500">−</button>
+                          <input
+                            type="number"
+                            inputMode={isDecimal ? 'decimal' : 'numeric'}
+                            step={step}
+                            min={step}
+                            value={item.so_luong}
+                            onChange={e => {
+                              const v = isDecimal ? parseFloat(e.target.value) : parseInt(e.target.value)
+                              if (!isNaN(v) && v > 0) changeItem(item.id, 'so_luong', isDecimal ? v : Math.round(v))
+                            }}
+                            className="w-12 text-sm font-semibold text-gray-700 text-center bg-transparent focus:outline-none"
+                          />
+                          <button onClick={() => changeItem(item.id, 'so_luong', parseFloat((item.so_luong + step).toFixed(2)))} className="w-5 h-5 flex items-center justify-center text-gray-500">+</button>
+                        </>
+                      )
+                    })()}
                   </div>
                   <span className="text-gray-300 text-sm">×</span>
-                  <input type="number" value={item.don_gia || ''}
-                    onChange={e => changeItem(item.id, 'don_gia', Number(e.target.value) || 0)}
+                  <PriceInput
+                    value={item.don_gia}
+                    onChange={v => changeItem(item.id, 'don_gia', v)}
                     placeholder="Đơn giá"
-                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
                   <span className="text-xs font-semibold text-blue-600 min-w-[72px] text-right">
                     {fmtM(item.so_luong * item.don_gia)}
                   </span>

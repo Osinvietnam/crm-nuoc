@@ -16,11 +16,10 @@ export async function GET(
 
     const { id } = await params
 
-    const query = supabase.from('products').select('*')
-    const { data, error } = await (/^\d+$/.test(id)
-      ? query.eq('id', parseInt(id))
-      : query.eq('lark_record_id', id)
-    ).single()
+    const { data, error } = await supabase
+      .from('products').select('*')
+      .eq('id', parseInt(id))
+      .single()
 
     if (error || !data) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 })
     return NextResponse.json({ data: mapProduct(data) })
@@ -57,16 +56,25 @@ export async function PATCH(
       if (key in body) updates[key] = body[key]
     }
 
-    // Fetch current values for before/after audit
-    const numId = /^\d+$/.test(id) ? parseInt(id) : null
-    const { data: current } = await supabase.from('products').select('*')
-      .eq(numId !== null ? 'id' : 'lark_record_id', numId ?? id).single()
+    // Price sanity check
+    const ny  = updates.gia_niem_yet   as number | undefined
+    const ck  = updates.gia_chiet_khau as number | undefined
+    const dl  = updates.gia_dai_ly     as number | undefined
+    const npp = updates.gia_npp        as number | undefined
+    if (ny  !== undefined && ny  < 0) return NextResponse.json({ error: 'Giá không được âm' }, { status: 400 })
+    if (ck  !== undefined && ck  < 0) return NextResponse.json({ error: 'Giá không được âm' }, { status: 400 })
+    if (dl  !== undefined && dl  < 0) return NextResponse.json({ error: 'Giá không được âm' }, { status: 400 })
+    if (npp !== undefined && npp < 0) return NextResponse.json({ error: 'Giá không được âm' }, { status: 400 })
+    if (ny !== undefined && ck !== undefined && ny > 0 && ck > ny) {
+      return NextResponse.json({ error: 'Giá chiết khấu không được cao hơn giá niêm yết' }, { status: 400 })
+    }
 
-    const query = supabase.from('products').update(updates).select('*')
-    const { data, error } = await (numId !== null
-      ? query.eq('id', numId)
-      : query.eq('lark_record_id', id)
-    ).single()
+    // Fetch current values for before/after audit
+    const { data: current } = await supabase.from('products').select('*')
+      .eq('id', parseInt(id)).single()
+
+    const { data, error } = await supabase.from('products').update(updates).select('*')
+      .eq('id', parseInt(id)).single()
 
     if (error) throw error
 
@@ -102,16 +110,14 @@ export async function DELETE(
 
     const { data: profile } = await supabase
       .from('profiles').select('role, full_name').eq('id', user.id).single()
+    // Note: RLS products_delete updated in migration 066 to allow ceo/director
     if (!['admin', 'ceo', 'director'].includes(profile?.role ?? '')) {
       return NextResponse.json({ error: 'Chỉ admin/CEO/Director mới xóa được sản phẩm' }, { status: 403 })
     }
 
     const { id } = await params
-    const query = supabase.from('products').delete()
-    const { error } = await (/^\d+$/.test(id)
-      ? query.eq('id', parseInt(id))
-      : query.eq('lark_record_id', id)
-    )
+    const { error } = await supabase.from('products').delete()
+      .eq('id', parseInt(id))
 
     if (error) throw error
     void logAudit(supabase, { user_id: user.id, user_name: profile?.full_name ?? '', action: 'product_deleted', entity: 'product', detail: `SP #${id}` })

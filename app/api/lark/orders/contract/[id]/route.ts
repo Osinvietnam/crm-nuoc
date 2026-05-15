@@ -156,12 +156,15 @@ export async function PATCH(
     if (body.trang_thai && data.customer_id) {
       const newPipeline = PIPELINE_BY_CONTRACT_STATUS[body.trang_thai]
       if (newPipeline) {
-        void (async () => {
-          const { error: pipelineErr } = await supabase.from('customers')
+        const PIPELINE_ORDER = ['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì']
+        const idx = PIPELINE_ORDER.indexOf(newPipeline)
+        const stagesBelow = idx > 0 ? PIPELINE_ORDER.slice(0, idx) : []
+        if (stagesBelow.length > 0) {
+          void supabase.from('customers')
             .update({ pipeline: newPipeline })
             .eq('id', data.customer_id)
-          if (pipelineErr) console.error('Pipeline sync (contract):', pipelineErr)
-        })()
+            .in('pipeline', stagesBelow)
+        }
       }
     }
 

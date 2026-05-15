@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .order('ten_sp', { ascending: true })
+      .order('ten_sp', { ascending: true }).limit(500)
     if (error) throw error
 
     return NextResponse.json({ data: (data ?? []).map(mapProduct) })
@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
     if (!body.ten_sp) {
       return NextResponse.json({ error: 'Tên sản phẩm là bắt buộc' }, { status: 400 })
     }
+
+    const { gia_niem_yet: ny = 0, gia_chiet_khau: ck = 0 } = body
+    if (ny < 0 || ck < 0) return NextResponse.json({ error: 'Giá không được âm' }, { status: 400 })
+    if (ny > 0 && ck > 0 && ck > ny) return NextResponse.json({ error: 'Giá chiết khấu không được cao hơn giá niêm yết' }, { status: 400 })
 
     const { data, error } = await supabase
       .from('products')

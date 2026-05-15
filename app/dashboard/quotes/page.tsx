@@ -20,6 +20,39 @@ const fmtDate  = (ms: number | null) => ms
   ? new Date(ms).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
   : '—'
 
+// ─── Time filter helpers ───────────────────────────────────────────────────────
+
+type TimePreset = 'month' | 'last_month' | 'quarter' | 'all' | 'custom'
+
+function currentYM() {
+  const d = new Date()
+  return { y: d.getFullYear(), m: d.getMonth() + 1 }
+}
+
+function presetLabel(p: TimePreset, customY: number, customM: number) {
+  if (p === 'all')        return 'Tất cả'
+  if (p === 'month')      return 'Tháng này'
+  if (p === 'last_month') return 'Tháng trước'
+  if (p === 'quarter')    return 'Quý này'
+  return `${String(customM).padStart(2,'0')}/${customY}`
+}
+
+function presetRange(p: TimePreset, customY: number, customM: number): [number,number] | null {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth() + 1
+  if (p === 'all') return null
+  if (p === 'month') return [new Date(y, m-1, 1).getTime(), new Date(y, m, 1).getTime()-1]
+  if (p === 'last_month') {
+    const lm = m===1?12:m-1, ly = m===1?y-1:y
+    return [new Date(ly, lm-1, 1).getTime(), new Date(ly, lm, 1).getTime()-1]
+  }
+  if (p === 'quarter') {
+    const q = Math.floor((m-1)/3)
+    return [new Date(y, q*3, 1).getTime(), new Date(y, q*3+3, 1).getTime()-1]
+  }
+  return [new Date(customY, customM-1, 1).getTime(), new Date(customY, customM, 1).getTime()-1]
+}
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 const STATUS_COLORS_COMMERCIAL: Record<string, { bg: string; text: string }> = {
@@ -674,6 +707,12 @@ export default function QuotesPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [showForm,     setShowForm]     = useState(false)
 
+  const { y: cY, m: cM } = currentYM()
+  const [timePreset, setTimePreset] = useState<TimePreset>('all')
+  const [customY,    setCustomY]    = useState(cY)
+  const [customM,    setCustomM]    = useState(cM)
+  const [showPicker, setShowPicker] = useState(false)
+
   // B2C dùng hook cũ (hỗ trợ follow-up / pull-to-refresh)
   const b2cHook = useQuoteData()
   // Commercial + Project dùng hook mới per-type
@@ -690,7 +729,7 @@ export default function QuotesPage() {
   }, [])
 
   // Reset filter khi đổi tab
-  useEffect(() => { setStatusFilter('all'); setSearch('') }, [tab])
+  useEffect(() => { setStatusFilter('all'); setSearch(''); setTimePreset('all') }, [tab])
 
   const canCreate = ['admin', 'ceo', 'director', 'sales'].includes(myRole)
 
@@ -716,9 +755,13 @@ export default function QuotesPage() {
         const displayStatus = isExpired ? 'Hết hạn' : q.trang_thai
         if (displayStatus !== statusFilter) return false
       }
+      const timeRange = presetRange(timePreset, customY, customM)
+      if (timeRange && q.ngay_lap !== null) {
+        if (q.ngay_lap < timeRange[0] || q.ngay_lap > timeRange[1]) return false
+      }
       return true
     })
-  }, [data, search, statusFilter, tab])
+  }, [data, search, statusFilter, tab, timePreset, customY, customM])
 
   const items = filtered()
   const followUpCount = tab === 'b2c' ? data.filter(isDueForFollowUp).length : 0
@@ -792,6 +835,42 @@ export default function QuotesPage() {
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">✕</button>}
         </div>
+        {/* Time filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 shrink-0">Thời gian:</span>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1">
+            {(['month', 'last_month', 'quarter', 'all'] as TimePreset[]).map(p => (
+              <button key={p}
+                onClick={() => { setTimePreset(p); setShowPicker(false) }}
+                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                  timePreset === p && p !== 'custom'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >{presetLabel(p, customY, customM)}</button>
+            ))}
+            <button onClick={() => setShowPicker(v => !v)}
+              className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                timePreset === 'custom'
+                  ? 'bg-blue-600 text-white border-transparent'
+                  : 'bg-white text-gray-500 border-gray-200'
+              }`}
+            >{timePreset === 'custom' ? presetLabel('custom', customY, customM) : 'Tùy chọn'}</button>
+          </div>
+        </div>
+        {showPicker && (
+          <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2.5">
+            <select value={customM} onChange={e => { setCustomM(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>Tháng {m}</option>)}
+            </select>
+            <select value={customY} onChange={e => { setCustomY(Number(e.target.value)); setTimePreset('custom') }}
+              className="text-sm bg-white border border-blue-200 rounded-lg px-2 py-1 outline-none">
+              {Array.from({length:5},(_,i)=>cY-2+i).map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={() => setShowPicker(false)} className="text-blue-600 text-sm font-semibold ml-auto">Xong</button>
+          </div>
+        )}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
           {statusFilters.map(s => {
             const count = s === 'all' ? data.length : (countByStatus[s] ?? 0)

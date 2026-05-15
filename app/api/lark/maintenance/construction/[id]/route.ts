@@ -20,15 +20,26 @@ async function autoCreatePeriodic(supabase: any, construction: any) {
       .eq('order_id', construction.order_id)
       .maybeSingle()
     if (existing) return
+  } else if (construction.customer_id) {
+    // M2: Secondary dedup by customer_id when no order_id — prevent duplicates
+    const { data: existing } = await supabase
+      .from('maintenance_periodic')
+      .select('id')
+      .eq('customer_id', construction.customer_id)
+      .is('order_id', null)
+      .eq('trang_thai', 'Đang hoạt động')
+      .maybeSingle()
+    if (existing) return
   }
 
   await supabase.from('maintenance_periodic').insert({
-    customer_id:     construction.customer_id  ?? null,
-    order_id:        construction.order_id     ?? null,
+    customer_id:     construction.customer_id   ?? null,
+    order_id:        construction.order_id      ?? null,
     san_pham_da_lap: construction.san_pham ? [construction.san_pham] : [],
+    nv_phu_trach:    construction.ktv_phu_trach ?? null,
     chu_ky:          6,
     trang_thai:      'Đang hoạt động',
-    khu_vuc:         construction.khu_vuc ?? null,
+    khu_vuc:         construction.khu_vuc       ?? null,
   })
 }
 
@@ -80,7 +91,7 @@ export async function PATCH(
     const body = await req.json()
 
     const updates: Record<string, unknown> = {}
-    for (const key of ['trang_thai', 'ghi_chu', 'san_pham', 'ktv_phu_trach', 'ma_ct']) {
+    for (const key of ['trang_thai', 'ghi_chu', 'san_pham', 'ktv_phu_trach', 'ma_ct', 'khu_vuc']) {
       if (key in body) updates[key] = body[key]
     }
     // Date fields: UI sends ms timestamp → convert to ISO date
@@ -102,12 +113,13 @@ export async function PATCH(
     if (body.trang_thai === 'Nghiệm thu hoàn thành') {
       void autoCreatePeriodic(supabase, data).catch((e: unknown) => console.error('autoCreatePeriodic:', e))
       if (data.customer_id) {
-        void (async () => {
-          const { error: pipelineErr } = await supabase.from('customers')
-            .update({ pipeline: 'Bảo hành' })
-            .eq('id', data.customer_id)
-          if (pipelineErr) console.error('Pipeline sync (construction):', pipelineErr)
-        })()
+        const PIPELINE_ORDER = ['Lead mới','Tiềm năng','Báo giá','Đàm phán','Chốt HĐ','Giao hàng','Nghiệm thu','Bảo hành','Bảo trì']
+        const idx = PIPELINE_ORDER.indexOf('Bảo hành')
+        const stagesBelow = PIPELINE_ORDER.slice(0, idx)
+        void supabase.from('customers')
+          .update({ pipeline: 'Bảo hành' })
+          .eq('id', data.customer_id)
+          .in('pipeline', stagesBelow)
       }
     }
 
