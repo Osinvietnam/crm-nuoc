@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { PIPELINE_STAGES } from '@/lib/lark/tables'
 
+export const dynamic = 'force-dynamic'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface MonthRevenue { label: string; value: number }
@@ -31,6 +33,12 @@ export interface DashboardStats {
   khau_hao_thang:            number   // tổng khấu hao tháng hiện tại
   cong_no_qua_han:           number   // tổng công nợ quá hạn (due_date < today)
   warranty_tickets_pending:  number   // yêu cầu bảo hành Chờ xử lý
+  // Phase 15A — Activity Feed & P&L
+  activity_feed: { user_name: string; action: string; entity: string; detail: string; created_at: string }[]
+  pl_summary: {
+    doanh_thu: number; chi_phi: number; hoa_hong: number
+    khau_hao:  number; loi_nhuan: number; bien_loi_nhuan_pct: number
+  } | null
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -85,6 +93,7 @@ function zero(): DashboardStats {
     logistics_pending: 0, logistics_delivering: 0, logistics_delivered_month: 0,
     logistics_overdue: 0, kh_no_contact_30d: 0, quotes_stale: 0, quotes_cho_duyet: 0,
     hoa_hong_chua_tra: 0, khau_hao_thang: 0, cong_no_qua_han: 0, warranty_tickets_pending: 0,
+    activity_feed: [], pl_summary: null,
   }
 }
 
@@ -248,6 +257,38 @@ export async function GET() {
         }
       }
       stats.khau_hao_thang = khtong
+
+      // Activity feed — 10 hoạt động gần nhất
+      const { data: feedRows } = await service
+        .from('audit_logs')
+        .select('user_name, action, entity, detail, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      stats.activity_feed = feedRows ?? []
+
+      // P&L summary tháng này
+      const nowDate  = new Date()
+      const curMonth = nowDate.getMonth() + 1
+      const curYear  = nowDate.getFullYear()
+      const [expRes, commPaidRes] = await Promise.all([
+        service.from('expenses').select('amount')
+          .eq('thang', curMonth).eq('nam', curYear),
+        service.from('orders').select('hh_kinh_doanh')
+          .eq('hh_da_tra', true)
+          .gte('hh_ngay_tra', mFrom).lte('hh_ngay_tra', mTo),
+      ])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pl_cp = (expRes.data      ?? []).reduce((s, e: any) => s + (e.amount        ?? 0), 0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pl_hh = (commPaidRes.data ?? []).reduce((s, o: any) => s + (o.hh_kinh_doanh ?? 0), 0)
+      const pl_dt = stats.revenue_month
+      const pl_kh = stats.khau_hao_thang
+      const pl_ln = pl_dt - pl_cp - pl_hh - pl_kh
+      stats.pl_summary = {
+        doanh_thu: pl_dt, chi_phi: pl_cp, hoa_hong: pl_hh, khau_hao: pl_kh,
+        loi_nhuan: pl_ln,
+        bien_loi_nhuan_pct: pl_dt > 0 ? Math.round(pl_ln / pl_dt * 100) : 0,
+      }
     }
 
     // ── G. Bảo hành ──────────────────────────────────────────────────────────

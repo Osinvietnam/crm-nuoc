@@ -119,6 +119,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Không có quyền chuyển người phụ trách' }, { status: 403 })
     }
 
+    // Chỉ admin/ceo/director mới được đánh dấu "Lost"
+    if ('pipeline' in updates && updates.pipeline === 'Lost') {
+      if (!['admin', 'ceo', 'director'].includes(profile?.role ?? '')) {
+        return NextResponse.json({ error: 'Chỉ quản lý mới có thể đánh dấu khách hàng là Lost' }, { status: 403 })
+      }
+    }
+
     const updateQuery = supabase
       .from('customers')
       .update(updates)

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const PIPELINE_ORDER = [
   'Lead mới', 'Tiềm năng', 'Báo giá', 'Đàm phán',
-  'Chốt HĐ', 'Giao hàng', 'Nghiệm thu', 'Bảo hành', 'Bảo trì',
+  'Chốt HĐ', 'Giao hàng', 'Nghiệm thu', 'Bảo hành', 'Bảo trì', 'Lost',
 ] as const
 
 export type PipelineStage = (typeof PIPELINE_ORDER)[number]
@@ -17,6 +17,8 @@ export async function advanceCustomerPipeline(
   customerId: number | string,
   newStage: string,
 ) {
+  // 'Lost' là terminal stage — chỉ set thủ công bởi manager, không advance tự động
+  if (newStage === 'Lost') return
   const idx = PIPELINE_ORDER.indexOf(newStage as PipelineStage)
   if (idx <= 0) return
   const stagesBelow = PIPELINE_ORDER.slice(0, idx) as unknown as string[]

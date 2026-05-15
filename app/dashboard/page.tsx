@@ -37,6 +37,16 @@ interface KPICard {
   href?:   string
 }
 
+type AlertSeverity = 'urgent' | 'important' | 'watch'
+
+interface AlertItem {
+  label:     string
+  count:     number
+  valueStr?: string   // hiển thị thay count (dùng cho tiền tệ)
+  href:      string
+  severity:  AlertSeverity
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function Shimmer({ className }: { className: string }) {
@@ -127,31 +137,74 @@ function KPIGrid({ cards, loading }: { cards: KPICard[]; loading: boolean }) {
   )
 }
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
+// ─── War Room ─────────────────────────────────────────────────────────────────
 
-function AlertsBanner({
-  alerts, role, loading,
-}: {
-  alerts: { label: string; count: number; href: string; color: string }[]
-  role: string
-  loading: boolean
-}) {
+const SEV_CONFIG: Record<AlertSeverity, { heading: string; ring: string; badge: string }> = {
+  urgent:    { heading: '🔴 Khẩn cấp',   ring: 'border-red-200 bg-red-50',     badge: 'bg-red-500 text-white'     },
+  important: { heading: '🟠 Quan trọng', ring: 'border-orange-200 bg-orange-50', badge: 'bg-orange-500 text-white' },
+  watch:     { heading: '🟡 Theo dõi',   ring: 'border-yellow-200 bg-yellow-50', badge: 'bg-yellow-400 text-gray-800' },
+}
+
+function WarRoom({ alerts, loading }: { alerts: AlertItem[]; loading: boolean }) {
+  const [open, setOpen] = useState(true)
+  const router = useRouter()
   const active = alerts.filter(a => a.count > 0)
   if (loading || active.length === 0) return null
-  const router = useRouter()
+
+  const byGroup = (sev: AlertSeverity) => active.filter(a => a.severity === sev)
+  const urgentCnt    = byGroup('urgent').length
+  const importantCnt = byGroup('important').length
+
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-semibold text-gray-700">Cần xử lý</p>
-      {active.map(a => (
-        <button
-          key={a.label}
-          onClick={() => router.push(a.href)}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left ${a.color}`}
-        >
-          <span className="text-sm font-medium">{a.label}</span>
-          <span className="text-sm font-bold">{a.count}</span>
-        </button>
-      ))}
+    <div className="rounded-2xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 active:bg-gray-100"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-800">⚡ Cần xử lý</span>
+          {urgentCnt > 0 && (
+            <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
+              {urgentCnt}
+            </span>
+          )}
+          {importantCnt > 0 && (
+            <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
+              {importantCnt}
+            </span>
+          )}
+        </div>
+        <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="p-3 space-y-3 bg-white">
+          {(['urgent', 'important', 'watch'] as AlertSeverity[]).map(sev => {
+            const items = byGroup(sev)
+            if (items.length === 0) return null
+            const cfg = SEV_CONFIG[sev]
+            return (
+              <div key={sev}>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">{cfg.heading}</p>
+                <div className="space-y-1.5">
+                  {items.map(a => (
+                    <button
+                      key={a.label}
+                      onClick={() => router.push(a.href)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-left ${cfg.ring}`}
+                    >
+                      <span className="text-sm font-medium text-gray-800">{a.label}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${cfg.badge}`}>
+                        {a.valueStr ?? a.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -297,6 +350,121 @@ function MyTasksWidget({ role }: { role: string }) {
   )
 }
 
+// ─── Activity Feed ────────────────────────────────────────────────────────────
+
+type FeedItem = DashboardStats['activity_feed'][0]
+
+const ACTION_ICON: Record<string, string> = {
+  customer_created:        '👤',
+  customer_updated:        '✏️',
+  customer_reassigned:     '🔄',
+  order_created:           '📋',
+  order_updated:           '📝',
+  payment_created:         '💰',
+  payment_updated:         '💵',
+  payment_deleted:         '🗑️',
+  quote_created:           '📄',
+  quote_updated:           '📝',
+  quote_status_changed:    '🔄',
+  warranty_ticket_created: '🛡️',
+  warranty_ticket_updated: '🔧',
+  commission_paid:         '💸',
+  task_updated:            '✅',
+  asset_created:           '🏷️',
+  expense_created:         '📊',
+}
+
+function relativeTime(ts: string): string {
+  const diff = Date.now() - new Date(ts).getTime()
+  const m    = Math.floor(diff / 60_000)
+  const h    = Math.floor(diff / 3_600_000)
+  const d    = Math.floor(diff / 86_400_000)
+  if (m < 1)  return 'vừa xong'
+  if (m < 60) return `${m} phút trước`
+  if (h < 24) return `${h} giờ trước`
+  return `${d} ngày trước`
+}
+
+function ActivityFeed({ feed }: { feed: FeedItem[] }) {
+  if (feed.length === 0) return null
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-3">Hoạt động gần đây</p>
+      <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
+        {feed.map((item, i) => (
+          <div key={i} className="flex items-start gap-3 px-4 py-3">
+            <span className="text-lg flex-shrink-0 mt-0.5">
+              {ACTION_ICON[item.action] ?? '📌'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-gray-700">{item.user_name}</p>
+              <p className="text-xs text-gray-500 truncate mt-0.5">{item.detail}</p>
+            </div>
+            <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5 whitespace-nowrap">
+              {relativeTime(item.created_at)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── P&L Widget ───────────────────────────────────────────────────────────────
+
+type PLSummary = NonNullable<DashboardStats['pl_summary']>
+
+function PLWidget({ pl }: { pl: PLSummary }) {
+  const isProfit = pl.loi_nhuan >= 0
+  return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700 mb-3">P&L tháng này</p>
+      <div className={`rounded-2xl p-4 border ${
+        isProfit
+          ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-100'
+          : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-100'
+      }`}>
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Lợi nhuận ròng</p>
+            <p className={`text-2xl font-bold leading-none ${isProfit ? 'text-green-700' : 'text-red-700'}`}>
+              {isProfit ? '+' : ''}{fmtMoney(pl.loi_nhuan)}đ
+            </p>
+          </div>
+          <div className={`text-right ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
+            <span className="text-xl">{isProfit ? '📈' : '📉'}</span>
+            <p className="text-sm font-bold">{Math.abs(pl.bien_loi_nhuan_pct)}%</p>
+          </div>
+        </div>
+        <div className="space-y-1.5 pt-3 border-t border-black/5">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">💰 Doanh thu</span>
+            <span className="font-semibold text-gray-700">{fmtMoney(pl.doanh_thu)}đ</span>
+          </div>
+          {pl.chi_phi > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">🧾 Chi phí</span>
+              <span className="font-semibold text-gray-700">−{fmtMoney(pl.chi_phi)}đ</span>
+            </div>
+          )}
+          {pl.hoa_hong > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">💸 Hoa hồng đã trả</span>
+              <span className="font-semibold text-gray-700">−{fmtMoney(pl.hoa_hong)}đ</span>
+            </div>
+          )}
+          {pl.khau_hao > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">🏷️ Khấu hao</span>
+              <span className="font-semibold text-gray-700">−{fmtMoney(pl.khau_hao)}đ</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Build cards per role ─────────────────────────────────────────────────────
 
 function buildCards(role: string, s: DashboardStats, target: number | null): KPICard[] {
@@ -356,32 +524,37 @@ function buildCards(role: string, s: DashboardStats, target: number | null): KPI
   ]
 }
 
-function buildAlerts(role: string, s: DashboardStats) {
-  // KH no-contact alert: chỉ cho role quản lý KH (không cho logistics/tech/accountant)
-  const base = ['admin', 'ceo', 'director', 'sales', 'partner'].includes(role)
-    ? [{ label: `${s.kh_no_contact_30d} KH chưa liên hệ > 30 ngày`, count: s.kh_no_contact_30d, href: '/dashboard/customers', color: 'bg-amber-50 text-amber-700 border border-amber-200' }]
-    : []
+function buildWarRoom(role: string, s: DashboardStats): AlertItem[] {
+  const items: AlertItem[] = []
+  const isMgr = ['admin', 'ceo', 'director'].includes(role)
+  const isKH  = ['admin', 'ceo', 'director', 'sales', 'partner'].includes(role)
+  const isTechMaint = ['admin', 'ceo', 'director', 'tech_lead', 'tech', 'logistics'].includes(role)
 
-  if (['admin', 'ceo', 'director', 'tech_lead', 'tech', 'logistics'].includes(role)) {
-    base.push({ label: `${s.maintenance_overdue} bảo trì định kỳ quá hạn`, count: s.maintenance_overdue, href: '/dashboard/maintenance', color: 'bg-red-50 text-red-700 border border-red-200' })
-    if (s.warranty_tickets_pending > 0) {
-      base.push({ label: `${s.warranty_tickets_pending} yêu cầu bảo hành chờ xử lý`, count: s.warranty_tickets_pending, href: '/dashboard/warranty', color: 'bg-purple-50 text-purple-700 border border-purple-200' })
-    }
-  }
-  if (role === 'accountant') {
-    base.push({ label: `${s.contracts_unpaid} hợp đồng chưa thu đủ`, count: s.contracts_unpaid, href: '/dashboard/contracts', color: 'bg-red-50 text-red-700 border border-red-200' })
-  }
-  if (role === 'sales') {
-    base.push({ label: `${s.quotes_stale} báo giá đã gửi chưa phản hồi`, count: s.quotes_stale, href: '/dashboard/contracts', color: 'bg-blue-50 text-blue-700 border border-blue-200' })
-  }
-  if (['admin', 'ceo', 'director'].includes(role) && s.quotes_cho_duyet > 0) {
-    base.unshift({ label: `${s.quotes_cho_duyet} báo giá chờ duyệt`, count: s.quotes_cho_duyet, href: '/dashboard/contracts', color: 'bg-orange-50 text-orange-700 border border-orange-300' })
-  }
-  if (role === 'logistics') {
-    base.push({ label: `${s.logistics_overdue} đơn giao quá hạn`, count: s.logistics_overdue, href: '/dashboard/contracts', color: 'bg-red-50 text-red-700 border border-red-200' })
-  }
+  // ── 🔴 Khẩn cấp ──
+  if (s.cong_no_qua_han > 0 && (isMgr || role === 'accountant'))
+    items.push({ label: 'Công nợ quá hạn', count: s.cong_no_qua_han, valueStr: fmtMoney(s.cong_no_qua_han) + 'đ', href: '/dashboard/finance', severity: 'urgent' })
+  if (s.kh_no_contact_30d > 0 && isKH)
+    items.push({ label: 'KH chưa liên hệ > 30 ngày', count: s.kh_no_contact_30d, href: '/dashboard/customers', severity: 'urgent' })
+  if (s.maintenance_overdue > 0 && isTechMaint)
+    items.push({ label: 'Bảo trì định kỳ quá hạn', count: s.maintenance_overdue, href: '/dashboard/maintenance', severity: 'urgent' })
 
-  return base
+  // ── 🟠 Quan trọng ──
+  if (s.warranty_tickets_pending > 0 && isTechMaint)
+    items.push({ label: 'Bảo hành chờ xử lý', count: s.warranty_tickets_pending, href: '/dashboard/warranty', severity: 'important' })
+  if (s.logistics_overdue > 0 && (role === 'logistics' || isMgr))
+    items.push({ label: 'Đơn giao quá hạn', count: s.logistics_overdue, href: '/dashboard/contracts', severity: 'important' })
+  if (s.quotes_cho_duyet > 0 && isMgr)
+    items.push({ label: 'Báo giá chờ duyệt', count: s.quotes_cho_duyet, href: '/dashboard/contracts', severity: 'important' })
+
+  // ── 🟡 Theo dõi ──
+  if (s.quotes_stale > 0 && (['sales', 'partner'].includes(role) || isMgr))
+    items.push({ label: 'Báo giá đã gửi chưa phản hồi', count: s.quotes_stale, href: '/dashboard/contracts', severity: 'watch' })
+  if (s.contracts_unpaid > 0 && (role === 'accountant' || isMgr))
+    items.push({ label: 'Hợp đồng chưa thu đủ', count: s.contracts_unpaid, href: '/dashboard/contracts', severity: 'watch' })
+  if (s.hoa_hong_chua_tra > 0 && isMgr)
+    items.push({ label: 'Hoa hồng chưa trả', count: s.hoa_hong_chua_tra, valueStr: fmtMoney(s.hoa_hong_chua_tra) + 'đ', href: '/dashboard/finance', severity: 'watch' })
+
+  return items
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -416,11 +589,12 @@ export default function DashboardPage() {
 
   if (loading) return <SkeletonDashboard />
 
-  const role    = profile?.role ?? 'sales'
-  const cards   = stats ? buildCards(role, stats, profile?.target_thang ?? null) : []
-  const alerts  = stats ? buildAlerts(role, stats) : []
-  const showRevChart   = ['admin', 'ceo', 'director', 'accountant', 'sales'].includes(role)
-  const showPipeline   = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)  // logistics không xem pipeline sales
+  const role          = profile?.role ?? 'sales'
+  const cards         = stats ? buildCards(role, stats, profile?.target_thang ?? null) : []
+  const warRoomAlerts = stats ? buildWarRoom(role, stats) : []
+  const isManager     = ['admin', 'ceo', 'director'].includes(role)
+  const showRevChart  = ['admin', 'ceo', 'director', 'accountant', 'sales'].includes(role)
+  const showPipeline  = ['admin', 'ceo', 'director', 'accountant', 'sales', 'partner'].includes(role)
 
   // Target progress bar cho sales
   const targetPct = profile?.target_thang && stats?.revenue_month
@@ -469,8 +643,8 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Alerts ── */}
-      <AlertsBanner alerts={alerts} role={role} loading={loading} />
+      {/* ── War Room ── */}
+      <WarRoom alerts={warRoomAlerts} loading={loading} />
 
       {/* ── Quick actions ── */}
       <QuickActions role={role} />
@@ -481,6 +655,9 @@ export default function DashboardPage() {
       {/* ── KPI cards ── */}
       {cards.length > 0 && <KPIGrid cards={cards} loading={false} />}
 
+      {/* ── P&L widget (manager only) ── */}
+      {isManager && stats?.pl_summary && <PLWidget pl={stats.pl_summary} />}
+
       {/* ── Revenue chart ── */}
       {showRevChart && stats && stats.revenue_6months.some(m => m.value > 0) && (
         <RevenueChart data={stats.revenue_6months} />
@@ -488,6 +665,11 @@ export default function DashboardPage() {
 
       {/* ── Pipeline ── */}
       {showPipeline && stats && <PipelineSection pipeline={stats.pipeline} />}
+
+      {/* ── Activity feed (manager only) ── */}
+      {isManager && stats && stats.activity_feed.length > 0 && (
+        <ActivityFeed feed={stats.activity_feed} />
+      )}
 
     </div>
   )
