@@ -567,11 +567,21 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
     muc_uu_tien: 'Trung bình', bao_gia: '', noi_dung: '', nhom_dv: '',
     khu_vuc: '', loai_kh: 'B2C',
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [saving, setSaving]           = useState(false)
+  const [error, setError]             = useState('')
   const [duplicateId, setDuplicateId] = useState<number | null>(null)
+  const [nameDuplicates, setNameDuplicates] = useState<{ id: number; ho_ten: string; sdt: string; pipeline: string }[]>([])
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const checkNameDuplicates = async (name: string) => {
+    if (name.trim().length < 3) { setNameDuplicates([]); return }
+    try {
+      const res = await fetch(`/api/lark/customers?check_duplicate=${encodeURIComponent(name.trim())}`)
+      const data = await res.json()
+      setNameDuplicates(data.duplicates ?? [])
+    } catch { /* silent */ }
+  }
 
   const handleSubmit = async () => {
     if (!form.ho_ten.trim() || !form.sdt.trim()) {
@@ -633,8 +643,25 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
               className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Nguyễn Văn A"
               value={form.ho_ten}
-              onChange={e => set('ho_ten', e.target.value)}
+              onChange={e => { set('ho_ten', e.target.value); setNameDuplicates([]) }}
+              onBlur={e => void checkNameDuplicates(e.target.value)}
             />
+            {nameDuplicates.length > 0 && (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-xs font-semibold text-amber-700 mb-1.5">⚠️ Có thể trùng với:</p>
+                {nameDuplicates.map(d => (
+                  <button key={d.id} type="button"
+                    onClick={() => router.push(`/dashboard/customers/${d.id}`)}
+                    className="w-full text-left text-xs text-amber-800 py-1 flex items-center gap-2"
+                  >
+                    <span className="font-medium">{d.ho_ten}</span>
+                    <span className="text-amber-500">· {d.sdt} · {d.pipeline}</span>
+                    <span className="ml-auto text-blue-600 font-medium">Xem →</span>
+                  </button>
+                ))}
+                <p className="text-[10px] text-amber-500 mt-1">Nhấn tên KH để xem chi tiết. Nếu không trùng, tiếp tục tạo mới.</p>
+              </div>
+            )}
           </div>
 
           <div>
@@ -845,11 +872,14 @@ function AddCustomerForm({ onClose, onCreated }: AddFormProps) {
 
 // ─── Customer Card ────────────────────────────────────────────────────────────
 
-function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true }: {
+function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true, bulkMode = false, selected = false, onToggleSelect }: {
   customer: Customer
   onClick: () => void
   onCreateQuote: (c: Customer) => void
   canCreateQuote?: boolean
+  bulkMode?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: number) => void
 }) {
   const pipeline = customer.pipeline || 'Lead mới'
   const pc  = PIPELINE_COLORS[pipeline] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
@@ -860,18 +890,24 @@ function CustomerCard({ customer, onClick, onCreateQuote, canCreateQuote = true 
   })
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className={`bg-white rounded-2xl shadow-sm border overflow-hidden transition-colors ${selected ? 'border-blue-400 bg-blue-50/30' : 'border-gray-100'}`}>
       <button
-        onClick={onClick}
+        onClick={bulkMode ? () => onToggleSelect?.(customer.id) : onClick}
         className="w-full p-4 text-left active:bg-gray-50 transition-colors"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm font-bold">
-                {customer.ho_ten?.charAt(0)?.toUpperCase() ?? '?'}
-              </span>
-            </div>
+            {bulkMode ? (
+              <div className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-colors ${selected ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}>
+                {selected && <span className="text-white text-lg font-bold">✓</span>}
+              </div>
+            ) : (
+              <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-sm font-bold">
+                  {customer.ho_ten?.charAt(0)?.toUpperCase() ?? '?'}
+                </span>
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-gray-800 text-sm truncate">{customer.ho_ten}</p>
               <p className="text-xs text-gray-500 mt-0.5">{formatPhone(customer.sdt)}</p>
@@ -978,6 +1014,12 @@ export default function CustomersPage() {
   const [role, setRole]                 = useState('')
   const [error, setError]               = useState('')
   const [quoteFor, setQuoteFor]         = useState<Customer | null>(null)
+  const [bulkMode, setBulkMode]         = useState(false)
+  const [selectedIds, setSelectedIds]   = useState<Set<number>>(new Set())
+  const [bulkAction, setBulkAction]     = useState<'assign'|'pipeline'|'khu_vuc'>('assign')
+  const [bulkValue, setBulkValue]       = useState('')
+  const [bulkSaving, setBulkSaving]     = useState(false)
+  const [staffList, setStaffList]       = useState<{ id: string; full_name: string }[]>([])
 
   // Loại KH filter
   const [loaiKh, setLoaiKh] = useState('Tất cả')
@@ -1015,6 +1057,43 @@ export default function CustomersPage() {
 
   useEffect(() => { loadCustomers() }, [loadCustomers])
 
+  // Load staff list cho bulk assign (lazy)
+  useEffect(() => {
+    if (!bulkMode || staffList.length > 0) return
+    fetch('/api/admin/users').then(r => r.json()).then(d => {
+      setStaffList((d.data ?? [])
+        .filter((u: { is_active: boolean }) => u.is_active)
+        .map((u: { id: string; full_name: string }) => ({ id: u.id, full_name: u.full_name }))
+      )
+    }).catch(() => {})
+  }, [bulkMode])
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const applyBulkAction = async () => {
+    if (!bulkValue || selectedIds.size === 0) return
+    setBulkSaving(true)
+    try {
+      const res = await fetch('/api/lark/customers/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds), action: bulkAction, value: bulkValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || 'Lỗi', true); return }
+      showToast(`Đã cập nhật ${data.updated} khách hàng`)
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkValue('')
+      void loadCustomers()
+    } catch { showToast('Lỗi kết nối', true) }
+    finally { setBulkSaving(false) }
+  }
+
   const ptr = usePullToRefresh(loadCustomers)
 
   const timeRange = presetRange(timePreset, customY, customM)
@@ -1051,7 +1130,23 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {['admin', 'ceo', 'director'].includes(role) && (
+            {['admin', 'ceo', 'director'].includes(role) && !bulkMode && (
+              <button
+                onClick={() => setBulkMode(true)}
+                className="border border-gray-200 text-gray-600 text-xs font-medium px-3 py-2 rounded-xl"
+              >
+                ☑️ Chọn nhiều
+              </button>
+            )}
+            {bulkMode && (
+              <button
+                onClick={() => { setBulkMode(false); setSelectedIds(new Set()); setBulkValue('') }}
+                className="border border-red-200 text-red-500 text-xs font-medium px-3 py-2 rounded-xl"
+              >
+                Huỷ
+              </button>
+            )}
+            {!bulkMode && ['admin', 'ceo', 'director'].includes(role) && (
               <button
                 onClick={() => setShowImport(true)}
                 className="border border-gray-200 text-gray-600 text-sm font-medium px-3 py-2 rounded-xl flex items-center gap-1.5"
@@ -1059,7 +1154,7 @@ export default function CustomersPage() {
                 Import
               </button>
             )}
-            {['admin', 'ceo', 'director', 'sales'].includes(role) && (
+            {!bulkMode && ['admin', 'ceo', 'director', 'sales'].includes(role) && (
               <button
                 onClick={() => setShowForm(true)}
                 className="bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5"
@@ -1230,12 +1325,63 @@ export default function CustomersPage() {
               customer={c}
               onClick={() => router.push(`/dashboard/customers/${c.record_id}`)}
               onCreateQuote={c => setQuoteFor(c)}
-              canCreateQuote={['admin', 'ceo', 'director', 'sales'].includes(role)}
+              canCreateQuote={['admin', 'ceo', 'director', 'sales'].includes(role) && !bulkMode}
+              bulkMode={bulkMode}
+              selected={selectedIds.has(c.id)}
+              onToggleSelect={toggleSelect}
             />
           ))
         )}
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {bulkMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-sm px-4">
+          <div className="bg-gray-900 rounded-2xl p-4 shadow-xl space-y-3">
+            <p className="text-white text-sm font-semibold text-center">
+              Đã chọn {selectedIds.size} khách hàng
+            </p>
+            <div className="flex gap-2">
+              <select value={bulkAction}
+                onChange={e => { setBulkAction(e.target.value as typeof bulkAction); setBulkValue('') }}
+                className="flex-shrink-0 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 border border-gray-700 focus:outline-none"
+              >
+                <option value="assign">Giao cho</option>
+                <option value="pipeline">Pipeline</option>
+                <option value="khu_vuc">Khu vực</option>
+              </select>
+              {bulkAction === 'assign' && (
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)}
+                  className="flex-1 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 border border-gray-700 focus:outline-none">
+                  <option value="">— Chọn NV —</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+              )}
+              {bulkAction === 'pipeline' && (
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)}
+                  className="flex-1 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 border border-gray-700 focus:outline-none">
+                  <option value="">— Chọn stage —</option>
+                  {PIPELINE_STAGES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              )}
+              {bulkAction === 'khu_vuc' && (
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)}
+                  className="flex-1 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 border border-gray-700 focus:outline-none">
+                  <option value="">— Chọn khu vực —</option>
+                  <option>Miền Nam</option>
+                  <option>Miền Bắc</option>
+                  <option>Miền Trung</option>
+                </select>
+              )}
+            </div>
+            <button onClick={applyBulkAction} disabled={!bulkValue || bulkSaving}
+              className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40">
+              {bulkSaving ? 'Đang cập nhật...' : 'Áp dụng'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <AddCustomerForm onClose={() => setShowForm(false)} onCreated={handleCreated} />

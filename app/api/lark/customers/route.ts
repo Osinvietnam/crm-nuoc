@@ -78,7 +78,7 @@ function mapRow(c: any): Customer {
 
 // ─── GET /api/lark/customers ──────────────────────────────────────────────────
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -91,6 +91,32 @@ export async function GET(_req: NextRequest) {
       .single()
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
+    // ── Duplicate check mode ──────────────────────────────────────────────────
+    const checkName = req.nextUrl.searchParams.get('check_duplicate')
+    if (checkName) {
+      // Lấy 3 ký tự đầu (bỏ dấu tối giản) để tìm tương tự
+      const prefix = checkName.trim().slice(0, 4)
+      const { data: candidates } = await supabase
+        .from('customers')
+        .select('id, ho_ten, sdt, pipeline, nguoi_phu_trach_id:nguoi_phu_trach')
+        .ilike('ho_ten', `${prefix}%`)
+        .limit(10)
+
+      // Client-side similarity: tính % ký tự trùng (simple)
+      const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+      const normTarget = normalize(checkName)
+      const similar = (candidates ?? []).filter(c => {
+        const normC = normalize(c.ho_ten)
+        const shorter = Math.min(normTarget.length, normC.length)
+        let match = 0
+        for (let i = 0; i < shorter; i++) if (normTarget[i] === normC[i]) match++
+        return shorter > 0 && match / shorter >= 0.7
+      })
+
+      return NextResponse.json({ duplicates: similar })
+    }
+
+    // ── Normal list mode ──────────────────────────────────────────────────────
     let query = supabase
       .from('customers')
       .select('*, profiles!nguoi_phu_trach(id, full_name)')

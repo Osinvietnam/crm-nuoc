@@ -39,6 +39,7 @@ export type AuditAction =
   | 'asset_created'
   | 'asset_updated'
   | 'customer_reassigned'
+  | 'bulk_update'
 
 export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task' | 'order' | 'product' | 'asset' | 'maintenance'
 
