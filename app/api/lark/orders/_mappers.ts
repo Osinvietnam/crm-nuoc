@@ -98,7 +98,8 @@ export function mapContract(r: any): Contract {
     gia_tri_gws:           r.gia_tri_gws            ?? 0,
     trang_thai:            r.trang_thai             ?? '',
     san_pham:              r.san_pham               ?? [],
-    dia_chi_ct:            r.dia_chi_ct             ?? '',
+    // dia_chi_ct: ưu tiên trường trực tiếp trên orders, fallback sang customers join
+    dia_chi_ct:            r.dia_chi_ct || r.customers?.dia_chi_ct || r.customers?.dia_chi_hd || '',
     hh_kinh_doanh:         r.hh_kinh_doanh          ?? 0,
     ghi_chu:               r.ghi_chu                ?? '',
     customer_id:           r.customer_id            ?? null,

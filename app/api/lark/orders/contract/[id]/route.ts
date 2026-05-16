@@ -7,7 +7,7 @@ import { advanceCustomerPipeline } from '@/lib/pipeline'
 const SELECT = `
   *,
   staff:nguoi_phu_trach(id, full_name),
-  customers!customer_id(id, ho_ten, sdt)
+  customers!customer_id(id, ho_ten, sdt, dia_chi_ct, dia_chi_hd)
 `
 
 // ─── Q4: HĐ "Đang thi công" → tự tạo maintenance_construction ────────────────

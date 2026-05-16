@@ -148,7 +148,8 @@ function fmtDate(v: string | number | null): { ngay: string; thang: string; nam:
 
 function Bullet({ text, indent = 1, bold = false }: { text: string; indent?: number; bold?: boolean }) {
   return (
-    <View style={[s.bullet, { paddingLeft: indent * 10 }]}>
+    // wrap={false} prevents the bullet dash from splitting to a different page than its text
+    <View style={[s.bullet, { paddingLeft: indent * 10 }]} wrap={false}>
       <Text style={s.bulletDot}>-</Text>
       <Text style={[s.bulletText, bold ? { fontWeight: 700 } : {}]}>{text}</Text>
     </View>
@@ -233,7 +234,13 @@ export function ContractPDFDocument({
           <Text style={[s.infoValueNormal, { width: 100 }]}>{'  chức vụ : '}</Text>
           <Text style={s.infoValue}>Giám Đốc</Text>
         </View>
-        <InfoRow label="Tư vấn viên"      value={(contract.nguoi_phu_trach || '..............................') + '                CCCD'} />
+        <View style={s.infoRow}>
+          <Text style={s.infoLabel}>Tư vấn viên</Text>
+          <Text style={s.infoColon}>:</Text>
+          <Text style={s.infoValue}>{contract.nguoi_phu_trach || '..............................'}</Text>
+          <Text style={[s.infoValueNormal, { width: 60 }]}>{'  CCCD: '}</Text>
+          <Text style={s.infoValueNormal}>{'..............................'}</Text>
+        </View>
 
         {/* ── Bên B ────────────────────────────────────────────────────── */}
         <Text style={s.partyHeader}>BÊN MUA THIẾT BỊ VÀ DỊCH VỤ LẮP ĐẶT (BÊN B):</Text>
@@ -277,8 +284,8 @@ export function ContractPDFDocument({
             <Text style={[s.thText, s.colName]}>Sản phẩm</Text>
             <Text style={[s.thText, s.colDvt]}>Đvt</Text>
             <Text style={[s.thText, s.colQty]}>SL</Text>
-            <Text style={[s.thText, s.colPrice]}>Đơn giá\nVNĐ</Text>
-            <Text style={[s.thText, s.colTotal]}>Thành tiền\nVNĐ</Text>
+            <Text style={[s.thText, s.colPrice]}>{'Đơn giá\nVNĐ'}</Text>
+            <Text style={[s.thText, s.colTotal]}>{'Thành tiền\nVNĐ'}</Text>
           </View>
 
           {/* Data rows */}
@@ -348,32 +355,44 @@ export function ContractPDFDocument({
         <Bullet text={'Giá Trị hợp đồng: ' + fmtVnd(tongCoVat)} />
         <Bullet text="Bên Mua thanh toán cho Bên Bán theo từng đợt như sau:" />
 
-        {/* Đợt 1 */}
-        <View style={[s.bullet, { paddingLeft: 20 }]}>
-          <Text style={s.bulletDot}>•</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.bulletText}><Text style={s.dotLabel}>Thanh toán đợt 1: </Text>{'Bên Mua thanh toán 50% giá trị hợp đồng tương ứng với số tiền là ' + fmtVnd(d1)}</Text>
-            <Text style={s.dotBangChu}>{'( Bằng chữ ) ' + (d1 > 0 ? soThanhChu(d1) : '............................................')}</Text>
-            <Text style={[s.bulletText, { marginLeft: 12 }]}>trong vòng 02 ngày sau khi hai bên ký hợp đồng.</Text>
+        {/* Đợt 1 — avoid nested <Text> inside <Text> which causes overlap in react-pdf */}
+        <View style={{ paddingLeft: 20, marginBottom: 5 }} wrap={false}>
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={s.bulletDot}>•</Text>
+            <Text style={[s.bulletText, { fontWeight: 700 }]}>{'Thanh toán đợt 1: '}</Text>
           </View>
+          <Text style={[s.dotBangChu, { paddingLeft: 14 }]}>
+            {'( Bằng chữ ) ' + (d1 > 0 ? soThanhChu(d1) : '............................................')}
+          </Text>
+          <Text style={[s.bulletText, { paddingLeft: 14 }]}>
+            {'Bên Mua thanh toán 50% giá trị hợp đồng tương ứng với số tiền là ' + fmtVnd(d1) + ' trong vòng 02 ngày sau khi hai bên ký hợp đồng.'}
+          </Text>
         </View>
         {/* Đợt 2 */}
-        <View style={[s.bullet, { paddingLeft: 20 }]}>
-          <Text style={s.bulletDot}>•</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.bulletText}><Text style={s.dotLabel}>Thanh toán đợt 2: </Text>{'Bên Mua thanh toán 45% giá trị hợp đồng tương ứng với số tiền là ' + fmtVnd(d2)}</Text>
-            <Text style={s.dotBangChu}>{'( Bằng chữ ) ' + (d2 > 0 ? soThanhChu(d2) : '............................................')}</Text>
-            <Text style={[s.bulletText, { marginLeft: 12 }]}>sau khi giao hàng đến chân công trình và lắp đặt.</Text>
+        <View style={{ paddingLeft: 20, marginBottom: 5 }} wrap={false}>
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={s.bulletDot}>•</Text>
+            <Text style={[s.bulletText, { fontWeight: 700 }]}>{'Thanh toán đợt 2: '}</Text>
           </View>
+          <Text style={[s.dotBangChu, { paddingLeft: 14 }]}>
+            {'( Bằng chữ ) ' + (d2 > 0 ? soThanhChu(d2) : '............................................')}
+          </Text>
+          <Text style={[s.bulletText, { paddingLeft: 14 }]}>
+            {'Bên Mua thanh toán 45% giá trị hợp đồng tương ứng với số tiền là ' + fmtVnd(d2) + ' sau khi giao hàng đến chân công trình và lắp đặt.'}
+          </Text>
         </View>
         {/* Đợt 3 */}
-        <View style={[s.bullet, { paddingLeft: 20 }]}>
-          <Text style={s.bulletDot}>•</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.bulletText}><Text style={s.dotLabel}>Thanh toán đợt 3: </Text>{'Bên Mua thanh toán 5% giá trị hợp đồng với số tiền là ' + fmtVnd(d3)}</Text>
-            <Text style={s.dotBangChu}>{'( Bằng chữ ) ' + (d3 > 0 ? soThanhChu(d3) : '............................................')}</Text>
-            <Text style={[s.bulletText, { marginLeft: 12 }]}>sau khi bên Bán hoàn thành việc lắp đặt hệ thống cho bên Mua trong vòng 05 ngày.</Text>
+        <View style={{ paddingLeft: 20, marginBottom: 5 }} wrap={false}>
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={s.bulletDot}>•</Text>
+            <Text style={[s.bulletText, { fontWeight: 700 }]}>{'Thanh toán đợt 3: '}</Text>
           </View>
+          <Text style={[s.dotBangChu, { paddingLeft: 14 }]}>
+            {'( Bằng chữ ) ' + (d3 > 0 ? soThanhChu(d3) : '............................................')}
+          </Text>
+          <Text style={[s.bulletText, { paddingLeft: 14 }]}>
+            {'Bên Mua thanh toán 5% giá trị hợp đồng với số tiền là ' + fmtVnd(d3) + ' sau khi bên Bán hoàn thành việc lắp đặt hệ thống cho bên Mua trong vòng 05 ngày.'}
+          </Text>
         </View>
 
         <Bullet text="Bên Bán không phải chịu trách nhiệm bất kỳ phí ngân hàng nào nếu Bên Mua thực hiện thanh toán bằng chuyển khoản" />
@@ -473,7 +492,7 @@ export function ContractPDFDocument({
             <Text style={s.sigTitle}>ĐẠI DIỆN BÊN MUA</Text>
             <Text style={{ fontSize: 9, color: '#555', marginBottom: 2 }}>(Ký và ghi rõ họ tên)</Text>
             <View style={s.sigSpace} />
-            <Text style={s.sigName}>{contract.khach_hang || ''}</Text>
+            <Text style={s.sigName}>{''}</Text>
           </View>
         </View>
 
