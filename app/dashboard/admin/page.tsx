@@ -509,6 +509,7 @@ function ChangeRoleSheet({
   onDone: (msg: string) => void
 }) {
   const [selectedRole, setSelectedRole] = useState(target.role)
+  const [reason,       setReason]       = useState('')
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState('')
 
@@ -520,7 +521,7 @@ function ChangeRoleSheet({
       const res = await fetch('/api/admin/users', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ id: target.id, role: selectedRole }),
+        body:    JSON.stringify({ id: target.id, role: selectedRole, reason: reason.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi cập nhật'); return }
@@ -559,6 +560,17 @@ function ChangeRoleSheet({
               {selectedRole === opt.value && <span className="text-blue-600">✓</span>}
             </button>
           ))}
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">LÝ DO (tùy chọn)</label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Thăng chức, điều chuyển bộ phận..."
+            rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
@@ -1386,6 +1398,8 @@ function UserPermsPanel() {
   const [success,       setSuccess]       = useState('')
   const [error,         setError]         = useState('')
   const [expanded,      setExpanded]      = useState<string>('Khách hàng')
+  const [cloneFromId,   setCloneFromId]   = useState('')
+  const [cloning,       setCloning]       = useState(false)
 
   // Tải danh sách nhân viên (active only)
   useEffect(() => {
@@ -1449,6 +1463,31 @@ function UserPermsPanel() {
     finally { setSaving(false) }
   }
 
+  // C3: Clone permissions from another user
+  const cloneFromUser = async () => {
+    if (!cloneFromId || !selectedId) return
+    setCloning(true); setError(''); setSuccess('')
+    try {
+      const res = await fetch(`/api/admin/permissions?userId=${cloneFromId}`)
+      const d   = await res.json()
+      if (!res.ok) { setError('Không tải được quyền nguồn'); return }
+      const updates = Object.entries(d.permissions as Record<string, boolean>)
+        .map(([permission_key, is_enabled]) => ({ permission_key, is_enabled }))
+      const saveRes = await fetch('/api/admin/permissions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: selectedId, updates }),
+      })
+      const saveData = await saveRes.json()
+      if (!saveRes.ok) { setError(saveData.error || 'Lỗi sao chép'); return }
+      setSuccess(`Đã sao chép ${updates.length} quyền`)
+      setTimeout(() => setSuccess(''), 3000)
+      setCloneFromId('')
+      loadUserPerms(selectedId)
+    } catch { setError('Lỗi kết nối') }
+    finally { setCloning(false) }
+  }
+
   const resetToDefault = async () => {
     if (!selectedId) return
     setResetting(true); setError(''); setSuccess('')
@@ -1500,13 +1539,35 @@ function UserPermsPanel() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={resetToDefault}
-              disabled={resetting || !selectedId}
-              className="text-xs border border-orange-200 text-orange-600 px-3 py-1.5 rounded-lg hover:bg-orange-50 disabled:opacity-50"
-            >
-              {resetting ? '...' : '↺ Mặc định role'}
-            </button>
+            <div className="flex gap-1.5 items-center">
+              {/* C3: Clone from another user */}
+              <select
+                value={cloneFromId}
+                onChange={e => setCloneFromId(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white max-w-[120px]"
+              >
+                <option value="">Sao chép từ...</option>
+                {staffList.filter(s => s.id !== selectedId).map(s => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                ))}
+              </select>
+              {cloneFromId && (
+                <button
+                  onClick={cloneFromUser}
+                  disabled={cloning}
+                  className="text-xs border border-blue-200 text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {cloning ? '...' : '📋 Áp dụng'}
+                </button>
+              )}
+              <button
+                onClick={resetToDefault}
+                disabled={resetting || !selectedId}
+                className="text-xs border border-orange-200 text-orange-600 px-2 py-1.5 rounded-lg hover:bg-orange-50 disabled:opacity-50 whitespace-nowrap"
+              >
+                {resetting ? '...' : '↺ Mặc định'}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -2407,6 +2468,14 @@ export default function AdminPage() {
   const [editingId,    setEditingId]    = useState<string | null>(null)
   const [editDraft,    setEditDraft]    = useState<Record<string, string | number | null>>({})
   const [editSaving,   setEditSaving]   = useState(false)
+  const [kpiSnapshot,  setKpiSnapshot]  = useState<Record<string, {target: number; actual: number}>>({})
+  const [auditUserId,  setAuditUserId]  = useState<string | null>(null)
+  const [auditLogs,    setAuditLogs]    = useState<Array<{id: number; action: string; entity: string; detail: string; created_at: string}>>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
+  const [bulkAction,   setBulkAction]   = useState<'role' | 'khu_vuc' | null>(null)
+  const [bulkValue,    setBulkValue]    = useState('')
+  const [bulkSaving,   setBulkSaving]   = useState(false)
   const supabase = createClient()
 
   const notify = (msg: string, isError = false) => {
@@ -2420,9 +2489,21 @@ export default function AdminPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) setMyId(user.id)
 
-      const res = await fetch('/api/admin/users')
-      const data = await res.json()
-      setUsers(data.data ?? [])
+      const now = new Date()
+      const [usersRes, kpiRes] = await Promise.all([
+        fetch('/api/admin/users').then(r => r.json()),
+        fetch(`/api/admin/kpi?month=${now.getMonth()+1}&year=${now.getFullYear()}`).then(r => r.json()).catch(() => ({ data: [] })),
+      ])
+      setUsers(usersRes.data ?? [])
+
+      // C1: Build KPI snapshot for progress bars
+      const snap: Record<string, {target: number; actual: number}> = {}
+      for (const row of (kpiRes.data ?? [])) {
+        if (row.target_revenue) {
+          snap[row.user_id] = { target: row.target_revenue, actual: row.revenue_actual ?? 0 }
+        }
+      }
+      setKpiSnapshot(snap)
     } catch {
       notify('Lỗi tải danh sách user', true)
     } finally {
@@ -2620,6 +2701,21 @@ export default function AdminPage() {
               >
                 {/* Top row: avatar + info + status */}
                 <div className="flex items-start gap-3">
+                  {/* C2: Bulk select checkbox */}
+                  {!isMe && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(u.id)}
+                      onChange={e => {
+                        setSelectedIds(prev => {
+                          const next = new Set(prev)
+                          e.target.checked ? next.add(u.id) : next.delete(u.id)
+                          return next
+                        })
+                      }}
+                      className="mt-3 w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                    />
+                  )}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold ${
                     u.is_active ? 'bg-blue-600' : 'bg-gray-400'
                   }`}>
@@ -2663,6 +2759,30 @@ export default function AdminPage() {
                     {new Date(u.created_at).toLocaleDateString('vi-VN')}
                   </span>
                 </div>
+
+                {/* C1: KPI progress bar */}
+                {kpiSnapshot[u.id] && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-gray-500">
+                      <span>KPI tháng này</span>
+                      <span className="font-semibold">
+                        {Math.min(100, Math.round((kpiSnapshot[u.id].actual / kpiSnapshot[u.id].target) * 100))}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          kpiSnapshot[u.id].actual >= kpiSnapshot[u.id].target
+                            ? 'bg-green-500'
+                            : kpiSnapshot[u.id].actual >= kpiSnapshot[u.id].target * 0.7
+                            ? 'bg-blue-500'
+                            : 'bg-orange-400'
+                        }`}
+                        style={{ width: `${Math.min(100, (kpiSnapshot[u.id].actual / kpiSnapshot[u.id].target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* B3: Inline edit expand */}
                 {editingId === u.id && (
@@ -2794,6 +2914,22 @@ export default function AdminPage() {
                       🔑 Đặt MK
                     </button>
                     <button
+                      onClick={async () => {
+                        setAuditUserId(u.id)
+                        setAuditLogs([])
+                        setAuditLoading(true)
+                        try {
+                          const res = await fetch(`/api/admin/audit?user_id=${u.id}&limit=20`)
+                          const d = await res.json()
+                          setAuditLogs(d.data ?? [])
+                        } catch {}
+                        finally { setAuditLoading(false) }
+                      }}
+                      className="flex-1 border border-gray-200 text-gray-500 text-xs font-semibold py-2 rounded-xl hover:bg-gray-50"
+                    >
+                      🕐 Lịch sử
+                    </button>
+                    <button
                       onClick={() => setDeactTarget(u)}
                       className="w-full border border-red-200 text-red-500 text-xs font-semibold py-2 rounded-xl hover:bg-red-50"
                     >
@@ -2897,6 +3033,95 @@ export default function AdminPage() {
             }
           }}
         />
+      )}
+
+      {/* C2: Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 z-40 px-4">
+          <div className="bg-gray-900 text-white rounded-2xl px-4 py-3 shadow-xl space-y-3 max-w-lg mx-auto">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">{selectedIds.size} đã chọn</p>
+              <button onClick={() => { setSelectedIds(new Set()); setBulkAction(null) }} className="text-gray-400 text-xs">✕ Bỏ chọn</button>
+            </div>
+            {!bulkAction ? (
+              <div className="flex gap-2">
+                <button onClick={() => setBulkAction('role')} className="flex-1 bg-blue-600 text-white text-xs font-medium py-2 rounded-xl">🎭 Đổi role</button>
+                <button onClick={() => setBulkAction('khu_vuc')} className="flex-1 bg-purple-600 text-white text-xs font-medium py-2 rounded-xl">🗺️ Đổi khu vực</button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {bulkAction === 'role' ? (
+                  <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="w-full rounded-xl px-3 py-2 text-gray-800 text-sm bg-white">
+                    <option value="">— Chọn vai trò —</option>
+                    {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                ) : (
+                  <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="w-full rounded-xl px-3 py-2 text-gray-800 text-sm bg-white">
+                    <option value="">— Chọn khu vực —</option>
+                    <option value="CN">Cả nước</option>
+                    <option value="MN">Miền Nam</option>
+                    <option value="MB">Miền Bắc</option>
+                    <option value="MT">Miền Trung</option>
+                  </select>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => { setBulkAction(null); setBulkValue('') }} className="flex-1 border border-gray-600 text-gray-300 text-xs py-2 rounded-xl">Huỷ</button>
+                  <button
+                    disabled={!bulkValue || bulkSaving}
+                    onClick={async () => {
+                      if (!bulkValue) return
+                      setBulkSaving(true)
+                      try {
+                        const ids = [...selectedIds]
+                        await Promise.all(ids.map(id =>
+                          fetch('/api/admin/users', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id, [bulkAction === 'role' ? 'role' : 'khu_vuc']: bulkValue }),
+                          })
+                        ))
+                        notify(`Đã cập nhật ${ids.length} nhân viên`)
+                        setSelectedIds(new Set()); setBulkAction(null); setBulkValue('')
+                        loadUsers()
+                      } catch { notify('Lỗi bulk update', true) }
+                      finally { setBulkSaving(false) }
+                    }}
+                    className="flex-1 bg-blue-600 disabled:bg-blue-800 text-white text-xs font-semibold py-2 rounded-xl"
+                  >
+                    {bulkSaving ? 'Đang lưu...' : `✓ Áp dụng (${selectedIds.size})`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* C4: Per-user audit slide-over */}
+      {auditUserId && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={e => { if (e.target === e.currentTarget) setAuditUserId(null) }}>
+          <div className="w-full max-w-sm bg-white h-full overflow-y-auto shadow-2xl">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-800">🕐 Lịch sử hoạt động</p>
+              <button onClick={() => setAuditUserId(null)} className="text-gray-400 text-lg leading-none">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              {auditLoading ? (
+                <div className="flex justify-center py-8"><span className="crm-spinner" /></div>
+              ) : auditLogs.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">Chưa có nhật ký nào</p>
+              ) : auditLogs.map(log => (
+                <div key={log.id} className="bg-gray-50 rounded-xl px-3 py-3 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{log.action}</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">{new Date(log.created_at).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">{log.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       </> /* end users tab */}

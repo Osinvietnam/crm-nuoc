@@ -17,9 +17,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
-    const { searchParams } = new URL(req.url)
-    const month = searchParams.get('month')
-    const year  = searchParams.get('year')
+    const month = req.nextUrl.searchParams.get('month')
+    const year  = req.nextUrl.searchParams.get('year')
 
     const service = createServiceClient()
     let query = service.from('kpi_targets').select('*').order('user_id')
@@ -31,20 +30,38 @@ export async function GET(req: NextRequest) {
     if (error) throw error
 
     // Lấy danh sách profiles để ghép tên
-    const { data: profiles } = await service
-      .from('profiles')
-      .select('id, full_name, role, chuc_vu')
+    const [profilesRes, paymentsRes] = await Promise.all([
+      service.from('profiles').select('id, full_name, role, chuc_vu'),
+      // C1: revenue_actual — tổng đã thu trong tháng per nguoi_phu_trach_id
+      month && year ? service
+        .from('payment_records')
+        .select('nguoi_phu_trach_id, amount')
+        .eq('is_paid', true)
+        .is('deleted_at', null)
+        .gte('paid_date', `${year}-${String(month).padStart(2,'0')}-01`)
+        .lte('paid_date', `${year}-${String(month).padStart(2,'0')}-31`)
+      : Promise.resolve({ data: [] as Array<{nguoi_phu_trach_id: string; amount: number}> }),
+    ])
 
     const profileMap: Record<string, { full_name: string; role: string; chuc_vu?: string }> = {}
-    for (const p of profiles ?? []) {
+    for (const p of profilesRes.data ?? []) {
       profileMap[p.id] = { full_name: p.full_name, role: p.role, chuc_vu: p.chuc_vu }
+    }
+
+    // Aggregate revenue by nguoi_phu_trach_id
+    const revenueMap: Record<string, number> = {}
+    for (const r of ((paymentsRes as { data: Array<{nguoi_phu_trach_id: string; amount: number}> }).data ?? [])) {
+      if (r.nguoi_phu_trach_id) {
+        revenueMap[r.nguoi_phu_trach_id] = (revenueMap[r.nguoi_phu_trach_id] ?? 0) + (r.amount ?? 0)
+      }
     }
 
     const enriched = (targets ?? []).map(t => ({
       ...t,
-      user_name: profileMap[t.user_id]?.full_name ?? t.user_id,
-      user_role: profileMap[t.user_id]?.role ?? '',
+      user_name:    profileMap[t.user_id]?.full_name ?? t.user_id,
+      user_role:    profileMap[t.user_id]?.role ?? '',
       user_chuc_vu: profileMap[t.user_id]?.chuc_vu ?? '',
+      revenue_actual: revenueMap[t.user_id] ?? 0,
     }))
 
     return NextResponse.json({ data: enriched })

@@ -183,7 +183,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { id, ...updates } = body
+    const { id, reason, ...updates } = body
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
     // Chỉ admin/director mới được đổi role
@@ -215,12 +215,20 @@ export async function PATCH(req: NextRequest) {
       await service.from('profiles').update({ is_active: true }).eq('id', id)
     }
 
+    const reasonSuffix = reason ? ` | Lý do: ${reason}` : ''
+    const actionStr = 'role' in updates ? 'role_changed' : 'profile_updated'
+    const detailStr = 'role' in updates
+      ? `${before?.full_name ?? id}: ${before?.role} → ${updates.role}${reasonSuffix}`
+      : `${before?.full_name ?? id}: cập nhật [${Object.keys(updates).join(', ')}]${reasonSuffix}`
+
     await logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
-      action:    'profile_updated',
+      action:    actionStr as 'role_changed' | 'profile_updated',
       entity:    'user',
-      detail:    `${before?.full_name ?? id}: cập nhật [${Object.keys(updates).join(', ')}]`,
+      detail:    detailStr,
+      before:    'role' in updates ? { role: before?.role } : undefined,
+      after:     'role' in updates ? { role: updates.role } : undefined,
     })
 
     return NextResponse.json({ success: true })

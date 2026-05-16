@@ -20,17 +20,19 @@ export async function GET(req: NextRequest) {
     const offset = Number(sp.get('offset') ?? 0)
     const action    = sp.get('action')
     const user_name = sp.get('user_name')
+    const user_id   = sp.get('user_id')    // C4: filter by actor user_id
     const entity    = sp.get('entity')
     const from      = sp.get('from')
     const to        = sp.get('to')
 
     let query = supabase
       .from('audit_logs')
-      .select('id, user_name, action, entity, detail, created_at', { count: 'exact' })
+      .select('id, user_id, user_name, action, entity, detail, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
 
     if (action)    query = query.eq('action', action)
     if (user_name) query = query.ilike('user_name', `%${user_name}%`)
+    if (user_id)   query = query.eq('user_id', user_id)
     if (entity)    query = query.eq('entity', entity)
     if (from)      query = query.gte('created_at', from)
     if (to)        query = query.lte('created_at', to)
