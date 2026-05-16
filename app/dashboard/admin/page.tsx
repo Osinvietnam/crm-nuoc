@@ -1069,6 +1069,327 @@ function AuditLogTab() {
   )
 }
 
+// ─── Activity Tab ─────────────────────────────────────────────────────────────
+
+interface ActivityUser {
+  user_id: string; user_name: string; role: string
+  total_actions: number; active_days: number; working_days: number
+  last_active_at: string | null; action_breakdown: Record<string, number>
+  avg_actions_per_active_day: number
+  total_sessions: number; total_online_min: number
+  avg_session_min: number; avg_online_min_per_active_day: number
+}
+interface OnlineUser { user_id: string; user_name: string; role: string; last_ping_at: string }
+interface HeatCell  { weekday: number; hour: number; count: number }
+interface ActivityData {
+  users: ActivityUser[]; heatmap: HeatCell[]
+  online: OnlineUser[]; period: { month: number; year: number }
+  working_days: number; warning: string | null
+}
+
+const WEEKDAY_LABEL = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+
+function fmtMinutes(min: number): string {
+  if (min <= 0) return '—'
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h === 0) return `${m}p`
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`
+}
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return '—'
+  const diff = Date.now() - new Date(iso).getTime()
+  const min  = Math.floor(diff / 60000)
+  if (min < 2)   return 'Vừa xong'
+  if (min < 60)  return `${min} phút trước`
+  const h = Math.floor(min / 60)
+  if (h < 24)    return `${h} giờ trước`
+  return `${Math.floor(h / 24)} ngày trước`
+}
+
+function heatColor(count: number): string {
+  if (count === 0) return 'bg-gray-100'
+  if (count <= 3)  return 'bg-blue-100'
+  if (count <= 10) return 'bg-blue-300'
+  if (count <= 30) return 'bg-blue-500'
+  return 'bg-blue-700'
+}
+
+function ActivityTab() {
+  const now = new Date()
+  const supabase = createClient()
+  const [data,     setData]     = useState<ActivityData | null>(null)
+  const [online,   setOnline]   = useState<OnlineUser[]>([])
+  const [month,    setMonth]    = useState(now.getMonth() + 1)
+  const [year,     setYear]     = useState(now.getFullYear())
+  const [loading,  setLoading]  = useState(true)
+  const [sortKey,  setSortKey]  = useState<'actions' | 'days' | 'online'>('actions')
+  const [hoverCell, setHoverCell] = useState<string | null>(null)
+
+  const load = async (m: number, y: number) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/activity?month=${m}&year=${y}`)
+      const d   = await res.json()
+      if (d.users) {
+        setData(d)
+        setOnline(d.online ?? [])
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false) }
+  }
+
+  // Tải analytics khi period thay đổi
+  useEffect(() => { load(month, year) }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime: refresh online list khi có session mới/cập nhật
+  useEffect(() => {
+    const ch = supabase
+      .channel('activity-sessions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_sessions' }, () => {
+        // Chỉ refresh online list nhẹ, không re-fetch toàn bộ analytics
+        fetch(`/api/admin/activity?month=${month}&year=${year}`)
+          .then(r => r.json())
+          .then(d => { if (d.online) setOnline(d.online) })
+          .catch(() => {})
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(ch) }
+  }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sorted = [...(data?.users ?? [])].sort((a, b) => {
+    if (sortKey === 'days')   return b.active_days - a.active_days
+    if (sortKey === 'online') return b.total_online_min - a.total_online_min
+    return b.total_actions - a.total_actions
+  })
+
+  // Heatmap: build map weekday×hour → count
+  const heatMap = new Map<string, number>()
+  for (const cell of data?.heatmap ?? []) {
+    heatMap.set(`${cell.weekday}-${cell.hour}`, cell.count)
+  }
+  const HOURS = Array.from({ length: 17 }, (_, i) => i + 6) // 6h–22h
+
+  const totalActions    = data?.users.reduce((s, u) => s + u.total_actions, 0) ?? 0
+  const totalOnlineMin  = data?.users.reduce((s, u) => s + u.total_online_min, 0) ?? 0
+  const avgOnlinePerDay = data && data.working_days > 0
+    ? Math.round(totalOnlineMin / data.working_days)
+    : 0
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Online ngay bây giờ ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <p className="text-xs font-semibold text-gray-700">
+            Đang online ({online.length})
+          </p>
+          <p className="text-[10px] text-gray-400 ml-auto">cập nhật realtime</p>
+        </div>
+        {online.length === 0 ? (
+          <p className="text-xs text-gray-400">Không có ai đang hoạt động</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {online.map(u => {
+              const mins = Math.floor((Date.now() - new Date(u.last_ping_at).getTime()) / 60000)
+              const isActive = mins < 6
+              return (
+                <div key={u.user_id}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    isActive ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                  }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-yellow-400'}`} />
+                  {u.user_name}
+                  <span className="font-normal opacity-70">
+                    {ROLE_LABEL[u.role] ?? u.role}
+                    {!isActive && ` · ${mins}p trước`}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Header: period picker + summary cards ───────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-semibold text-gray-700 flex-1">Thống kê tháng</p>
+        <select value={month} onChange={e => setMonth(Number(e.target.value))}
+          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(m =>
+            <option key={m} value={m}>Tháng {m}</option>
+          )}
+        </select>
+        <select value={year} onChange={e => setYear(Number(e.target.value))}
+          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+          {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <button onClick={() => load(month, year)}
+          className="text-xs text-blue-500 font-medium px-2">↺</button>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: 'Đang hoạt động', value: `${data?.users.length ?? 0} NV`, sub: `trong tháng ${month}` },
+          { label: 'Tổng hành động', value: totalActions.toLocaleString('vi'), sub: `tháng ${month}/${year}` },
+          { label: 'TB online/ngày làm', value: fmtMinutes(avgOnlinePerDay), sub: `${data?.working_days ?? 0} ngày làm việc` },
+        ].map(c => (
+          <div key={c.label} className="bg-white rounded-2xl border border-gray-100 p-3 text-center">
+            <p className="text-[10px] text-gray-400">{c.label}</p>
+            <p className="text-lg font-bold text-gray-800 mt-0.5">{c.value}</p>
+            <p className="text-[10px] text-gray-400">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {data?.warning && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+          ⚠️ {data.warning}
+        </div>
+      )}
+
+      {/* ── Bảng per-user ─────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
+          <p className="text-xs font-semibold text-gray-700 flex-1">Chi tiết nhân viên</p>
+          <p className="text-[10px] text-gray-400">Sắp xếp theo:</p>
+          {[
+            { key: 'actions', label: 'Hành động' },
+            { key: 'days',    label: 'Ngày active' },
+            { key: 'online',  label: 'Thời gian online' },
+          ].map(s => (
+            <button key={s.key} onClick={() => setSortKey(s.key as typeof sortKey)}
+              className={`text-[10px] px-2 py-1 rounded-lg font-medium ${
+                sortKey === s.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <span className="crm-spinner" />
+          </div>
+        ) : sorted.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">Không có dữ liệu</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {sorted.map(u => {
+              const activePct = u.working_days > 0
+                ? Math.round(u.active_days / u.working_days * 100)
+                : 0
+              const topAction = Object.entries(u.action_breakdown)
+                .sort(([,a],[,b]) => b - a)[0]
+              return (
+                <div key={u.user_id} className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-sm font-semibold text-gray-800">{u.user_name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                      {ROLE_LABEL[u.role] ?? u.role}
+                    </span>
+                    <span className="text-[10px] text-gray-400 ml-auto">
+                      {u.last_active_at ? timeAgo(u.last_active_at) : 'Chưa hoạt động'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-base font-bold text-gray-800">{u.active_days}/{u.working_days}</p>
+                      <p className="text-[10px] text-gray-400">Ngày active</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-gray-800">{u.total_actions}</p>
+                      <p className="text-[10px] text-gray-400">Hành động</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-gray-800">{fmtMinutes(u.avg_online_min_per_active_day)}</p>
+                      <p className="text-[10px] text-gray-400">Online/ngày</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-gray-800">{u.avg_actions_per_active_day}</p>
+                      <p className="text-[10px] text-gray-400">HĐ/ngày</p>
+                    </div>
+                  </div>
+                  {/* Active day progress bar */}
+                  <div className="mt-2">
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all"
+                        style={{ width: `${activePct}%` }} />
+                    </div>
+                    <div className="flex justify-between mt-0.5">
+                      <span className="text-[9px] text-gray-400">{activePct}% ngày làm việc</span>
+                      {topAction && (
+                        <span className="text-[9px] text-gray-400">
+                          Chủ yếu: {topAction[0].replace(/_/g, ' ')} ({topAction[1]})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Heatmap giờ hoạt động ─────────────────────────────────────────────── */}
+      {!loading && (data?.heatmap?.length ?? 0) > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <p className="text-xs font-semibold text-gray-700 mb-3">
+            Heatmap giờ hoạt động — tháng {month}/{year}
+          </p>
+          <div className="overflow-x-auto">
+            <div className="min-w-[320px]">
+              {/* Header weekdays */}
+              <div className="grid gap-0.5 mb-0.5" style={{ gridTemplateColumns: '28px repeat(7, 1fr)' }}>
+                <div />
+                {WEEKDAY_LABEL.map(d => (
+                  <div key={d} className="text-[9px] text-gray-400 text-center font-medium">{d}</div>
+                ))}
+              </div>
+              {/* Rows: hours */}
+              {HOURS.map(h => (
+                <div key={h} className="grid gap-0.5 mb-0.5" style={{ gridTemplateColumns: '28px repeat(7, 1fr)' }}>
+                  <div className="text-[9px] text-gray-400 text-right pr-1 leading-5">{h}h</div>
+                  {WEEKDAY_LABEL.map((_, wd) => {
+                    const key   = `${wd}-${h}`
+                    const count = heatMap.get(key) ?? 0
+                    return (
+                      <div key={wd}
+                        className={`h-5 rounded-sm cursor-default ${heatColor(count)}`}
+                        onMouseEnter={() => setHoverCell(`${WEEKDAY_LABEL[wd]} ${h}h: ${count} HĐ`)}
+                        onMouseLeave={() => setHoverCell(null)}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Tooltip + legend */}
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-[10px] text-blue-600 font-medium h-4">
+              {hoverCell ?? ''}
+            </p>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-gray-400">Ít</span>
+              {['bg-gray-100', 'bg-blue-100', 'bg-blue-300', 'bg-blue-500', 'bg-blue-700'].map(c => (
+                <div key={c} className={`w-3 h-3 rounded-sm ${c}`} />
+              ))}
+              <span className="text-[9px] text-gray-400">Nhiều</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── System Config Tab ────────────────────────────────────────────────────────
 
 interface HealthData {
@@ -2478,7 +2799,7 @@ function KpiTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [tab,          setTab]          = useState<'users' | 'kpi' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks'>('users')
+  const [tab,          setTab]          = useState<'users' | 'kpi' | 'company' | 'audit' | 'activity' | 'system' | 'business' | 'roles' | 'tasks'>('users')
   const [users,        setUsers]        = useState<StaffUser[]>([])
   const [loading,      setLoading]      = useState(true)
   const [myId,         setMyId]         = useState('')
@@ -2594,6 +2915,7 @@ export default function AdminPage() {
           { key: 'business', label: '📐 Rules'    },
           { key: 'company',  label: '🏢 Công ty'  },
           { key: 'audit',    label: '📋 Nhật ký'  },
+          { key: 'activity', label: '📊 Hoạt động' },
           { key: 'system',   label: '⚙️ Hệ thống' },
         ] as const).map(t => (
           <button
@@ -2611,6 +2933,7 @@ export default function AdminPage() {
       {tab === 'kpi'      && <KpiTab />}
       {tab === 'company'  && <CompanySettingsTab />}
       {tab === 'audit'    && <AuditLogTab />}
+      {tab === 'activity' && <ActivityTab />}
       {tab === 'system'   && <SystemConfigTab />}
       {tab === 'business' && <BusinessRulesTab />}
       {tab === 'roles'    && <RolesTab />}

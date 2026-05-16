@@ -64,6 +64,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => { void supabase.removeChannel(channel) }
   }, [userId])
 
+  // Heartbeat: ping mỗi 5 phút khi tab visible — ghi user_sessions cho activity analytics
+  useEffect(() => {
+    if (!userId) return
+    const ping = () => {
+      if (document.visibilityState === 'visible')
+        fetch('/api/activity/ping', { method: 'POST' }).catch(() => {})
+    }
+    ping() // ping ngay khi mount (login vào dashboard)
+    const interval = setInterval(ping, 5 * 60 * 1000)
+    document.addEventListener('visibilitychange', ping)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', ping)
+    }
+  }, [userId])
+
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: 'global' })
     router.push('/login')
