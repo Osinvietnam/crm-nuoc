@@ -239,16 +239,9 @@ function buildContractDoc(data: {
       })()
     : { ngay: '...', thang: '...', nam: 2026 }
 
-  // ── Header (watermark text — simplified) ─────────────────────────────────
+  // ── Header (để trống — hợp đồng pháp lý không cần watermark header) ─────
   const header = new Header({
-    children: [
-      new Paragraph({
-        children: [
-          new TextRun({ text: 'GALAXY WATER SOLUTIONS', font: TNR, size: 20, color: 'CCCCCC' }),
-        ],
-        alignment: AlignmentType.CENTER,
-      }),
-    ],
+    children: [new Paragraph({ children: [] })],
   })
 
   // ── Footer ────────────────────────────────────────────────────────────────
@@ -301,7 +294,16 @@ function buildContractDoc(data: {
     infoRow('Mã số thuế', '0311945766'),
     infoRow('Số điện thoại', '(028) 62935959 – 0914790488'),
     infoRow('Người đại diện', 'Bà TRỊNH KIM NGỌC                  chức vụ : Giám Đốc'),
-    infoRow('Tư vấn viên', (data.tuVanVien || '...............................') + '              CCCD'),
+    new Paragraph({
+      children: [
+        run('Tư vấn viên'.padEnd(22), {}),
+        run(': ', {}),
+        run(data.tuVanVien || '...............................', { bold: true }),
+        run('          CCCD: ', {}),
+        run('..............................', { bold: true }),
+      ],
+      spacing: { before: 0, after: 60, line: 360, lineRule: 'auto' as const },
+    }),
     blankLine(),
 
     // 6. Bên B
@@ -569,7 +571,7 @@ function buildContractDoc(data: {
       children: [
         run('Giám Đốc', { bold: true }),
         new TextRun({ text: '\t', font: TNR }),
-        run('', {}),
+        run('(Ký và ghi rõ họ tên)', { italic: true }),
       ],
       tabStops: [{ type: TabStopType.LEFT, position: 5400 }],
       spacing: { before: 0, after: 280 },
