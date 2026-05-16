@@ -2475,178 +2475,10 @@ function KpiTab() {
   )
 }
 
-// ─── Pipeline Config Tab ──────────────────────────────────────────────────────
-
-interface PipelineCfg {
-  order_type: string; display_name: string; stages: string[]
-  stage_labels: string[]; is_active: boolean; description: string | null
-}
-
-function PipelineTab() {
-  const [configs,      setConfigs]      = useState<PipelineCfg[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [saving,       setSaving]       = useState<string | null>(null)
-  const [success,      setSuccess]      = useState('')
-  const [error,        setError]        = useState('')
-  const [editLabels,   setEditLabels]   = useState<Record<string, string[]>>({})
-  const [labelSaving,  setLabelSaving]  = useState<string | null>(null)
-
-  const load = useCallback(() => {
-    setLoading(true)
-    fetch('/api/admin/pipeline-config')
-      .then(r => r.json())
-      .then(d => setConfigs(d.configs ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const toggleActive = async (cfg: PipelineCfg) => {
-    setSaving(cfg.order_type); setError('')
-    try {
-      const res = await fetch(`/api/admin/pipeline-config?order_type=${encodeURIComponent(cfg.order_type)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !cfg.is_active }),
-      })
-      if (res.ok) {
-        setConfigs(prev => prev.map(c =>
-          c.order_type === cfg.order_type ? { ...c, is_active: !c.is_active } : c
-        ))
-        setSuccess(`${!cfg.is_active ? 'Bật' : 'Tắt'} pipeline: ${cfg.display_name}`)
-        setTimeout(() => setSuccess(''), 2500)
-      }
-    } catch { setError('Lỗi kết nối') }
-    finally { setSaving(null) }
-  }
-
-  const saveLabels = async (cfg: PipelineCfg) => {
-    const labels = editLabels[cfg.order_type]
-    if (!labels) return
-    setLabelSaving(cfg.order_type)
-    try {
-      const res = await fetch(`/api/admin/pipeline-config?order_type=${encodeURIComponent(cfg.order_type)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage_labels: labels }),
-      })
-      if (res.ok) {
-        setConfigs(prev => prev.map(c =>
-          c.order_type === cfg.order_type ? { ...c, stage_labels: labels } : c
-        ))
-        setEditLabels(prev => { const n = { ...prev }; delete n[cfg.order_type]; return n })
-        setSuccess(`Đã lưu tên stages: ${cfg.display_name}`)
-        setTimeout(() => setSuccess(''), 2500)
-      } else {
-        const d = await res.json()
-        setError(d.error || 'Lỗi lưu')
-      }
-    } catch { setError('Lỗi kết nối') }
-    finally { setLabelSaving(null) }
-  }
-
-  const ORDER_TYPE_COLOR: Record<string, string> = {
-    B2C:        'bg-blue-100 text-blue-700',
-    Thuong_mai: 'bg-green-100 text-green-700',
-    Du_an:      'bg-purple-100 text-purple-700',
-  }
-
-  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-gray-500">Kích hoạt / tắt từng loại pipeline. Mỗi loại có bộ stages riêng.</p>
-
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
-      {error   && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">⚠️ {error}</div>}
-
-      {configs.map(cfg => (
-        <div key={cfg.order_type} className={`bg-white rounded-2xl border overflow-hidden ${
-          cfg.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'
-        }`}>
-          <div className="px-4 py-4 flex items-start gap-3">
-            {/* Toggle */}
-            <button
-              onClick={() => toggleActive(cfg)}
-              disabled={saving === cfg.order_type}
-              className={`mt-0.5 w-11 h-6 rounded-full flex-shrink-0 transition-colors relative ${
-                cfg.is_active ? 'bg-green-500' : 'bg-gray-200'
-              }`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                cfg.is_active ? 'translate-x-5' : 'translate-x-0.5'
-              }`} />
-            </button>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-semibold text-gray-800">{cfg.display_name}</span>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ORDER_TYPE_COLOR[cfg.order_type] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {cfg.order_type}
-                </span>
-              </div>
-              {cfg.description && (
-                <p className="text-xs text-gray-500 mb-2">{cfg.description}</p>
-              )}
-              {/* D3: Stage labels — inline edit */}
-              {editLabels[cfg.order_type] ? (
-                <div className="space-y-1.5 mt-2">
-                  {editLabels[cfg.order_type].map((label, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 w-5 flex-shrink-0">{i+1}.</span>
-                      <input
-                        value={label}
-                        onChange={e => {
-                          const updated = [...editLabels[cfg.order_type]]
-                          updated[i] = e.target.value
-                          setEditLabels(p => ({ ...p, [cfg.order_type]: updated }))
-                        }}
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs"
-                      />
-                    </div>
-                  ))}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => setEditLabels(p => { const n = { ...p }; delete n[cfg.order_type]; return n })}
-                      className="text-[10px] text-gray-400 px-2 py-1 border border-gray-200 rounded-lg"
-                    >Huỷ</button>
-                    <button
-                      onClick={() => saveLabels(cfg)}
-                      disabled={labelSaving === cfg.order_type}
-                      className="text-[10px] bg-blue-600 text-white px-3 py-1 rounded-lg disabled:opacity-50"
-                    >{labelSaving === cfg.order_type ? '...' : '💾 Lưu tên stage'}</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {cfg.stage_labels?.map((label, i) => (
-                    <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                      {i + 1}. {label}
-                    </span>
-                  ))}
-                  <button
-                    onClick={() => setEditLabels(p => ({ ...p, [cfg.order_type]: [...(cfg.stage_labels ?? [])] }))}
-                    className="text-[10px] text-blue-500 px-2 py-0.5 rounded-full bg-blue-50 ml-1"
-                  >✏️ Sửa tên</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-        ℹ️ Chỉ có thể đổi <strong>tên hiển thị</strong> của stage. Không thêm/xoá stage vì ảnh hưởng dữ liệu toàn hệ thống.
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [tab,          setTab]          = useState<'users' | 'kpi' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks' | 'pipeline'>('users')
+  const [tab,          setTab]          = useState<'users' | 'kpi' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks'>('users')
   const [users,        setUsers]        = useState<StaffUser[]>([])
   const [loading,      setLoading]      = useState(true)
   const [myId,         setMyId]         = useState('')
@@ -2759,7 +2591,6 @@ export default function AdminPage() {
           { key: 'kpi',      label: '🎯 KPI'      },
           { key: 'roles',    label: '🔑 Quyền'    },
           { key: 'tasks',    label: '✅ Tasks'    },
-          { key: 'pipeline', label: '🔀 Pipeline' },
           { key: 'business', label: '📐 Rules'    },
           { key: 'company',  label: '🏢 Công ty'  },
           { key: 'audit',    label: '📋 Nhật ký'  },
@@ -2784,7 +2615,6 @@ export default function AdminPage() {
       {tab === 'business' && <BusinessRulesTab />}
       {tab === 'roles'    && <RolesTab />}
       {tab === 'tasks'    && <TasksTab />}
-      {tab === 'pipeline' && <PipelineTab />}
 
       {/* Users tab content */}
       {tab === 'users' && <>
