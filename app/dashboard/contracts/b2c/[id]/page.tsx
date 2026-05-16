@@ -6,11 +6,26 @@ import { CONTRACT_STATUS_COLORS } from '@/lib/lark/tables'
 import type { Contract } from '@/app/api/lark/orders/route'
 
 const downloadContractPDF = async (contract: Contract) => {
-  const [{ downloadContractPDF: dl }, company] = await Promise.all([
-    import('@/components/ContractPDF'),
-    fetch('/api/admin/settings').then(r => r.json()).then(d => d.data ?? {}),
-  ])
-  await dl(contract, company)
+  const { downloadContractPDF: dl } = await import('@/components/ContractPDF')
+
+  // Fetch quote_items nếu có source_quote_id (để có đơn giá trong PDF)
+  let items: Array<{ ten_sp: string; so_luong: number; don_gia: number; thanh_tien: number }> = []
+  if (contract.source_quote_id) {
+    try {
+      const qRes = await fetch(`/api/lark/quotes/${contract.source_quote_id}`)
+      if (qRes.ok) {
+        const qData = await qRes.json()
+        items = (qData.data?.items ?? []).map((it: any) => ({
+          ten_sp:     it.ten_sp     ?? '',
+          so_luong:   it.so_luong   ?? 1,
+          don_gia:    it.don_gia    ?? 0,
+          thanh_tien: it.thanh_tien ?? 0,
+        }))
+      }
+    } catch { /* fallback to san_pham[] */ }
+  }
+
+  await dl(contract, items)
 }
 
 const fmtMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
