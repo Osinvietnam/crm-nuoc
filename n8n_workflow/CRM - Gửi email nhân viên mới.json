@@ -1,0 +1,70 @@
+{
+  "name": "CRM - Gửi email nhân viên mới",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-new-staff",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9e0512f7-942e-42b5-ad5b-5327dded893e",
+      "name": "Webhook",
+      "webhookId": "1593a4b2-1379-4e2b-883c-6e8fb321f9a2"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.email }}",
+        "subject": "Thông tin đăng nhập CRM Máy Lọc Nước",
+        "message": "=<div style=\"font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px\">\n  <div style=\"background:#2563eb;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px\">\n    <h1 style=\"color:white;margin:0;font-size:20px\">CRM Máy Lọc Nước</h1>\n    <p style=\"color:#bfdbfe;margin:8px 0 0\">Thông tin tài khoản của bạn</p>\n  </div>\n  <p>Xin chào <strong>{{ $json.body.full_name }}</strong>,</p>\n  <p>Tài khoản CRM của bạn đã được tạo. Thông tin đăng nhập:</p>\n  <div style=\"background:#f1f5f9;border-radius:10px;padding:16px;margin:20px 0\">\n    <p style=\"margin:0 0 8px\"><strong>🌐 Link đăng nhập:</strong><br>\n      <a href=\"{{ $json.body.app_url }}\" style=\"color:#2563eb\">{{ $json.body.app_url }}</a>\n    </p>\n    <p style=\"margin:8px 0\"><strong>📧 Email:</strong> {{ $json.body.email }}</p>\n    <p style=\"margin:8px 0 0\"><strong>🔑 Mật khẩu:</strong>\n      <span style=\"background:#fff;padding:2px 8px;border-radius:4px;font-family:monospace;font-weight:bold\">\n        {{ $json.body.password }}\n      </span>\n    </p>\n  </div>\n  <div style=\"background:#fef3c7;border-radius:10px;padding:12px;margin:16px 0\">\n    <p style=\"margin:0;font-size:13px;color:#92400e\">\n      ⚠️ Vui lòng đổi mật khẩu sau lần đăng nhập đầu tiên.\n    </p>\n  </div>\n  <p style=\"color:#6b7280;font-size:13px\">\n    Vai trò: <strong>{{ $json.body.role_label }}</strong><br>\n    Phòng ban: {{ $json.body.department }}\n  </p>\n  <p style=\"color:#9ca3af;font-size:12px;margin-top:24px\">\n    Email này được gửi tự động từ hệ thống CRM. Vui lòng không reply.\n  </p>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "70170db8-7f32-4b32-9d43-78b4e66f3fcc",
+      "name": "Send a message",
+      "webhookId": "e88e1c14-f8ca-494c-bc9c-dadfa7f1bc10",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XMkmCyF2tHReeBMq",
+          "name": "Gmail_CRM_Máy lọc nước"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "7fde4514-2ef1-43d0-923d-7f53c922e778",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0490ee9271da619dfb0ef2c511f58d54a0b0743d054b455afdc181a2315c99f5"
+  },
+  "id": "MHBZuoWlenGlJ63zy6CKg",
+  "tags": []
+}

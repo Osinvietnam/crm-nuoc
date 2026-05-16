@@ -22,6 +22,7 @@ interface StaffUser {
   trang_thai_nv: string
   is_active: boolean
   created_at: string
+  last_sign_in_at?: string | null  // D1
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1208,10 +1209,11 @@ function SystemConfigTab() {
 // ─── Business Rules Tab ───────────────────────────────────────────────────────
 
 function BusinessRulesTab() {
-  const [threshold,  setThreshold]  = useState('')
-  const [discount,   setDiscount]   = useState('')
-  const [slaDays,    setSlaDays]    = useState('')
-  const [slaOverride,setSlaOverride]= useState<Record<string, string>>({ DN: '', GH: '', NT: '' })
+  const [threshold,      setThreshold]      = useState('')
+  const [discount,       setDiscount]       = useState('')
+  const [slaDays,        setSlaDays]        = useState('')
+  const [slaOverride,    setSlaOverride]    = useState<Record<string, string>>({ DN: '', GH: '', NT: '' })
+  const [retentionDays,  setRetentionDays]  = useState('365')
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(false)
   const [success,    setSuccess]    = useState('')
@@ -1228,6 +1230,7 @@ function BusinessRulesTab() {
         setSlaDays(String(r.default_stage_sla_days ?? ''))
         const ov = r.stage_sla_override ?? {}
         setSlaOverride({ DN: String(ov.DN ?? ''), GH: String(ov.GH ?? ''), NT: String(ov.NT ?? '') })
+        setRetentionDays(String(r.audit_retention_days ?? '365'))
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -1237,9 +1240,10 @@ function BusinessRulesTab() {
     setSaving(true); setError(''); setSuccess('')
     try {
       const body: Record<string, any> = {}
-      if (threshold) body.ceo_approval_threshold = Number(threshold)
-      if (discount)  body.sales_max_discount_pct = Number(discount)
-      if (slaDays)   body.default_stage_sla_days = Number(slaDays)
+      if (threshold)      body.ceo_approval_threshold  = Number(threshold)
+      if (discount)       body.sales_max_discount_pct  = Number(discount)
+      if (slaDays)        body.default_stage_sla_days  = Number(slaDays)
+      if (retentionDays)  body.audit_retention_days    = Math.max(30, Math.min(3650, Number(retentionDays)))
       const ov: Record<string, number> = {}
       if (slaOverride.DN) ov.DN = Number(slaOverride.DN)
       if (slaOverride.GH) ov.GH = Number(slaOverride.GH)
@@ -1302,6 +1306,21 @@ function BusinessRulesTab() {
               className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         ))}
+      </div>
+
+      {/* D2: Audit retention */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <p className="text-sm font-semibold text-gray-800">Nhật ký hệ thống</p>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">LƯU NHẬT KÝ (ngày)</label>
+          <input
+            type="number" value={retentionDays}
+            onChange={e => setRetentionDays(e.target.value)}
+            min={30} max={3650} placeholder="365"
+            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">Cron mùng 1 hàng tháng tự xoá log cũ hơn số ngày này (min 30, max 3650)</p>
+        </div>
       </div>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">✅ {success}</div>}
@@ -2348,11 +2367,13 @@ interface PipelineCfg {
 }
 
 function PipelineTab() {
-  const [configs,  setConfigs]  = useState<PipelineCfg[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [saving,   setSaving]   = useState<string | null>(null)
-  const [success,  setSuccess]  = useState('')
-  const [error,    setError]    = useState('')
+  const [configs,      setConfigs]      = useState<PipelineCfg[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [saving,       setSaving]       = useState<string | null>(null)
+  const [success,      setSuccess]      = useState('')
+  const [error,        setError]        = useState('')
+  const [editLabels,   setEditLabels]   = useState<Record<string, string[]>>({})
+  const [labelSaving,  setLabelSaving]  = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -2382,6 +2403,31 @@ function PipelineTab() {
       }
     } catch { setError('Lỗi kết nối') }
     finally { setSaving(null) }
+  }
+
+  const saveLabels = async (cfg: PipelineCfg) => {
+    const labels = editLabels[cfg.order_type]
+    if (!labels) return
+    setLabelSaving(cfg.order_type)
+    try {
+      const res = await fetch(`/api/admin/pipeline-config?order_type=${encodeURIComponent(cfg.order_type)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage_labels: labels }),
+      })
+      if (res.ok) {
+        setConfigs(prev => prev.map(c =>
+          c.order_type === cfg.order_type ? { ...c, stage_labels: labels } : c
+        ))
+        setEditLabels(prev => { const n = { ...prev }; delete n[cfg.order_type]; return n })
+        setSuccess(`Đã lưu tên stages: ${cfg.display_name}`)
+        setTimeout(() => setSuccess(''), 2500)
+      } else {
+        const d = await res.json()
+        setError(d.error || 'Lỗi lưu')
+      }
+    } catch { setError('Lỗi kết nối') }
+    finally { setLabelSaving(null) }
   }
 
   const ORDER_TYPE_COLOR: Record<string, string> = {
@@ -2427,21 +2473,55 @@ function PipelineTab() {
               {cfg.description && (
                 <p className="text-xs text-gray-500 mb-2">{cfg.description}</p>
               )}
-              {/* Stages list */}
-              <div className="flex flex-wrap gap-1">
-                {cfg.stage_labels?.map((label, i) => (
-                  <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                    {i + 1}. {label}
-                  </span>
-                ))}
-              </div>
+              {/* D3: Stage labels — inline edit */}
+              {editLabels[cfg.order_type] ? (
+                <div className="space-y-1.5 mt-2">
+                  {editLabels[cfg.order_type].map((label, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 w-5 flex-shrink-0">{i+1}.</span>
+                      <input
+                        value={label}
+                        onChange={e => {
+                          const updated = [...editLabels[cfg.order_type]]
+                          updated[i] = e.target.value
+                          setEditLabels(p => ({ ...p, [cfg.order_type]: updated }))
+                        }}
+                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs"
+                      />
+                    </div>
+                  ))}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => setEditLabels(p => { const n = { ...p }; delete n[cfg.order_type]; return n })}
+                      className="text-[10px] text-gray-400 px-2 py-1 border border-gray-200 rounded-lg"
+                    >Huỷ</button>
+                    <button
+                      onClick={() => saveLabels(cfg)}
+                      disabled={labelSaving === cfg.order_type}
+                      className="text-[10px] bg-blue-600 text-white px-3 py-1 rounded-lg disabled:opacity-50"
+                    >{labelSaving === cfg.order_type ? '...' : '💾 Lưu tên stage'}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {cfg.stage_labels?.map((label, i) => (
+                    <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                      {i + 1}. {label}
+                    </span>
+                  ))}
+                  <button
+                    onClick={() => setEditLabels(p => ({ ...p, [cfg.order_type]: [...(cfg.stage_labels ?? [])] }))}
+                    className="text-[10px] text-blue-500 px-2 py-0.5 rounded-full bg-blue-50 ml-1"
+                  >✏️ Sửa tên</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       ))}
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-        ℹ️ Để chỉnh sửa stages trong từng pipeline, vui lòng liên hệ Admin hệ thống. Thay đổi stages có thể ảnh hưởng dữ liệu hiện tại.
+        ℹ️ Chỉ có thể đổi <strong>tên hiển thị</strong> của stage. Không thêm/xoá stage vì ảnh hưởng dữ liệu toàn hệ thống.
       </div>
     </div>
   )
@@ -2731,6 +2811,23 @@ export default function AdminPage() {
                     </div>
                     <p className="text-xs text-gray-500 truncate">{u.email}</p>
                     {u.phone && <p className="text-xs text-gray-500">{u.phone}</p>}
+                    {/* D1: Last sign-in */}
+                    {'last_sign_in_at' in u && (
+                      u.last_sign_in_at ? (
+                        <p className="text-[10px] text-gray-400">
+                          Đăng nhập: {(() => {
+                            const diff = Date.now() - new Date(u.last_sign_in_at!).getTime()
+                            const mins = Math.floor(diff / 60000)
+                            if (mins < 60) return `${mins} phút trước`
+                            const hrs = Math.floor(mins / 60)
+                            if (hrs < 24) return `${hrs} giờ trước`
+                            return `${Math.floor(hrs / 24)} ngày trước`
+                          })()}
+                        </p>
+                      ) : (
+                        <span className="text-[10px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full font-medium">Chưa đăng nhập</span>
+                      )
+                    )}
                   </div>
 
                   <div className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${

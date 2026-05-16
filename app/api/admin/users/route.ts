@@ -66,6 +66,20 @@ export async function GET() {
       }
     }
 
+    // D1: Enrich with last_sign_in_at from Supabase Auth
+    try {
+      const { data: authData } = await service.auth.admin.listUsers({ perPage: 1000 })
+      if (authData?.users?.length && profiles) {
+        const authMap: Record<string, string | null> = {}
+        for (const u of authData.users) {
+          authMap[u.id] = u.last_sign_in_at ?? null
+        }
+        profiles = profiles.map(p => ({ ...p, last_sign_in_at: authMap[p.id] ?? null }))
+      }
+    } catch {
+      // Non-critical — skip if auth admin list fails
+    }
+
     return NextResponse.json({ data: profiles ?? [], isManager, isAdmin })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
