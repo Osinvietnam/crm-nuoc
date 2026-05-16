@@ -797,8 +797,9 @@ function buildWarRoom(role: string, s: DashboardStats): AlertItem[] {
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [stats,   setStats]   = useState<DashboardStats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [stats,      setStats]      = useState<DashboardStats | null>(null)
+  const [loading,    setLoading]    = useState(true)
+  const [statsError, setStatsError] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -815,9 +816,12 @@ export default function DashboardPage() {
 
       try {
         const res = await fetch('/api/dashboard/stats')
-        const d   = await res.json()
-        setStats(d.data ?? null)
-      } catch { /* stats không hiện nếu lỗi */ }
+        if (!res.ok) { setStatsError(true) }
+        else {
+          const d = await res.json()
+          setStats(d.data ?? null)
+        }
+      } catch { setStatsError(true) }
       finally { setLoading(false) }
     }
     init()
@@ -879,6 +883,26 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* ── Stats error banner (UX-04) ── */}
+      {statsError && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-orange-700">⚠️ Không tải được số liệu dashboard</p>
+          <button
+            onClick={async () => {
+              setStatsError(false)
+              try {
+                const res = await fetch('/api/dashboard/stats')
+                if (res.ok) { const d = await res.json(); setStats(d.data ?? null) }
+                else setStatsError(true)
+              } catch { setStatsError(true) }
+            }}
+            className="text-xs text-orange-700 font-semibold underline flex-shrink-0"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
 
       {/* ── War Room ── */}
       <WarRoom alerts={warRoomAlerts} loading={loading} />

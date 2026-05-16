@@ -44,6 +44,7 @@ export type AuditAction =
   | 'inventory_updated'
   | 'warranty_ticket_updated'
   | 'warranty_ticket_created'
+  | 'payment_proof_uploaded'
 
 export type AuditEntity = 'user' | 'company_settings' | 'quote' | 'system_config' | 'payment' | 'kpi' | 'customer' | 'expense' | 'commission' | 'task' | 'order' | 'product' | 'asset' | 'maintenance' | 'warranty_ticket'
 

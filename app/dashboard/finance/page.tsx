@@ -44,7 +44,7 @@ interface PayRecord {
   id: number; customer_record_id: number | null; customer_name: string | null
   nguoi_phu_trach: string | null; installment: number; percent: number | null
   amount: number | null; due_date: string | null; paid_date: string | null
-  is_paid: boolean; notes: string | null
+  is_paid: boolean; notes: string | null; proof_url: string | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -114,6 +114,11 @@ export default function FinancePage() {
   const [showPayForm, setShowPayForm] = useState(false)
   const [payForm, setPayForm] = useState({ customer_record_id: '', customer_name: '', installment: '1', amount: '', due_date: '', notes: '' })
   const [payFormSaving, setPayFormSaving] = useState(false)
+  // Proof upload state
+  const [proofPayId,     setProofPayId]     = useState<number | null>(null)
+  const [proofFile,      setProofFile]      = useState<File | null>(null)
+  const [proofUploading, setProofUploading] = useState(false)
+  const [reportError,    setReportError]    = useState(false)
 
   // Fetch role once
   useEffect(() => {
@@ -129,10 +134,14 @@ export default function FinancePage() {
   const fetchReport = useCallback(async () => {
     if (!role) return
     setLoading(true)
+    setReportError(false)
     try {
       const res = await fetch(`/api/finance/report?thang=${thang}&nam=${nam}`)
+      if (!res.ok) { setReportError(true); return }
       const json = await res.json()
       setReport(json)
+    } catch {
+      setReportError(true)
     } finally {
       setLoading(false)
     }
@@ -256,18 +265,47 @@ export default function FinancePage() {
     }
   }
 
-  async function markAsPaid(id: number) {
+  async function markAsPaid(id: number, proofUrl?: string) {
     setPayMarkingId(id)
+    const body: Record<string, unknown> = { id, is_paid: true, paid_date: payPaidDate }
+    if (proofUrl) body.proof_url = proofUrl
     const res = await fetch('/api/payments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_paid: true, paid_date: payPaidDate }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
-      setPayRecords(prev => prev.map(r => r.id === id ? { ...r, is_paid: true, paid_date: payPaidDate } : r))
+      setPayRecords(prev => prev.map(r =>
+        r.id === id ? { ...r, is_paid: true, paid_date: payPaidDate, proof_url: proofUrl ?? r.proof_url } : r
+      ))
       fetchReport()
     }
     setPayMarkingId(null)
+    setProofPayId(null)
+    setProofFile(null)
+  }
+
+  async function handleMarkWithProof() {
+    if (!proofPayId) return
+    setProofUploading(true)
+    let proofUrl: string | undefined
+    try {
+      if (proofFile) {
+        const fd = new FormData()
+        fd.append('file', proofFile)
+        fd.append('payment_id', String(proofPayId))
+        const res = await fetch('/api/payments/proof', { method: 'POST', body: fd })
+        if (res.ok) {
+          const data = await res.json()
+          proofUrl = data.url
+        }
+      }
+      await markAsPaid(proofPayId, proofUrl)
+    } catch {
+      alert('Lỗi upload chứng từ, thử lại sau')
+    } finally {
+      setProofUploading(false)
+    }
   }
 
   async function savePayRecord() {
@@ -359,6 +397,14 @@ export default function FinancePage() {
           </button>
         ))}
       </div>
+
+      {/* Error banner (UX-09) */}
+      {reportError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-red-700">Không tải được báo cáo tài chính</p>
+          <button onClick={fetchReport} className="text-xs text-red-600 font-semibold underline flex-shrink-0">Thử lại</button>
+        </div>
+      )}
 
       {/* ── Tab: Tổng quan ── */}
       {tab === 'overview' && r && isManager && (r as ReportManager).role === 'manager' && (() => {
@@ -549,40 +595,71 @@ export default function FinancePage() {
                     </div>
                     <div className="text-right ml-3 flex-shrink-0">
                       <p className="text-sm font-semibold text-gray-800">{fmt(pr.amount)}</p>
-                      {pr.is_paid
-                        ? (
-                          <div className="flex flex-col items-end gap-1">
-                            <p className="text-xs text-green-600 font-medium">✓ Đã thu {pr.paid_date}</p>
+                      {pr.is_paid ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-xs text-green-600 font-medium">✓ Đã thu {pr.paid_date}</p>
+                          {pr.proof_url ? (
+                            <a href={pr.proof_url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline">
+                              📎 Xem chứng từ
+                            </a>
+                          ) : null}
+                          <button
+                            onClick={async () => {
+                              const { downloadReceiptPDF } = await import('@/components/ReceiptPDF')
+                              const company = await fetch('/api/admin/settings').then(r => r.json()).then(d => d.data ?? {})
+                              await downloadReceiptPDF({
+                                receipt_no:      `PT-${pr.id}`,
+                                customer_name:   pr.customer_name ?? '—',
+                                nguoi_phu_trach: pr.nguoi_phu_trach,
+                                installment:     pr.installment,
+                                amount:          pr.amount ?? 0,
+                                paid_date:       pr.paid_date ?? new Date().toISOString().split('T')[0],
+                                notes:           pr.notes,
+                              }, company)
+                            }}
+                            className="text-xs text-blue-600 font-medium hover:underline"
+                          >
+                            Xuất biên lai
+                          </button>
+                        </div>
+                      ) : proofPayId === pr.id ? (
+                        /* ── Inline proof upload form ── */
+                        <div className="mt-2 space-y-2 text-left min-w-[180px]">
+                          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer border border-dashed border-gray-300 rounded-lg px-3 py-2 hover:border-blue-400 transition-colors">
+                            <span className="flex-shrink-0">📎</span>
+                            <span className="flex-1 truncate text-left">
+                              {proofFile ? proofFile.name : 'Đính kèm chứng từ (tùy chọn)'}
+                            </span>
+                            <input type="file" className="hidden"
+                              accept="image/jpeg,image/png,image/webp,application/pdf"
+                              onChange={e => setProofFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                          <div className="flex gap-1.5">
                             <button
-                              onClick={async () => {
-                                const { downloadReceiptPDF } = await import('@/components/ReceiptPDF')
-                                const company = await fetch('/api/admin/settings').then(r => r.json()).then(d => d.data ?? {})
-                                await downloadReceiptPDF({
-                                  receipt_no:    `PT-${pr.id}`,
-                                  customer_name: pr.customer_name ?? '—',
-                                  nguoi_phu_trach: pr.nguoi_phu_trach,
-                                  installment:   pr.installment,
-                                  amount:        pr.amount ?? 0,
-                                  paid_date:     pr.paid_date ?? new Date().toISOString().split('T')[0],
-                                  notes:         pr.notes,
-                                }, company)
-                              }}
-                              className="text-xs text-blue-600 font-medium hover:underline"
+                              onClick={() => { setProofPayId(null); setProofFile(null) }}
+                              className="flex-1 text-xs text-gray-500 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50"
                             >
-                              Xuất biên lai
+                              Bỏ qua
+                            </button>
+                            <button
+                              onClick={handleMarkWithProof}
+                              disabled={proofUploading}
+                              className="flex-1 text-xs text-white bg-green-600 rounded-lg py-1.5 font-semibold disabled:opacity-50"
+                            >
+                              {proofUploading ? '...' : '✓ Xác nhận'}
                             </button>
                           </div>
-                        )
-                        : (
-                          <button
-                            onClick={() => markAsPaid(pr.id)}
-                            disabled={payMarkingId === pr.id}
-                            className="mt-1 text-xs text-white bg-green-600 hover:bg-green-700 px-2.5 py-1 rounded-lg font-semibold disabled:opacity-50"
-                          >
-                            {payMarkingId === pr.id ? '...' : 'Đánh dấu đã thu'}
-                          </button>
-                        )
-                      }
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setProofPayId(pr.id)}
+                          disabled={payMarkingId === pr.id}
+                          className="mt-1 text-xs text-white bg-green-600 hover:bg-green-700 px-2.5 py-1 rounded-lg font-semibold disabled:opacity-50"
+                        >
+                          {payMarkingId === pr.id ? '...' : 'Đánh dấu đã thu'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

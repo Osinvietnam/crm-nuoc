@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
     }
 
-    const SELECT_COLS = 'id, customer_record_id, customer_name, nguoi_phu_trach, installment, percent, amount, due_date, paid_date, is_paid, notes'
+    const SELECT_COLS = 'id, customer_record_id, customer_name, nguoi_phu_trach, installment, percent, amount, due_date, paid_date, is_paid, notes, proof_url'
 
     let data: unknown[] | null = null
     let error: unknown = null
@@ -207,7 +207,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { id, is_paid, paid_date, amount, due_date, percent, notes } = body
+    const { id, is_paid, paid_date, amount, due_date, percent, notes, proof_url } = body
     if (!id) return NextResponse.json({ error: 'Thiếu id' }, { status: 400 })
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -217,6 +217,7 @@ export async function PATCH(req: NextRequest) {
     if (due_date  !== undefined) updates.due_date   = due_date
     if (percent   !== undefined) updates.percent    = percent != null ? Number(percent) : null
     if (notes     !== undefined) updates.notes      = notes
+    if (proof_url !== undefined) updates.proof_url  = proof_url
 
     const { data: record, error } = await supabase
       .from('payment_records')
