@@ -12,6 +12,16 @@ import { PaymentSection } from '@/components/PaymentSection'
 import { ACTIVITY_ICONS, ACTIVITY_LABELS, type ActivityRecord } from '@/lib/activity'
 import { computeHealthScore } from '@/lib/health'
 
+interface PipelineHistoryEntry {
+  id: number
+  from_stage: string | null
+  to_stage: string
+  changed_at: string
+  notes: string | null
+  changed_by: string | null
+  changed_by_name: string | null
+}
+
 const formatPhone = (p: string) => p?.replace(/^84/, '0') ?? ''
 const formatMoney = (n: number) => n ? n.toLocaleString('vi-VN') + '₫' : '—'
 const formatDate = (ms: number | null) => {
@@ -232,31 +242,41 @@ function PipelineSheet({
   onClose,
 }: {
   current: string
-  onSelect: (s: string) => void
+  onSelect: (s: string, note?: string) => void
   onClose: () => void
 }) {
+  const [selected, setSelected] = useState(current)
+  const [note, setNote]         = useState('')
+
+  const handleConfirm = () => {
+    if (selected === current) { onClose(); return }
+    onSelect(selected, note.trim() || undefined)
+    onClose()
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-3xl">
-        <div className="flex justify-center pt-3 pb-1">
+      <div className="bg-white rounded-t-3xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
         </div>
-        <div className="px-5 py-3 border-b border-gray-100">
+        <div className="px-5 py-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-bold text-gray-800">Cập nhật Pipeline</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Chọn giai đoạn mới</p>
         </div>
-        <div className="p-4 space-y-2 pb-8">
+        <div className="overflow-y-auto flex-1 p-4 space-y-1.5">
           {PIPELINE_STAGES.map((s, i) => {
             const pc = PIPELINE_COLORS[s]
-            const active = current === s
+            const active = selected === s
             return (
               <button
                 key={s}
-                onClick={() => { onSelect(s); onClose() }}
+                onClick={() => setSelected(s)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
-                  active ? `${pc.bg} ${pc.text}` : 'text-gray-700 hover:bg-gray-50'
+                  active ? `${pc.bg} ${pc.text} ring-2 ring-current ring-opacity-20` : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <span className="text-sm font-medium w-5 text-center text-gray-400">{i + 1}</span>
@@ -265,6 +285,23 @@ function PipelineSheet({
               </button>
             )
           })}
+        </div>
+        {/* Note + confirm */}
+        <div className="p-4 border-t border-gray-100 flex-shrink-0 space-y-3 pb-8">
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Ghi chú lý do chuyển giai đoạn (tuỳ chọn)..."
+            rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700 placeholder:text-gray-300"
+          />
+          <button
+            onClick={handleConfirm}
+            disabled={selected === current}
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm disabled:opacity-40"
+          >
+            {selected === current ? 'Chọn giai đoạn khác' : `Chuyển sang "${selected}"`}
+          </button>
         </div>
       </div>
     </div>
@@ -311,6 +348,8 @@ export default function CustomerDetailPage() {
   const [logSaving, setLogSaving]                 = useState(false)
   const [activities, setActivities]               = useState<ActivityRecord[]>([])
   const [activitiesLoading, setActivitiesLoading] = useState(false)
+  const [pipelineHistory, setPipelineHistory]     = useState<PipelineHistoryEntry[]>([])
+  const [pipelineHistoryLoading, setPipelineHistoryLoading] = useState(false)
   const [activeTab, setActiveTab]                 = useState<'overview'|'quotes'|'payment'|'aftercare'|'history'>('overview')
   const [quotes, setQuotes]               = useState<Quote[]>([])
   const [quotesLoading, setQuotesLoading] = useState(false)
@@ -388,6 +427,16 @@ export default function CustomerDetailPage() {
       .finally(() => setActivitiesLoading(false))
   }, [id])
 
+  // Load pipeline history
+  useEffect(() => {
+    setPipelineHistoryLoading(true)
+    fetch(`/api/customers/${id}/pipeline-history`)
+      .then(r => r.json())
+      .then(d => setPipelineHistory(d.history ?? []))
+      .catch(() => {})
+      .finally(() => setPipelineHistoryLoading(false))
+  }, [id])
+
   // Load lịch sử báo giá của KH
   useEffect(() => {
     setQuotesLoading(true)
@@ -428,20 +477,21 @@ export default function CustomerDetailPage() {
     load()
   }, [id])
 
-  const handlePipelineSelect = (newStage: string) => {
+  const handlePipelineSelect = (newStage: string, note?: string) => {
     if (newStage === 'Lost') {
       setShowLostSheet(true)
     } else {
-      void updatePipeline(newStage)
+      void updatePipeline(newStage, undefined, note)
     }
   }
 
-  const updatePipeline = async (newStage: string, lyDoTuChoi?: string) => {
+  const updatePipeline = async (newStage: string, lyDoTuChoi?: string, note?: string) => {
     if (!customer) return
     setUpdating(true)
     try {
       const body: Record<string, unknown> = { pipeline: newStage }
       if (lyDoTuChoi) body.ly_do_tu_choi = lyDoTuChoi
+      if (note)       body.pipeline_note  = note
       const res = await fetch(`/api/lark/customers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -460,6 +510,11 @@ export default function CustomerDetailPage() {
         setSuccessMsg('Đã cập nhật pipeline')
         setTimeout(() => setSuccessMsg(''), 2000)
       }
+      // Refresh pipeline history
+      fetch(`/api/customers/${id}/pipeline-history`)
+        .then(r => r.json())
+        .then(d => setPipelineHistory(d.history ?? []))
+        .catch(() => {})
     } catch {
       setSuccessMsg('Lỗi cập nhật pipeline')
       setTimeout(() => setSuccessMsg(''), 2000)
@@ -1068,6 +1123,50 @@ export default function CustomerDetailPage() {
           )}
         </div>
 
+        {/* Pipeline History */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-400">LỊCH SỬ PIPELINE</p>
+            <span className="text-[10px] text-gray-300">{pipelineHistory.length} thay đổi</span>
+          </div>
+          {pipelineHistoryLoading ? (
+            <div className="flex items-center justify-center gap-2 py-5 text-gray-400 text-xs">
+              <span className="crm-spinner" style={{width:16,height:16,borderWidth:2}} /><span>Đang tải...</span>
+            </div>
+          ) : pipelineHistory.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-5 pb-6">Chưa có thay đổi pipeline nào</p>
+          ) : (
+            <div className="px-4 pb-4 space-y-0">
+              {pipelineHistory.map((entry, i) => (
+                <div key={entry.id} className={`relative pl-8 py-2.5 ${i < pipelineHistory.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                  {/* Timeline dot */}
+                  <span className="absolute left-2 top-3.5 w-3 h-3 rounded-full border-2 border-blue-300 bg-white flex-shrink-0" />
+                  {/* Content */}
+                  <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                    {entry.from_stage ? (
+                      <>
+                        <span className="text-[11px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">{entry.from_stage}</span>
+                        <span className="text-gray-300 text-[10px]">→</span>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-gray-300 italic">Tạo mới</span>
+                    )}
+                    <span className="text-[11px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">{entry.to_stage}</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400">
+                    {entry.changed_by_name ? <span className="font-medium text-gray-500">{entry.changed_by_name}</span> : <span className="italic">Hệ thống</span>}
+                    {' · '}
+                    {new Date(entry.changed_at).toLocaleString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                  </p>
+                  {entry.notes && (
+                    <p className="text-xs text-gray-600 mt-0.5 leading-relaxed bg-gray-50 px-2 py-1 rounded-lg">{entry.notes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Lost card — hiện ở tab Lịch sử */}
         {pipeline === 'Lost' && (
           <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
@@ -1075,7 +1174,23 @@ export default function CustomerDetailPage() {
               <p className="text-xs font-semibold text-red-400">LÝ DO TỪ CHỐI</p>
               {['admin', 'ceo', 'director'].includes(userRole) && (
                 <button
-                  onClick={() => void updatePipeline('Tiềm năng')}
+                  onClick={async () => {
+                    await updatePipeline('Tiềm năng', undefined, 'Khôi phục từ Lost')
+                    // P5.2: Tạo follow-up task tự động sau khi khôi phục
+                    if (customer) {
+                      void fetch('/api/tasks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          tieu_de:     `Follow up KH khôi phục: ${customer.ho_ten}`,
+                          mo_ta:       'KH vừa được khôi phục từ trạng thái Lost. Liên hệ trong vòng 3 ngày.',
+                          customer_id: customer.record_id,
+                          deadline:    new Date(Date.now() + 3 * 86_400_000).toISOString().split('T')[0],
+                          uu_tien:     'Cao',
+                        }),
+                      }).catch(() => {})
+                    }
+                  }}
                   disabled={updating}
                   className="text-xs text-blue-600 font-semibold bg-white border border-blue-200 px-3 py-1 rounded-lg shrink-0 disabled:opacity-50"
                 >
@@ -1097,7 +1212,7 @@ export default function CustomerDetailPage() {
       {showPipeline && (
         <PipelineSheet
           current={pipeline}
-          onSelect={stage => { setShowPipeline(false); handlePipelineSelect(stage) }}
+          onSelect={(stage, note) => { setShowPipeline(false); handlePipelineSelect(stage, note) }}
           onClose={() => setShowPipeline(false)}
         />
       )}

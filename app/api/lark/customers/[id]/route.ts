@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { STAGE_TASKS } from '@/lib/tasks/checklist'
 import { logAudit } from '@/lib/audit'
 import { logActivity } from '@/lib/activity'
@@ -148,19 +148,36 @@ export async function PATCH(
     })
 
     // Activity: pipeline change
+    const pipelineNote = typeof body.pipeline_note === 'string' ? body.pipeline_note.trim() : null
     if ('pipeline' in updates && updates.pipeline !== current?.pipeline) {
       void logActivity(supabase, {
         customer_id: (data as any).id ?? current?.id,
         user_id:     user.id,
         user_name:   profile?.full_name ?? '',
         type:        'pipeline_change',
-        content:     `Chuyển pipeline: ${current?.pipeline ?? '?'} → ${updates.pipeline as string}`,
+        content:     `Chuyển pipeline: ${current?.pipeline ?? '?'} → ${updates.pipeline as string}${pipelineNote ? ` — ${pipelineNote}` : ''}`,
         meta: {
           from: current?.pipeline,
           to:   updates.pipeline as string,
           ...(updates.ly_do_tu_choi ? { reason: updates.ly_do_tu_choi } : {}),
         },
       })
+      // Ghi note vào pipeline_history entry mới nhất (trigger đã tạo entry, dùng service client để update)
+      if (pipelineNote) {
+        const custId = numericId ?? (data as any).id
+        const svc = createServiceClient()
+        const { data: latest } = await svc
+          .from('pipeline_history')
+          .select('id')
+          .eq('customer_id', custId)
+          .eq('to_stage', updates.pipeline as string)
+          .order('changed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (latest) {
+          void svc.from('pipeline_history').update({ notes: pipelineNote }).eq('id', latest.id)
+        }
+      }
     }
 
     // LOG-A11: Log riêng khi nguoi_phu_trach thay đổi

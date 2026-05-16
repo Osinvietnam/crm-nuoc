@@ -20,6 +20,7 @@ export const PIPELINE_STAGES = [
   'Tiềm năng',
   'Báo giá',
   'Đàm phán',
+  'Hồ sơ thầu',  // Du_an pipeline only
   'Chốt HĐ',
   'Giao hàng',
   'Nghiệm thu',
@@ -31,16 +32,17 @@ export const PIPELINE_STAGES = [
 export type PipelineStage = typeof PIPELINE_STAGES[number]
 
 export const PIPELINE_COLORS: Record<string, { bg: string; text: string }> = {
-  'Lead mới':   { bg: 'bg-gray-100',   text: 'text-gray-600' },
-  'Tiềm năng':  { bg: 'bg-blue-100',   text: 'text-blue-700' },
-  'Báo giá':    { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  'Đàm phán':   { bg: 'bg-orange-100', text: 'text-orange-700' },
-  'Chốt HĐ':   { bg: 'bg-green-100',  text: 'text-green-700' },
-  'Nghiệm thu': { bg: 'bg-teal-100',   text: 'text-teal-700' },
-  'Giao hàng':  { bg: 'bg-cyan-100',   text: 'text-cyan-700' },
-  'Bảo hành':   { bg: 'bg-indigo-100', text: 'text-indigo-700' },
-  'Bảo trì':    { bg: 'bg-purple-100', text: 'text-purple-700' },
-  'Lost':       { bg: 'bg-red-100',    text: 'text-red-700' },
+  'Lead mới':    { bg: 'bg-gray-100',   text: 'text-gray-600' },
+  'Tiềm năng':   { bg: 'bg-blue-100',   text: 'text-blue-700' },
+  'Báo giá':     { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  'Đàm phán':    { bg: 'bg-orange-100', text: 'text-orange-700' },
+  'Hồ sơ thầu': { bg: 'bg-amber-100',  text: 'text-amber-700' },
+  'Chốt HĐ':    { bg: 'bg-green-100',  text: 'text-green-700' },
+  'Giao hàng':   { bg: 'bg-cyan-100',   text: 'text-cyan-700' },
+  'Nghiệm thu':  { bg: 'bg-teal-100',   text: 'text-teal-700' },
+  'Bảo hành':    { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  'Bảo trì':     { bg: 'bg-purple-100', text: 'text-purple-700' },
+  'Lost':        { bg: 'bg-red-100',    text: 'text-red-700' },
 }
 
 export const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {

@@ -4,10 +4,37 @@ import { createServiceClient } from '@/lib/supabase/server'
 // Vercel Cron — chạy mỗi ngày lúc 08:00 ICT (01:00 UTC)
 // GET /api/cron/follow-up-reminders
 
-const STAGE_THRESHOLDS: Record<string, number> = {
+// ─── Fallback hardcode — dùng nếu DB không có cấu hình ──────────────────────
+const DEFAULT_STAGE_THRESHOLDS: Record<string, number> = {
   'Tiềm năng': 14,
   'Báo giá':    7,
   'Đàm phán':   5,
+}
+
+async function getStageThresholds(supabase: ReturnType<typeof createServiceClient>): Promise<Record<string, number>> {
+  try {
+    const { data: settings } = await supabase
+      .from('company_settings')
+      .select('key, value')
+      .in('key', ['stage_sla_override', 'default_stage_sla_days'])
+
+    if (!settings?.length) return DEFAULT_STAGE_THRESHOLDS
+
+    const slaMap    = settings.find(s => s.key === 'stage_sla_override')
+    const defaultSla = settings.find(s => s.key === 'default_stage_sla_days')
+    const defaultDays = defaultSla ? parseInt(defaultSla.value) || 7 : 7
+
+    if (!slaMap?.value) return DEFAULT_STAGE_THRESHOLDS
+
+    const overrides = typeof slaMap.value === 'string'
+      ? JSON.parse(slaMap.value) as Record<string, number>
+      : slaMap.value as Record<string, number>
+
+    // Merge: fallback thresholds + DB overrides
+    return { ...DEFAULT_STAGE_THRESHOLDS, ...overrides, _default: defaultDays } as Record<string, number>
+  } catch {
+    return DEFAULT_STAGE_THRESHOLDS
+  }
 }
 
 export async function GET(req: Request) {
@@ -17,12 +44,16 @@ export async function GET(req: Request) {
   }
 
   try {
-    const supabase    = createServiceClient()
-    const todayStr    = new Date().toISOString().split('T')[0]
-    let totalNotified = 0
+    const supabase       = createServiceClient()
+    const todayStr       = new Date().toISOString().split('T')[0]
+    let totalNotified    = 0
+
+    // ── 0. Load SLA thresholds từ DB (fallback về hardcode nếu lỗi) ───────────
+    const STAGE_THRESHOLDS = await getStageThresholds(supabase)
 
     // ── 1. Follow-up reminders (M1: dùng customer_activities để verify) ────────
     for (const [stage, days] of Object.entries(STAGE_THRESHOLDS)) {
+      if (stage === '_default') continue   // skip meta key
       const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
 
       const { data: candidates } = await supabase

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/audit-purge",
       "schedule": "0 2 1 * *"
+    },
+    {
+      "path": "/api/cron/pipeline-sla",
+      "schedule": "30 1 * * *"
     }
   ]
 }
