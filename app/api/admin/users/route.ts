@@ -76,7 +76,10 @@ export async function GET() {
 
 // ─── POST /api/admin/users — Tạo user mới với mật khẩu tạm ──────────────────
 
-const TEMP_PASSWORD = 'GWS@2026'
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!'
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -103,12 +106,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Vai trò không hợp lệ' }, { status: 400 })
     }
 
+    // A1: Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ error: 'Email không hợp lệ' }, { status: 400 })
+    }
+
     const service = createServiceClient()
+
+    // A1: Check duplicate email in auth
+    const { data: existingUsers } = await service.auth.admin.listUsers({ perPage: 1000 })
+    if (existingUsers.users.some(u => u.email?.toLowerCase() === email.toLowerCase())) {
+      return NextResponse.json({ error: 'Email đã tồn tại trong hệ thống' }, { status: 409 })
+    }
+
+    // A2: Generate unique temp password per user
+    const tempPassword = process.env.ADMIN_TEMP_PASSWORD ?? generateTempPassword()
 
     // Tạo user trực tiếp với mật khẩu tạm — không cần email mời
     const { data: created, error: createErr } = await service.auth.admin.createUser({
       email,
-      password:      TEMP_PASSWORD,
+      password:      tempPassword,
       email_confirm: true,                    // bỏ qua bước xác nhận email
       user_metadata: { full_name },
     })
@@ -143,7 +161,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Trả về temp_password để UI hiển thị cho admin
-    return NextResponse.json({ success: true, id: newId, temp_password: TEMP_PASSWORD })
+    return NextResponse.json({ success: true, id: newId, temp_password: tempPassword })
   } catch (err) {
     console.error('POST /api/admin/users:', err)
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })

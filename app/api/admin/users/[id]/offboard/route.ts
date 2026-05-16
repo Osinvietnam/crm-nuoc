@@ -50,38 +50,41 @@ export async function POST(
       ?? allManagers?.find(p => p.role === 'director')
       ?? allManagers?.find(p => p.role === 'admin')
 
-    if (!receiver) {
-      return NextResponse.json(
-        { error: 'Không tìm thấy người nhận bàn giao (cần ít nhất 1 CEO/Director/Admin đang active)' },
-        { status: 400 }
-      )
+    // A3: receiver là optional — offboard vẫn tiến hành nếu không có ai nhận bàn giao
+    const receiverId   = receiver?.id   ?? null
+    const receiverName = receiver?.full_name ?? null
+
+    let transferred = 0
+    let tasksTransferred = 0
+    let maintenanceTransferred = 0
+
+    if (receiverId) {
+      // Chuyển tất cả KH trong Supabase về receiver
+      const { data: updated } = await service
+        .from('customers')
+        .update({ nguoi_phu_trach: receiverId })
+        .eq('nguoi_phu_trach', id)
+        .select('id')
+      transferred = updated?.length ?? 0
+
+      // Reassign tasks đang active
+      const { data: reassignedTasks } = await service
+        .from('tasks')
+        .update({ assigned_to: receiverId })
+        .eq('assigned_to', id)
+        .in('trang_thai', ['Chờ xử lý', 'Đang làm'])
+        .select('id')
+      tasksTransferred = reassignedTasks?.length ?? 0
+
+      // Reassign maintenance construction chưa hoàn thành
+      const { data: reassignedMaintenance } = await service
+        .from('maintenance_construction')
+        .update({ ktv_phu_trach: receiverId })
+        .eq('ktv_phu_trach', id)
+        .neq('trang_thai', 'Nghiệm thu hoàn thành')
+        .select('id')
+      maintenanceTransferred = reassignedMaintenance?.length ?? 0
     }
-
-    // Chuyển tất cả KH trong Supabase về receiver
-    const { data: updated } = await service
-      .from('customers')
-      .update({ nguoi_phu_trach: receiver.id })
-      .eq('nguoi_phu_trach', id)
-      .select('id')
-    const transferred = updated?.length ?? 0
-
-    // Reassign tasks đang active
-    const { data: reassignedTasks } = await service
-      .from('tasks')
-      .update({ assigned_to: receiver.id })
-      .eq('assigned_to', id)
-      .in('trang_thai', ['Chờ xử lý', 'Đang làm'])
-      .select('id')
-    const tasksTransferred = reassignedTasks?.length ?? 0
-
-    // Reassign maintenance construction chưa hoàn thành
-    const { data: reassignedMaintenance } = await service
-      .from('maintenance_construction')
-      .update({ ktv_phu_trach: receiver.id })
-      .eq('ktv_phu_trach', id)
-      .neq('trang_thai', 'Nghiệm thu hoàn thành')
-      .select('id')
-    const maintenanceTransferred = reassignedMaintenance?.length ?? 0
 
     // Disable Supabase Auth (ban ~100 năm)
     await service.auth.admin.updateUserById(id, { ban_duration: '876600h' })
@@ -92,12 +95,16 @@ export async function POST(
       is_active:     false,
     }).eq('id', id)
 
+    const handoverInfo = receiverName
+      ? `→ bàn giao cho ${receiverName}: ${transferred} KH, ${tasksTransferred} tasks, ${maintenanceTransferred} CT lắp đặt`
+      : '→ không có người nhận bàn giao (dữ liệu KH/task chưa được chuyển)'
+
     await logAudit(supabase, {
       user_id:   user.id,
       user_name: me.full_name,
       action:    'user_offboarded',
       entity:    'user',
-      detail:    `${target.full_name} → bàn giao cho ${receiver.full_name}: ${transferred} KH, ${tasksTransferred} tasks, ${maintenanceTransferred} CT lắp đặt`,
+      detail:    `${target.full_name} ${handoverInfo}`,
     })
 
     return NextResponse.json({
@@ -105,7 +112,8 @@ export async function POST(
       transferred,
       tasksTransferred,
       maintenanceTransferred,
-      receiverName: receiver.full_name
+      receiverName,
+      warning: receiverName ? null : 'Không có người nhận bàn giao — dữ liệu KH/task chưa được chuyển',
     })
   } catch (err) {
     console.error('POST offboard:', err)

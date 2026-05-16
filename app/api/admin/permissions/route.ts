@@ -114,7 +114,9 @@ export async function PATCH(req: NextRequest) {
       user_name: me.full_name,
       action:    'permissions_updated',
       entity:    'user',
-      detail:    `${target?.full_name ?? userId}: ${parts.join(' | ')}`,
+      detail:    `[${target?.full_name ?? userId}] (${target?.role ?? '?'}): ${parts.join(' | ')}`,
+      before:    { permissions: disabled },
+      after:     { permissions: enabled },
     })
 
     return NextResponse.json({ success: true, updated: updates.length })

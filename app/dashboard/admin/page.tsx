@@ -76,30 +76,27 @@ function DeactivateModal({
   onClose: () => void
   onDone: (msg: string) => void
 }) {
-  const [newOwnerId,   setNewOwnerId]   = useState('')
   const [confirming,   setConfirming]   = useState(false)
   const [step,         setStep]         = useState<'pick' | 'confirm'>('pick')
   const [error,        setError]        = useState('')
 
   const candidates = managers.filter(m => m.id !== target.id && m.is_active)
-  const picked = candidates.find(c => c.id === newOwnerId)
 
   const handleDeactivate = async () => {
-    if (!picked) return
     setConfirming(true)
     setError('')
     try {
-      const res = await fetch(`/api/admin/users/${target.id}/deactivate`, {
+      const res = await fetch(`/api/admin/users/${target.id}/offboard`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          new_owner_name: picked.full_name,
-          new_owner_id:   picked.id,
-        }),
+        body:    JSON.stringify({}),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Lỗi khoá tài khoản'); return }
-      onDone(data.message ?? 'Đã khoá tài khoản và bàn giao thành công')
+      const msg = data.warning
+        ? `Đã khoá tài khoản ${target.full_name}. ⚠️ ${data.warning}`
+        : `Đã khoá tài khoản và bàn giao thành công${data.receiverName ? ` cho ${data.receiverName}` : ''}`
+      onDone(msg)
     } catch {
       setError('Lỗi kết nối')
     } finally {
@@ -129,43 +126,36 @@ function DeactivateModal({
               </div>
             </div>
 
-            <div className="bg-amber-50 rounded-xl px-4 py-3 text-xs text-amber-700">
-              Trước khi khoá, chọn người nhận bàn giao toàn bộ khách hàng và đơn hàng đang phụ trách.
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-gray-600 mb-2 block">BÀN GIAO CHO</label>
-              {candidates.length === 0 ? (
-                <p className="text-sm text-red-500">Không có quản lý/admin nào đang hoạt động để bàn giao.</p>
-              ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto">
-                  {candidates.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => setNewOwnerId(c.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                        newOwnerId === c.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold ${
-                        newOwnerId === c.id ? 'bg-blue-600' : 'bg-gray-400'
-                      }`}>
-                        {initials(c.full_name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800">{c.full_name}</p>
-                        <p className="text-xs text-gray-500">{ROLE_LABEL[c.role]}</p>
-                      </div>
-                      {newOwnerId === c.id && (
-                        <span className="text-blue-600 text-base">✓</span>
-                      )}
-                    </button>
-                  ))}
+            {candidates.length === 0 ? (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-xs text-orange-700">
+                ⚠️ Không có CEO/Director/Admin nào đang hoạt động để nhận bàn giao. Tài khoản sẽ bị khoá nhưng dữ liệu KH/task <strong>chưa được chuyển</strong> — bạn có thể xử lý thủ công sau.
+              </div>
+            ) : (
+              <>
+                <div className="bg-amber-50 rounded-xl px-4 py-3 text-xs text-amber-700">
+                  Hệ thống sẽ tự động bàn giao KH/tasks cho CEO/Director đang active.
                 </div>
-              )}
-            </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-600 mb-2 block">NGƯỜI NHẬN (tự động chọn CEO → Director → Admin)</label>
+                  <div className="space-y-2 max-h-52 overflow-y-auto">
+                    {candidates.slice(0, 5).map(c => (
+                      <div
+                        key={c.id}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50"
+                      >
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold bg-gray-400">
+                          {initials(c.full_name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800">{c.full_name}</p>
+                          <p className="text-xs text-gray-500">{ROLE_LABEL[c.role]}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 
@@ -175,9 +165,8 @@ function DeactivateModal({
                 Huỷ
               </button>
               <button
-                onClick={() => { if (newOwnerId) setStep('confirm') }}
-                disabled={!newOwnerId}
-                className="flex-1 bg-red-500 disabled:bg-red-300 text-white font-medium py-3 rounded-xl text-sm"
+                onClick={() => setStep('confirm')}
+                className="flex-1 bg-red-500 text-white font-medium py-3 rounded-xl text-sm"
               >
                 Tiếp tục
               </button>
@@ -188,8 +177,10 @@ function DeactivateModal({
             <div className="bg-red-50 rounded-xl px-4 py-4 space-y-1">
               <p className="text-sm font-bold text-red-700">Xác nhận khoá tài khoản</p>
               <p className="text-xs text-red-600">
-                Khoá <strong>{target.full_name}</strong> và bàn giao tất cả dữ liệu cho{' '}
-                <strong>{picked?.full_name}</strong>.
+                Khoá <strong>{target.full_name}</strong>
+                {candidates.length > 0
+                  ? ' — hệ thống tự động bàn giao KH/tasks cho CEO/Director active.'
+                  : ' — không có người nhận, dữ liệu KH/task chưa được chuyển.'}
               </p>
               <p className="text-xs text-red-400 mt-1">
                 Thao tác này không thể hoàn tác. User bị khoá sẽ không thể đăng nhập.
@@ -239,6 +230,10 @@ function CreateUserSheet({
     if (!form.full_name.trim() || !form.email.trim()) {
       setError('Họ tên và email là bắt buộc'); return
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(form.email.trim())) {
+      setError('Email không đúng định dạng'); return
+    }
     setSaving(true); setError('')
     try {
       const res = await fetch('/api/admin/users', {
@@ -247,6 +242,7 @@ function CreateUserSheet({
         body: JSON.stringify(form),
       })
       const data = await res.json()
+      if (res.status === 409) { setError('Email này đã có tài khoản trong hệ thống'); return }
       if (!res.ok) { setError(data.error || 'Lỗi tạo tài khoản'); return }
       onDone(`Đã tạo tài khoản ${form.full_name}`, data.temp_password, form.email)
     } catch {
@@ -272,7 +268,7 @@ function CreateUserSheet({
           </div>
           <div>
             <h2 className="text-base font-bold text-gray-800">Thêm nhân viên mới</h2>
-            <p className="text-xs text-gray-500">Mật khẩu tạm <strong>GWS@2026</strong> — nhân viên đổi lần đầu đăng nhập</p>
+            <p className="text-xs text-gray-500">Mật khẩu tạm sẽ được tạo tự động — hiển thị sau khi tạo thành công</p>
           </div>
         </div>
 
