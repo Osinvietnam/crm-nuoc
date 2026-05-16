@@ -68,6 +68,16 @@ export async function POST(req: NextRequest) {
     }
 
     const svc = createServiceClient()
+
+    // B4: Validate stage_code tồn tại trong pipeline_configs
+    const { data: stage } = await svc
+      .from('pipeline_configs')
+      .select('id')
+      .eq('stage_code', stage_code)
+      .maybeSingle()
+    if (!stage) {
+      return NextResponse.json({ error: `stage_code '${stage_code}' không tồn tại trong pipeline` }, { status: 400 })
+    }
     const { data, error } = await svc
       .from('task_definitions')
       .insert({

@@ -1843,12 +1843,29 @@ function TasksTab() {
     stage_code: '', stage_label: '', task_key: '', label: '', bo_phan: 'KD',
     roles_can_update: ['tech','sales'], roles_can_approve: ['admin','ceo'],
   })
+  const [stageOptions, setStageOptions] = useState<Array<{stage_code: string; stage_label: string}>>([])
 
   const load = useCallback(() => {
     setLoading(true)
-    fetch('/api/admin/task-definitions?active_only=false')
-      .then(r => r.json())
-      .then(d => setTasks(d.tasks ?? []))
+    Promise.all([
+      fetch('/api/admin/task-definitions?active_only=false').then(r => r.json()),
+      fetch('/api/admin/pipeline-config').then(r => r.json()),
+    ])
+      .then(([taskData, pipeData]) => {
+        setTasks(taskData.tasks ?? [])
+        // Collect unique stages across all pipelines
+        const seen = new Set<string>()
+        const stages: Array<{stage_code: string; stage_label: string}> = []
+        for (const cfg of (pipeData.data ?? [])) {
+          for (const s of (cfg.stages ?? [])) {
+            if (!seen.has(s.stage_code)) {
+              seen.add(s.stage_code)
+              stages.push({ stage_code: s.stage_code, stage_label: s.label ?? s.stage_code })
+            }
+          }
+        }
+        setStageOptions(stages)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -1941,17 +1958,26 @@ function TasksTab() {
         <div className="bg-white rounded-2xl border border-green-100 p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700">Thêm task định nghĩa mới</p>
           {addErr && <p className="text-xs text-red-500">{addErr}</p>}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">MÃ STAGE *</label>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">STAGE *</label>
+            {stageOptions.length > 0 ? (
+              <select
+                value={newTask.stage_code}
+                onChange={e => {
+                  const opt = stageOptions.find(s => s.stage_code === e.target.value)
+                  setNewTask(t => ({ ...t, stage_code: e.target.value, stage_label: opt?.stage_label ?? e.target.value }))
+                }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">— Chọn stage —</option>
+                {stageOptions.map(s => (
+                  <option key={s.stage_code} value={s.stage_code}>{s.stage_code} — {s.stage_label}</option>
+                ))}
+              </select>
+            ) : (
               <input value={newTask.stage_code} onChange={e => setNewTask(t => ({ ...t, stage_code: e.target.value.toUpperCase() }))}
                 placeholder="C1, B2, D3..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">TÊN STAGE</label>
-              <input value={newTask.stage_label} onChange={e => setNewTask(t => ({ ...t, stage_label: e.target.value }))}
-                placeholder="Tiếp cận KH..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
+            )}
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">TÊN TASK *</label>
@@ -2054,6 +2080,201 @@ function TasksTab() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ─── KPI Tab ──────────────────────────────────────────────────────────────────
+
+interface KpiRow {
+  user_id: string; user_name: string; user_role: string; user_chuc_vu: string
+  month: number; year: number
+  target_revenue: number | null; target_contracts: number | null; target_customers: number | null
+  notes: string | null
+}
+
+function KpiTab() {
+  const now = new Date()
+  const [month,    setMonth]    = useState(now.getMonth() + 1)
+  const [year,     setYear]     = useState(now.getFullYear())
+  const [staff,    setStaff]    = useState<Array<{id: string; full_name: string; role: string; chuc_vu: string | null}>>([])
+  const [kpiMap,   setKpiMap]   = useState<Record<string, KpiRow>>({})
+  const [drafts,   setDrafts]   = useState<Record<string, Partial<KpiRow>>>({})
+  const [saving,   setSaving]   = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(true)
+  const [success,  setSuccess]  = useState('')
+
+  const STAFF_ROLES = ['sales', 'tech', 'logistics', 'accountant']
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [usersRes, kpiRes] = await Promise.all([
+        fetch('/api/admin/users').then(r => r.json()),
+        fetch(`/api/admin/kpi?month=${month}&year=${year}`).then(r => r.json()),
+      ])
+      const allUsers = (usersRes.data ?? []) as Array<{id: string; full_name: string; role: string; chuc_vu: string | null; is_active: boolean}>
+      const staffList = allUsers.filter(u => STAFF_ROLES.includes(u.role) && u.is_active)
+      setStaff(staffList)
+      const map: Record<string, KpiRow> = {}
+      for (const row of (kpiRes.data ?? []) as KpiRow[]) {
+        map[row.user_id] = row
+      }
+      setKpiMap(map)
+      setDrafts({})
+    } catch {}
+    finally { setLoading(false) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year])
+
+  useEffect(() => { load() }, [load])
+
+  const getDraft = (uid: string): Partial<KpiRow> => drafts[uid] ?? {}
+  const val = (uid: string, key: keyof KpiRow): string => {
+    const d = getDraft(uid)
+    const v = key in d ? d[key] : kpiMap[uid]?.[key]
+    return v != null ? String(v) : ''
+  }
+  const setField = (uid: string, key: keyof KpiRow, value: string) => {
+    setDrafts(p => ({ ...p, [uid]: { ...(p[uid] ?? {}), [key]: value === '' ? null : Number(value) } }))
+  }
+
+  const saveRow = async (uid: string, full_name: string) => {
+    const d = drafts[uid] ?? {}
+    const existing = kpiMap[uid]
+    const payload = {
+      user_id:           uid,
+      month, year,
+      target_revenue:    d.target_revenue   !== undefined ? d.target_revenue   : existing?.target_revenue   ?? null,
+      target_contracts:  d.target_contracts !== undefined ? d.target_contracts : existing?.target_contracts ?? null,
+      target_customers:  d.target_customers !== undefined ? d.target_customers : existing?.target_customers ?? null,
+      notes:             d.notes            !== undefined ? d.notes            : existing?.notes            ?? null,
+    }
+    setSaving(uid)
+    try {
+      const res = await fetch('/api/admin/kpi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        setKpiMap(p => ({ ...p, [uid]: { ...payload, user_name: full_name, user_role: '', user_chuc_vu: '' } }))
+        setDrafts(p => { const n = { ...p }; delete n[uid]; return n })
+        setSuccess(`Đã lưu KPI ${full_name}`)
+        setTimeout(() => setSuccess(''), 2500)
+      }
+    } catch {}
+    finally { setSaving(null) }
+  }
+
+  if (loading) return <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
+
+  return (
+    <div className="space-y-4">
+      {/* Month/year picker */}
+      <div className="flex items-center gap-3">
+        <select
+          value={month}
+          onChange={e => setMonth(Number(e.target.value))}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"
+        >
+          {Array.from({length: 12}, (_, i) => (
+            <option key={i+1} value={i+1}>Tháng {i+1}</option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={e => setYear(Number(e.target.value))}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"
+        >
+          {[2024, 2025, 2026, 2027].map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <span className="text-xs text-gray-400 flex-1">{staff.length} nhân viên</span>
+      </div>
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 text-xs px-4 py-2 rounded-xl">
+          ✅ {success}
+        </div>
+      )}
+
+      {/* KPI table */}
+      <div className="space-y-2">
+        {staff.map(u => {
+          const hasTarget = !!kpiMap[u.id]
+          const isDirty = !!drafts[u.id]
+          return (
+            <div
+              key={u.id}
+              className={`bg-white rounded-2xl border p-4 space-y-3 ${
+                !hasTarget ? 'border-orange-200' : 'border-gray-100'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
+                  {u.full_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{u.full_name}</p>
+                  <p className="text-xs text-gray-400">{u.role} {u.chuc_vu ? `· ${u.chuc_vu}` : ''}</p>
+                </div>
+                {!hasTarget && (
+                  <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">Chưa đặt KPI</span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] text-gray-400 mb-0.5 block">DOANH THU (đ)</label>
+                  <input
+                    type="number"
+                    value={val(u.id, 'target_revenue')}
+                    onChange={e => setField(u.id, 'target_revenue', e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 mb-0.5 block">HĐ MỚI</label>
+                  <input
+                    type="number"
+                    value={val(u.id, 'target_contracts')}
+                    onChange={e => setField(u.id, 'target_contracts', e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 mb-0.5 block">KH MỚI</label>
+                  <input
+                    type="number"
+                    value={val(u.id, 'target_customers')}
+                    onChange={e => setField(u.id, 'target_customers', e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+              {isDirty && (
+                <button
+                  onClick={() => saveRow(u.id, u.full_name)}
+                  disabled={saving === u.id}
+                  className="w-full bg-blue-600 disabled:bg-blue-400 text-white text-xs font-semibold py-2 rounded-xl"
+                >
+                  {saving === u.id ? 'Đang lưu...' : '💾 Lưu KPI'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+        {staff.length === 0 && (
+          <div className="flex flex-col items-center py-10 gap-2">
+            <span className="text-3xl">🎯</span>
+            <p className="text-sm text-gray-400">Không có nhân viên nào</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -2168,7 +2389,7 @@ function PipelineTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [tab,          setTab]          = useState<'users' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks' | 'pipeline'>('users')
+  const [tab,          setTab]          = useState<'users' | 'kpi' | 'company' | 'audit' | 'system' | 'business' | 'roles' | 'tasks' | 'pipeline'>('users')
   const [users,        setUsers]        = useState<StaffUser[]>([])
   const [loading,      setLoading]      = useState(true)
   const [myId,         setMyId]         = useState('')
@@ -2182,6 +2403,10 @@ export default function AdminPage() {
   const [unlockTarget, setUnlockTarget] = useState<StaffUser | null>(null)
   const [unlocking,    setUnlocking]    = useState(false)
   const [statusFilter, setStatusFilter]  = useState<string[]>(['Đang làm'])
+  const [userSearch,   setUserSearch]   = useState('')
+  const [editingId,    setEditingId]    = useState<string | null>(null)
+  const [editDraft,    setEditDraft]    = useState<Record<string, string | number | null>>({})
+  const [editSaving,   setEditSaving]   = useState(false)
   const supabase = createClient()
 
   const notify = (msg: string, isError = false) => {
@@ -2213,9 +2438,14 @@ export default function AdminPage() {
   const STATUS_LIST = ['Đang làm', 'Thử việc', 'Tạm nghỉ', 'Nghỉ việc']
   const isAll = statusFilter.length === STATUS_LIST.length
 
-  const displayed = users.filter(u =>
-    isAll ? true : statusFilter.includes(u.trang_thai_nv ?? 'Đang làm')
-  )
+  const displayed = users.filter(u => {
+    const matchStatus = isAll || statusFilter.includes(u.trang_thai_nv ?? 'Đang làm')
+    const q = userSearch.trim().toLowerCase()
+    const matchSearch = !q
+      || u.full_name?.toLowerCase().includes(q)
+      || u.email?.toLowerCase().includes(q)
+    return matchStatus && matchSearch
+  })
 
   const statusCounts = STATUS_LIST.reduce<Record<string, number>>((acc, s) => {
     acc[s] = users.filter(u => (u.trang_thai_nv ?? 'Đang làm') === s).length
@@ -2233,10 +2463,11 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Tab switcher — 4x2 grid */}
-      <div className="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-xl">
+      {/* Tab switcher — 3x3 grid */}
+      <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl">
         {([
           { key: 'users',    label: '👥 Users'    },
+          { key: 'kpi',      label: '🎯 KPI'      },
           { key: 'roles',    label: '🔑 Quyền'    },
           { key: 'tasks',    label: '✅ Tasks'    },
           { key: 'pipeline', label: '🔀 Pipeline' },
@@ -2257,6 +2488,7 @@ export default function AdminPage() {
         ))}
       </div>
 
+      {tab === 'kpi'      && <KpiTab />}
       {tab === 'company'  && <CompanySettingsTab />}
       {tab === 'audit'    && <AuditLogTab />}
       {tab === 'system'   && <SystemConfigTab />}
@@ -2275,6 +2507,23 @@ export default function AdminPage() {
       >
         <span className="text-lg leading-none">＋</span> Thêm nhân viên mới
       </button>
+
+      {/* B2: Search */}
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <input
+          value={userSearch}
+          onChange={e => setUserSearch(e.target.value)}
+          placeholder="Tìm theo tên hoặc email..."
+          className="w-full pl-9 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {userSearch && (
+          <button
+            onClick={() => setUserSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+          >✕</button>
+        )}
+      </div>
 
       {/* Thông báo */}
       {successMsg && (
@@ -2415,20 +2664,134 @@ export default function AdminPage() {
                   </span>
                 </div>
 
+                {/* B3: Inline edit expand */}
+                {editingId === u.id && (
+                  <div className="border-t border-gray-100 pt-3 space-y-3">
+                    <p className="text-xs font-semibold text-gray-500">SỬA THÔNG TIN</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-gray-400 mb-0.5 block">CHỨC VỤ</label>
+                        <input
+                          value={(editDraft.chuc_vu as string) ?? ''}
+                          onChange={e => setEditDraft(p => ({ ...p, chuc_vu: e.target.value }))}
+                          placeholder="Nhân viên KD..."
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 mb-0.5 block">KHU VỰC</label>
+                        <select
+                          value={(editDraft.khu_vuc as string) ?? ''}
+                          onChange={e => setEditDraft(p => ({ ...p, khu_vuc: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+                        >
+                          <option value="CN">Cả nước</option>
+                          <option value="MN">Miền Nam</option>
+                          <option value="MB">Miền Bắc</option>
+                          <option value="MT">Miền Trung</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 mb-0.5 block">SĐT</label>
+                        <input
+                          value={(editDraft.phone as string) ?? ''}
+                          onChange={e => setEditDraft(p => ({ ...p, phone: e.target.value }))}
+                          placeholder="09..."
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 mb-0.5 block">MỤC TIÊU/THÁNG (đ)</label>
+                        <input
+                          type="number"
+                          value={(editDraft.target_thang as number) ?? ''}
+                          onChange={e => setEditDraft(p => ({ ...p, target_thang: e.target.value ? Number(e.target.value) : null }))}
+                          placeholder="100000000"
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] text-gray-400 mb-0.5 block">NGÀY VÀO LÀM</label>
+                        <input
+                          type="date"
+                          value={(editDraft.ngay_vao_lam as string) ?? ''}
+                          onChange={e => setEditDraft(p => ({ ...p, ngay_vao_lam: e.target.value || null }))}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="flex-1 border border-gray-200 text-gray-500 text-xs font-medium py-2 rounded-xl"
+                      >Huỷ</button>
+                      <button
+                        onClick={async () => {
+                          setEditSaving(true)
+                          try {
+                            const res = await fetch('/api/admin/users', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ id: u.id, ...editDraft }),
+                            })
+                            if (res.ok) {
+                              setEditingId(null)
+                              notify(`Đã cập nhật thông tin ${u.full_name}`)
+                              loadUsers()
+                            } else {
+                              const d = await res.json()
+                              notify(d.error || 'Lỗi cập nhật', true)
+                            }
+                          } catch {
+                            notify('Lỗi kết nối', true)
+                          } finally {
+                            setEditSaving(false)
+                          }
+                        }}
+                        disabled={editSaving}
+                        className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white text-xs font-medium py-2 rounded-xl"
+                      >{editSaving ? 'Đang lưu...' : '💾 Lưu'}</button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Actions — chỉ hiện nếu không phải chính mình */}
                 {!isMe && u.is_active && (
                   <div className="flex gap-2 pt-1 border-t border-gray-50 flex-wrap">
                     <button
-                      onClick={() => setRoleTarget(u)}
-                      className="flex-1 border border-blue-200 text-blue-600 text-xs font-semibold py-2 rounded-xl hover:bg-blue-50"
+                      onClick={() => {
+                        if (editingId === u.id) {
+                          setEditingId(null)
+                        } else {
+                          setEditingId(u.id)
+                          setEditDraft({
+                            chuc_vu: u.chuc_vu ?? '',
+                            khu_vuc: u.khu_vuc ?? 'MN',
+                            phone: u.phone ?? '',
+                            target_thang: u.target_thang ?? null,
+                            ngay_vao_lam: u.ngay_vao_lam ?? '',
+                          })
+                        }
+                      }}
+                      className={`flex-1 border text-xs font-semibold py-2 rounded-xl transition-colors ${
+                        editingId === u.id
+                          ? 'border-gray-300 text-gray-500 bg-gray-50'
+                          : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                      }`}
                     >
-                      ✏️ Đổi vai trò
+                      {editingId === u.id ? '✕ Đóng' : '📝 Sửa TT'}
+                    </button>
+                    <button
+                      onClick={() => setRoleTarget(u)}
+                      className="flex-1 border border-purple-200 text-purple-600 text-xs font-semibold py-2 rounded-xl hover:bg-purple-50"
+                    >
+                      🎭 Đổi role
                     </button>
                     <button
                       onClick={() => setResetPwdTarget(u)}
                       className="flex-1 border border-amber-200 text-amber-600 text-xs font-semibold py-2 rounded-xl hover:bg-amber-50"
                     >
-                      🔑 Đặt lại MK
+                      🔑 Đặt MK
                     </button>
                     <button
                       onClick={() => setDeactTarget(u)}
