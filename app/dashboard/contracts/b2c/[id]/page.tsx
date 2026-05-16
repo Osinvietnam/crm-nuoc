@@ -431,19 +431,39 @@ export default function ContractDetailPage() {
           )}
         </div>}
 
-        {/* Xuất PDF */}
-        <button
-          onClick={async () => {
-            setExportingPDF(true)
-            try { await downloadContractPDF(contract) }
-            catch { /* silent */ }
-            finally { setExportingPDF(false) }
-          }}
-          disabled={exportingPDF}
-          className="w-full bg-blue-600 disabled:bg-blue-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-blue-700">
-          <span>📄</span>
-          {exportingPDF ? 'Đang tạo PDF...' : 'Xuất PDF Hợp đồng'}
-        </button>
+        {/* Xuất tài liệu */}
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setExportingPDF(true)
+              try { await downloadContractPDF(contract) }
+              catch { /* silent */ }
+              finally { setExportingPDF(false) }
+            }}
+            disabled={exportingPDF}
+            className="flex-1 bg-blue-600 disabled:bg-blue-400 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-blue-700">
+            <span>📄</span>
+            {exportingPDF ? 'Đang tạo...' : 'Xuất PDF'}
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch(`/api/lark/orders/contract/${id}/export-docx`)
+                if (!res.ok) { alert('Lỗi xuất DOCX'); return }
+                const blob = await res.blob()
+                const cd = res.headers.get('content-disposition') ?? ''
+                const match = cd.match(/filename\*=UTF-8''(.+)/)
+                const fname = match ? decodeURIComponent(match[1]) : `HopDong-${id}.docx`
+                const url = URL.createObjectURL(blob)
+                const a = Object.assign(document.createElement('a'), { href: url, download: fname })
+                a.click(); URL.revokeObjectURL(url)
+              } catch { alert('Lỗi xuất DOCX') }
+            }}
+            className="flex-1 bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm active:bg-emerald-700">
+            <span>📝</span>
+            Xuất Word
+          </button>
+        </div>
       </div>
 
       {/* Status picker */}
