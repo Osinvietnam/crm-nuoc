@@ -60,6 +60,19 @@ const ROLE_LABEL: Record<string, string> = {
   partner:    'Đối tác',
 }
 
+// Thứ tự nhóm và nhãn hiển thị (giống module Nhân viên)
+const ROLE_ORDER = ['ceo', 'director', 'admin', 'accountant', 'tech', 'sales', 'logistics', 'partner']
+const ROLE_GROUP: Record<string, { label: string; icon: string; color: string }> = {
+  ceo:        { label: 'Ban Giám đốc',  icon: '👑', color: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
+  director:   { label: 'Quản lý',       icon: '🏢', color: 'text-orange-700 bg-orange-50 border-orange-100' },
+  admin:      { label: 'Quản trị viên', icon: '⚙️', color: 'text-purple-700 bg-purple-50 border-purple-100' },
+  accountant: { label: 'Kế toán',       icon: '💼', color: 'text-teal-700   bg-teal-50   border-teal-100'   },
+  tech:       { label: 'Kỹ thuật',      icon: '🔧', color: 'text-amber-700  bg-amber-50  border-amber-100'  },
+  sales:      { label: 'Kinh doanh',    icon: '📈', color: 'text-green-700  bg-green-50  border-green-100'  },
+  logistics:  { label: 'Hậu cần',       icon: '🚚', color: 'text-cyan-700   bg-cyan-50   border-cyan-100'   },
+  partner:    { label: 'Đối tác',       icon: '🤝', color: 'text-gray-600   bg-gray-50   border-gray-200'   },
+}
+
 function initials(name: string) {
   return name?.charAt(0)?.toUpperCase() ?? '?'
 }
@@ -2716,6 +2729,18 @@ export default function AdminPage() {
     return acc
   }, {})
 
+  // Nhóm theo role — flat khi đang tìm kiếm (như module Nhân viên)
+  const isSearching = userSearch.trim().length > 0
+  const groupedUsers = isSearching ? null : (() => {
+    const map: Record<string, typeof displayed> = {}
+    for (const u of displayed) {
+      const key = u.role in ROLE_GROUP ? u.role : 'partner'
+      if (!map[key]) map[key] = []
+      map[key].push(u)
+    }
+    return ROLE_ORDER.filter(r => map[r]?.length).map(r => ({ role: r, members: map[r] }))
+  })()
+
   return (
     <div className="p-4 space-y-4">
 
@@ -2895,8 +2920,19 @@ export default function AdminPage() {
           <p className="text-sm font-medium text-gray-500">Không có tài khoản nào</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {displayed.map(u => {
+        <div className="space-y-2">
+          {(groupedUsers ?? [{ role: '__flat__', members: displayed }]).map(({ role, members }) => (
+            <div key={role}>
+              {/* Group header — chỉ hiện khi đang nhóm (không search) */}
+              {groupedUsers && role in ROLE_GROUP && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border mb-2 mt-1 ${ROLE_GROUP[role].color}`}>
+                  <span className="text-sm">{ROLE_GROUP[role].icon}</span>
+                  <span className="text-xs font-semibold tracking-wide uppercase">{ROLE_GROUP[role].label}</span>
+                  <span className="ml-auto text-xs font-medium opacity-70">{members.length}</span>
+                </div>
+              )}
+              <div className="space-y-3">
+              {members.map(u => {
             const isMe = u.id === myId
             return (
               <div
@@ -3176,6 +3212,9 @@ export default function AdminPage() {
               </div>
             )
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
