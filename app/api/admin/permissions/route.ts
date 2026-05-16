@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
 
 // ─── GET /api/admin/permissions?userId= ──────────────────────────────────────
 // Trả về quyền hiện tại của một user + role default để so sánh
@@ -84,6 +85,11 @@ export async function PATCH(req: NextRequest) {
 
     if (!userId || !updates?.length) {
       return NextResponse.json({ error: 'Thiếu userId hoặc updates' }, { status: 400 })
+    }
+
+    // E4: Rate limit — 30 permission updates per admin per minute
+    if (!rateLimit(`${user.id}:perm_update`, 30)) {
+      return NextResponse.json({ error: 'Cập nhật quyền quá nhanh. Vui lòng thử lại sau.' }, { status: 429 })
     }
 
     const service = createServiceClient()

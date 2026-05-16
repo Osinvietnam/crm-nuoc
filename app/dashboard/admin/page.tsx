@@ -1058,6 +1058,11 @@ function AuditLogTab() {
 
 // ─── System Config Tab ────────────────────────────────────────────────────────
 
+interface HealthData {
+  counts: Record<string, number>; db_response_ms: number
+  last_cron_runs: Array<{detail: string; created_at: string}>; checked_at: string
+}
+
 function SystemConfigTab() {
   const [n8nUrl,      setN8nUrl]      = useState('')
   const [appUrl,      setAppUrl]      = useState('')
@@ -1070,6 +1075,8 @@ function SystemConfigTab() {
   const [larkCfg,     setLarkCfg]     = useState<boolean | null>(null)
   const [success,     setSuccess]     = useState('')
   const [error,       setError]       = useState('')
+  const [health,      setHealth]      = useState<HealthData | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/system')
@@ -1080,6 +1087,13 @@ function SystemConfigTab() {
         setLarkCfg(d.lark_configured ?? false)
       })
       .catch(() => {})
+    // E1: Load health on mount
+    setHealthLoading(true)
+    fetch('/api/admin/system/health')
+      .then(r => r.json())
+      .then(d => { if (d.counts) setHealth(d) })
+      .catch(() => {})
+      .finally(() => setHealthLoading(false))
   }, [])
 
   const testConnection = async (which: 'lark' | 'n8n') => {
@@ -1125,6 +1139,49 @@ function SystemConfigTab() {
 
   return (
     <div className="space-y-4">
+
+      {/* E1: System health */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-800">💚 Sức khoẻ hệ thống</p>
+          {health && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+              health.db_response_ms < 500 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+            }`}>DB: {health.db_response_ms}ms</span>
+          )}
+        </div>
+        {healthLoading ? (
+          <div className="flex justify-center py-4"><span className="crm-spinner" /></div>
+        ) : health ? (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Khách hàng', value: health.counts.customers },
+              { label: 'Đơn hàng', value: health.counts.orders },
+              { label: 'Báo giá', value: health.counts.quotes },
+              { label: 'Thanh toán', value: health.counts.payment_records },
+              { label: 'Nhật ký', value: health.counts.audit_logs },
+              { label: 'Users active', value: health.counts.active_users },
+            ].map(item => (
+              <div key={item.label} className="bg-gray-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-gray-800">{item.value.toLocaleString('vi-VN')}</p>
+                <p className="text-[10px] text-gray-400">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-4">Không tải được dữ liệu</p>
+        )}
+        {health?.last_cron_runs?.length ? (
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold text-gray-400">CRON GẦN ĐÂY</p>
+            {health.last_cron_runs.map((r, i) => (
+              <p key={i} className="text-[10px] text-gray-500 truncate">
+                {new Date(r.created_at).toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · {r.detail}
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {/* LarkBase */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
@@ -1733,7 +1790,10 @@ function RolesTab() {
   const [saving,     setSaving]     = useState(false)
   const [success,    setSuccess]    = useState('')
   const [error,      setError]      = useState('')
-  const [expanded,   setExpanded]   = useState<string>('Khách hàng')
+  const [expanded,     setExpanded]     = useState<string>('Khách hàng')
+  const [cloneFrom,    setCloneFrom]    = useState('')
+  const [cloneTo,      setCloneTo]      = useState('')
+  const [cloning,      setCloning]      = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -1777,6 +1837,26 @@ function RolesTab() {
 
   const visibleRoles = roles.filter(r => ['admin','ceo','director','accountant','sales','tech','logistics'].includes(r.code))
 
+  // E3: Clone role permission matrix
+  const cloneRolePerms = async () => {
+    if (!cloneFrom || !cloneTo || cloneFrom === cloneTo) return
+    setCloning(true); setError(''); setSuccess('')
+    try {
+      const res = await fetch('/api/admin/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_role: cloneFrom, to_role: cloneTo }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || 'Lỗi sao chép'); return }
+      setSuccess(`Đã sao chép quyền ${cloneFrom} → ${cloneTo}`)
+      setTimeout(() => setSuccess(''), 3000)
+      setCloneFrom(''); setCloneTo('')
+      load()
+    } catch { setError('Lỗi kết nối') }
+    finally { setCloning(false) }
+  }
+
   return (
     <div className="space-y-4">
 
@@ -1809,6 +1889,29 @@ function RolesTab() {
           <p className="text-xs text-gray-500">
             Quyền mặc định cho từng vai trò. Tích để cấp, thay đổi chưa lưu hiển thị màu vàng.
           </p>
+
+          {/* E3: Clone role permissions */}
+          <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 space-y-2">
+            <p className="text-xs font-semibold text-blue-700">📋 Sao chép ma trận quyền</p>
+            <div className="flex items-center gap-2">
+              <select value={cloneFrom} onChange={e => setCloneFrom(e.target.value)} className="flex-1 border border-blue-200 rounded-xl px-3 py-2 text-xs bg-white">
+                <option value="">Từ role...</option>
+                {visibleRoles.map(r => <option key={r.id} value={r.code}>{ROLE_LABEL[r.code] ?? r.code}</option>)}
+              </select>
+              <span className="text-blue-400 text-sm">→</span>
+              <select value={cloneTo} onChange={e => setCloneTo(e.target.value)} className="flex-1 border border-blue-200 rounded-xl px-3 py-2 text-xs bg-white">
+                <option value="">Sang role...</option>
+                {visibleRoles.filter(r => r.code !== cloneFrom).map(r => <option key={r.id} value={r.code}>{ROLE_LABEL[r.code] ?? r.code}</option>)}
+              </select>
+              <button
+                onClick={cloneRolePerms}
+                disabled={!cloneFrom || !cloneTo || cloning}
+                className="px-3 py-2 bg-blue-600 disabled:bg-blue-300 text-white text-xs font-semibold rounded-xl whitespace-nowrap"
+              >
+                {cloning ? '...' : '✓ Clone'}
+              </button>
+            </div>
+          </div>
 
           {loading ? (
             <div className="flex justify-center py-10"><span className="crm-spinner" /></div>
@@ -2661,13 +2764,36 @@ export default function AdminPage() {
       {/* Users tab content */}
       {tab === 'users' && <>
 
-      {/* Nút thêm nhân viên */}
-      <button
-        onClick={() => setShowCreate(true)}
-        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-semibold rounded-xl text-sm hover:bg-blue-700 transition-colors"
-      >
-        <span className="text-lg leading-none">＋</span> Thêm nhân viên mới
-      </button>
+      {/* E2: CSV export + Thêm nhân viên */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-semibold rounded-xl text-sm hover:bg-blue-700 transition-colors"
+        >
+          <span className="text-lg leading-none">＋</span> Thêm nhân viên
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Họ tên','Email','Vai trò','Chức vụ','Khu vực','Trạng thái','SĐT','Ngày vào làm']
+            const rows = users.map(u => [
+              u.full_name, u.email, ROLE_LABEL[u.role] ?? u.role,
+              u.chuc_vu ?? '', u.khu_vuc ?? '',
+              u.trang_thai_nv ?? '', u.phone ?? '', u.ngay_vao_lam ?? '',
+            ])
+            const csv = [headers, ...rows].map(r => r.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n')
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+            const a = Object.assign(document.createElement('a'), {
+              href: URL.createObjectURL(blob),
+              download: `nhan-vien-${new Date().toISOString().split('T')[0]}.csv`,
+            })
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          }}
+          className="px-4 py-3 border border-gray-200 text-gray-600 font-semibold rounded-xl text-sm hover:bg-gray-50"
+          title="Xuất CSV"
+        >
+          📥
+        </button>
+      </div>
 
       {/* B2: Search */}
       <div className="relative">

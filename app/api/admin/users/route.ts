@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
 
 const ROLES = ['admin', 'ceo', 'director', 'accountant', 'sales', 'tech', 'logistics', 'partner'] as const
 
@@ -105,6 +106,11 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('role, full_name').eq('id', user.id).single()
     if (!me || me.role !== 'admin') {
       return NextResponse.json({ error: 'Chỉ admin mới tạo được tài khoản' }, { status: 403 })
+    }
+
+    // E4: Rate limit — 10 user creates per admin per minute
+    if (!rateLimit(`${user.id}:create_user`, 10)) {
+      return NextResponse.json({ error: 'Tạo quá nhiều tài khoản. Vui lòng thử lại sau 1 phút.' }, { status: 429 })
     }
 
     const body = await req.json()

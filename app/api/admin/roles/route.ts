@@ -118,3 +118,70 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
   }
 }
+
+// ─── POST /api/admin/roles — E3: Clone toàn bộ permissions từ 1 role sang role khác ──
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: me } = await supabase
+      .from('profiles').select('role, full_name').eq('id', user.id).single()
+    if (!me || me.role !== 'admin') {
+      return NextResponse.json({ error: 'Chỉ Admin mới clone được role permissions' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const { from_role, to_role } = body
+    if (!from_role || !to_role || from_role === to_role) {
+      return NextResponse.json({ error: 'Cần from_role và to_role khác nhau' }, { status: 400 })
+    }
+
+    const svc = createServiceClient()
+
+    // Lấy role IDs
+    const { data: roleRows } = await svc
+      .from('roles').select('id, code').in('code', [from_role, to_role])
+
+    const fromId = roleRows?.find(r => r.code === from_role)?.id
+    const toId   = roleRows?.find(r => r.code === to_role)?.id
+    if (!fromId || !toId) {
+      return NextResponse.json({ error: 'Role không tồn tại' }, { status: 404 })
+    }
+
+    // Lấy permissions của from_role
+    const { data: fromPerms } = await svc
+      .from('role_permissions').select('permission_key, is_enabled').eq('role_id', fromId)
+
+    if (!fromPerms?.length) {
+      return NextResponse.json({ error: 'Role nguồn chưa có permission nào' }, { status: 400 })
+    }
+
+    // Upsert vào to_role
+    const upsertRows = fromPerms.map(p => ({
+      role_id:        toId,
+      permission_key: p.permission_key,
+      is_enabled:     p.is_enabled,
+    }))
+
+    const { error } = await svc
+      .from('role_permissions')
+      .upsert(upsertRows, { onConflict: 'role_id,permission_key' })
+    if (error) throw error
+
+    void logAudit(supabase, {
+      user_id:   user.id,
+      user_name: me.full_name ?? '',
+      action:    'role_changed',
+      entity:    'user',
+      detail:    `Clone role permissions: ${from_role} → ${to_role} (${fromPerms.length} quyền)`,
+    })
+
+    return NextResponse.json({ success: true, copied: fromPerms.length })
+  } catch (err) {
+    console.error('POST /api/admin/roles:', err)
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 })
+  }
+}
